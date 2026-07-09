@@ -1,10 +1,22 @@
 {
   "version": 0,
   "name": "signed-solver",
-  "discovery_pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
   "markets": [
     {
-      "pair": "btc/btc",
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/price?pair=btcusd",
       "price_decimals": 8,
       "invert": false,
@@ -13,5 +25,5 @@
       "max_base_amount": 5000000
     }
   ],
-  "sig": "f587ea7612d8ff63a00129a5a57711d0b84292a968e9814089ccf3237aa79abb4780259c24e7061c33371aa72a09b25af930f41540dbaa50f691202ec8126bd2"
+  "sig": "0c3d229d3f1e65e506bae891ea6bba15f64e52106a6ffd8abf0d588bcd2aa19382ffa30c065b80bb6f9d753ea17d2686cba876dc7fdfbabacb4e5e30d944fc13"
 }

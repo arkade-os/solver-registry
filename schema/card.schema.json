@@ -5,9 +5,50 @@
   "description": "One solver's market listing for one network. Path: solvers/<network>/<name>.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "name", "markets"],
+  "required": [
+    "version",
+    "name",
+    "markets"
+  ],
   "dependencies": {
-    "sig": ["discovery_pubkey"]
+    "sig": [
+      "discovery_pubkey"
+    ]
+  },
+  "definitions": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "ticker",
+        "precision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(btc|[0-9a-f]{68})$",
+          "description": "Canonical asset identity: \"btc\" or a 68-hex-char AssetId."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "ticker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18,
+          "description": "Number of decimals: base-units per display unit = 10^precision."
+        }
+      }
+    }
   },
   "properties": {
     "version": {
@@ -36,6 +77,8 @@
         "additionalProperties": false,
         "required": [
           "pair",
+          "base_asset",
+          "quote_asset",
           "price_feed",
           "price_decimals",
           "invert",
@@ -46,8 +89,16 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^(btc|[0-9a-f]{68})/(btc|[0-9a-f]{68})$",
-            "description": "<base-id>/<quote-id>. \"btc\" or a 68-hex-char AssetId, per side."
+            "pattern": "^[A-Za-z0-9._-]{1,16}/[A-Za-z0-9._-]{1,16}$",
+            "description": "Display pair \"<base-ticker>/<quote-ticker>\"; must equal base_asset.ticker + \"/\" + quote_asset.ticker. Canonical identity lives in base_asset.id / quote_asset.id."
+          },
+          "base_asset": {
+            "$ref": "#/definitions/asset",
+            "description": "Display metadata for the pair's base side."
+          },
+          "quote_asset": {
+            "$ref": "#/definitions/asset",
+            "description": "Display metadata for the pair's quote side."
           },
           "price_feed": {
             "type": "string",

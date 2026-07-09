@@ -24,7 +24,9 @@ One file per solver per network, `solvers/<network>/<name>.json` (networks: `mai
   "sig": "<128-hex schnorr, OPTIONAL>",
   "markets": [
     {
-      "pair": "<base-id>/<quote-id>",
+      "pair": "BTC/DePix",
+      "base_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "precision": 8 },
+      "quote_asset": { "id": "<68-hex AssetId>", "name": "Decentralized Pix", "ticker": "DePix", "precision": 8 },
       "price_feed": "https://feed.example.com/price?pair=...",
       "price_decimals": 8,
       "invert": false,
@@ -43,7 +45,8 @@ Field semantics:
 | `name` | Unique within the network directory; must match the filename. CI enforces. |
 | `discovery_pubkey` | Optional in v0, required in v1. The solver's BIP340 identity: signs the card when `sig` is present, and signs v1 quote events. |
 | `sig` | Optional in v0, required in v1. BIP340 Schnorr by `discovery_pubkey` over `sha256(canonical_json)`: the card serialized with `sig` removed, keys sorted lexicographically, no whitespace, UTF-8. If present, `discovery_pubkey` is required and CI MUST verify; if absent, the PR is the authentication. |
-| `pair` | Canonical id `<base-id>/<quote-id>`: `BTC` or the serialized AssetId in lowercase hex, for each side. Asset-to-asset pairs are first-class; nothing assumes bitcoin on either side. |
+| `base_asset`, `quote_asset` | Each side of the pair: `id` (the canonical identity — `btc` or the serialized AssetId in lowercase hex), plus display metadata `name`, `ticker`, and `precision` (decimals: base-units per display unit = 10^precision). Asset-to-asset pairs are first-class; nothing assumes bitcoin on either side. |
+| `pair` | Display label `<base-ticker>/<quote-ticker>`; MUST equal `base_asset.ticker + "/" + quote_asset.ticker` (CI enforces). Tickers are not unique — matching and grouping key on `base_asset.id`/`quote_asset.id`, never on `pair`. |
 | `price_feed` | The exact URL the solver's plugin validates against at fill time. Makers MUST price from this URL, not a substitute. MUST be fetchable from browsers (CORS-permissive), otherwise browser wallets cannot price the pair. |
 | `price_decimals`, `invert` | How to normalize the feed's value to quote-units-per-base-unit. Mirrors the solver Pair config. |
 | `fee_bps` | The solver's spread: the promise is that an offer priced at least `fee_bps` (plus a reasonable safety cushion) inside fair value will fill. The solver's fill-time tolerance check is internal and MUST be wide enough to honor this; a solver whose published fee doesn't fill loses flow. |
@@ -57,7 +60,7 @@ On every merge to the default branch, CI, independently per network directory:
 
 1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed pairs, `min > max`, unknown `version`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
 2. Flattens the network's cards into one market list, each entry carrying its solver's `name` (and `discovery_pubkey` when present; `sig` stays in the card, it is not propagated).
-3. Groups by `pair`; within a pair, sorts ascending by `fee_bps` (best expected execution first).
+3. Groups by canonical pair identity (`base_asset.id`/`quote_asset.id`); within a pair, sorts ascending by `fee_bps` (best expected execution first).
 4. Emits one index per network — `mainnet.json`, `signet.json`, `mutinynet.json` — each stamped with its `network`, `generated_at` (unix seconds, set by CI, never by hand), and the source commit hash.
 5. Publishes via GitHub Pages / raw URL. A broken card in one network must not block publishing the others.
 
@@ -69,7 +72,9 @@ On every merge to the default branch, CI, independently per network directory:
   "commit": "<git sha>",
   "markets": [
     {
-      "pair": "<base-id>/<quote-id>",
+      "pair": "BTC/DePix",
+      "base_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "precision": 8 },
+      "quote_asset": { "id": "<68-hex AssetId>", "name": "Decentralized Pix", "ticker": "DePix", "precision": 8 },
       "solver": "arklabs-solver",
       "discovery_pubkey": "<optional>",
       "price_feed": "...",

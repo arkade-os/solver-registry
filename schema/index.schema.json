@@ -5,14 +5,58 @@
   "description": "Reduced, flattened output for one network: <network>.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "network", "generated_at", "commit", "markets"],
+  "required": [
+    "version",
+    "network",
+    "generated_at",
+    "commit",
+    "markets"
+  ],
+  "definitions": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "ticker",
+        "precision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(btc|[0-9a-f]{68})$",
+          "description": "Canonical asset identity: \"btc\" or a 68-hex-char AssetId."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "ticker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        }
+      }
+    }
+  },
   "properties": {
     "version": {
       "const": 0
     },
     "network": {
       "type": "string",
-      "enum": ["mainnet", "signet", "mutinynet"]
+      "enum": [
+        "mainnet",
+        "signet",
+        "mutinynet"
+      ]
     },
     "generated_at": {
       "type": "integer",
@@ -31,6 +75,8 @@
         "required": [
           "pair",
           "solver",
+          "base_asset",
+          "quote_asset",
           "price_feed",
           "price_decimals",
           "invert",
@@ -41,11 +87,18 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^(btc|[0-9a-f]{68})/(btc|[0-9a-f]{68})$"
+            "pattern": "^[A-Za-z0-9._-]{1,16}/[A-Za-z0-9._-]{1,16}$",
+            "description": "Display pair \"<base-ticker>/<quote-ticker>\"; must equal base_asset.ticker + \"/\" + quote_asset.ticker. Canonical identity lives in base_asset.id / quote_asset.id."
           },
           "solver": {
             "type": "string",
             "pattern": "^[a-z0-9-]+$"
+          },
+          "base_asset": {
+            "$ref": "#/definitions/asset"
+          },
+          "quote_asset": {
+            "$ref": "#/definitions/asset"
           },
           "discovery_pubkey": {
             "type": "string",

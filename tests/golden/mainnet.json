@@ -5,7 +5,19 @@
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
-      "pair": "btc/btc",
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/alice",
       "price_decimals": 8,
       "invert": false,
@@ -15,7 +27,19 @@
       "solver": "alice"
     },
     {
-      "pair": "btc/btc",
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/carol",
       "price_decimals": 8,
       "invert": false,
@@ -25,7 +49,19 @@
       "solver": "carol"
     },
     {
-      "pair": "btc/btc",
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/bob",
       "price_decimals": 8,
       "invert": false,

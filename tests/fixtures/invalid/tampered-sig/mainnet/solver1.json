@@ -4,7 +4,19 @@
   "discovery_pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
   "markets": [
     {
-      "pair": "btc/btc",
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/price?pair=btcusd",
       "price_decimals": 8,
       "invert": false,

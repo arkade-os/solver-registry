@@ -38,12 +38,15 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
   assert.deepEqual(solvers, ["alice", "carol", "bob"]);
 });
 
+// The signed-solver fixture is signed with the BIP340 test-vector #1 secret key
+// (b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef); re-sign
+// with scripts/canonical.ts signCard() whenever the fixture's content changes.
 test("signed card: valid signature verifies and discovery_pubkey propagates to the index", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
   assert.equal(result.ok, true);
   const entry = result.index!.markets.find((m) => m.solver === "signed-solver");
   assert.ok(entry);
-  assert.equal(entry!.discovery_pubkey, "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f");
+  assert.equal(entry!.discovery_pubkey, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659");
 });
 
 test("mixed: a broken network fails independently without blocking sibling networks", () => {
@@ -60,6 +63,8 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "name-pattern", expect: "must match pattern" },
   { case: "duplicate-name", expect: "duplicate name" },
   { case: "bad-pair", expect: "must match pattern" },
+  { case: "bad-asset-id", expect: "must match pattern" },
+  { case: "pair-ticker-mismatch", expect: "does not match asset tickers" },
   { case: "bad-price-feed", expect: "must match pattern" },
   { case: "bad-price-decimals", expect: "must be <=" },
   { case: "bad-fee-bps", expect: "must be <=" },

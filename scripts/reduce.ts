@@ -13,8 +13,17 @@ import { verifyCardSig } from "./canonical.ts";
 export const NETWORKS = ["mainnet", "signet", "mutinynet"] as const;
 export type Network = (typeof NETWORKS)[number];
 
+export interface AssetInfo {
+  id: string;
+  name: string;
+  ticker: string;
+  precision: number;
+}
+
 export interface Market {
   pair: string;
+  base_asset: AssetInfo;
+  quote_asset: AssetInfo;
   price_feed: string;
   price_decimals: number;
   invert: boolean;
@@ -110,6 +119,12 @@ export function reduceNetwork(
             `markets[${i}]: min_base_amount (${market.min_base_amount}) > max_base_amount (${market.max_base_amount})`,
           );
         }
+        const expectedPair = `${market.base_asset.ticker}/${market.quote_asset.ticker}`;
+        if (market.pair !== expectedPair) {
+          messages.push(
+            `markets[${i}]: pair "${market.pair}" does not match asset tickers "${expectedPair}"`,
+          );
+        }
       }
       if (card.sig) {
         if (!verifyCardSig(card)) {
@@ -148,8 +163,12 @@ export function reduceNetwork(
     }
   }
 
+  // Group by canonical asset ids (tickers are display-only and not unique),
+  // then best expected execution first, solver name for determinism.
   markets.sort((a, b) => {
-    if (a.pair !== b.pair) return a.pair < b.pair ? -1 : 1;
+    const idPairA = `${a.base_asset.id}/${a.quote_asset.id}`;
+    const idPairB = `${b.base_asset.id}/${b.quote_asset.id}`;
+    if (idPairA !== idPairB) return idPairA < idPairB ? -1 : 1;
     if (a.fee_bps !== b.fee_bps) return a.fee_bps - b.fee_bps;
     return a.solver < b.solver ? -1 : a.solver > b.solver ? 1 : 0;
   });

@@ -3,7 +3,19 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "BTC/btc",
+      "pair": "TEST",
+      "base_asset": {
+        "id": "btc",
+        "name": "Test Asset",
+        "ticker": "TEST",
+        "precision": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "precision": 8
+      },
       "price_feed": "https://feed.example.com/x",
       "price_decimals": 8,
       "invert": false,

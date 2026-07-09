@@ -3,11 +3,11 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "BTC/BTC",
+      "pair": "TEST/WRONG",
       "base_asset": {
         "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
+        "name": "Test Asset",
+        "ticker": "TEST",
         "precision": 8
       },
       "quote_asset": {
@@ -20,7 +20,7 @@
       "price_decimals": 8,
       "invert": false,
       "fee_bps": 30,
-      "min_base_amount": 0,
+      "min_base_amount": 1000,
       "max_base_amount": 5000000
     }
   ]

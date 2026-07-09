@@ -115,51 +115,27 @@ function extractPrice(body) {
   return Number(v);
 }
 
-// Explorer per network: asset pages for links, /api/asset/<id> for metadata
-// (ticker/name). Metadata is best-effort — on any failure the short hash stays.
+// Explorer per network, for linking asset pair sides to their asset page.
 const EXPLORERS = {
   mainnet: "https://arkade.space",
   signet: "https://explorer.signet.arkade.sh",
   mutinynet: "https://explorer.mutinynet.arkade.sh",
 };
 
-function shortId(side) {
-  return side === "btc" ? "BTC" : side.slice(0, 8) + "…" + side.slice(-6);
-}
-
-const assetMetaCache = new Map(); // `${network}:${id}` -> promise of metadata|null
-function fetchAssetMeta(network, id) {
-  const key = `${network}:${id}`;
-  if (!assetMetaCache.has(key)) {
-    const base = EXPLORERS[network];
-    const promise = base
-      ? fetch(`${base}/api/asset/${id}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((body) => body?.metadata ?? null)
-          .catch(() => null)
-      : Promise.resolve(null);
-    assetMetaCache.set(key, promise);
-  }
-  return assetMetaCache.get(key);
-}
-
-// A pair side: "BTC" as plain text, an asset as an explorer link whose label
-// upgrades from the short hash to the ticker once metadata resolves.
-function assetCell(network, side) {
-  if (side === "btc") return el("span", { text: "BTC" });
-  const base = EXPLORERS[network];
-  const link = el("a", {
-    href: base ? `${base}/asset/${side}` : "#",
+// A pair side: BTC as plain text, an asset as an explorer link. Label is the
+// ticker; the canonical asset id lives in base_asset.id / quote_asset.id.
+function assetCell(network, asset) {
+  const label = asset.ticker;
+  const title = `${asset.name} · precision ${asset.precision} · ${asset.id}`;
+  const explorer = EXPLORERS[network];
+  if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
+  return el("a", {
+    href: `${explorer}/asset/${asset.id}`,
     target: "_blank",
     rel: "noopener",
-    title: side,
-    text: shortId(side),
+    title,
+    text: label,
   });
-  fetchAssetMeta(network, side).then((meta) => {
-    const label = meta?.ticker || meta?.name;
-    if (label) link.textContent = label;
-  });
-  return link;
 }
 
 function el(tag, attrs = {}, children = []) {
@@ -209,14 +185,13 @@ async function renderNetwork(network, container) {
   const priceCells = [];
 
   for (const m of index.markets) {
-    const [base, quote] = m.pair.split("/");
     const priceCell = el("td", { class: "num price", text: "…" });
     priceCells.push([m.price_feed, priceCell]);
     tbody.appendChild(el("tr", {}, [
       el("td", {}, [el("code", {}, [
-        assetCell(network, base),
+        assetCell(network, m.base_asset),
         el("span", { text: "/" }),
-        assetCell(network, quote),
+        assetCell(network, m.quote_asset),
       ])]),
       el("td", { text: m.solver }),
       el("td", { class: "num", text: String(m.fee_bps) }),

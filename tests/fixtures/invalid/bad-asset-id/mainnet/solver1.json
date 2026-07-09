@@ -3,15 +3,15 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "BTC/BTC",
+      "pair": "TEST/BTC",
       "base_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
+        "id": "deadbeef",
+        "name": "Test Asset",
+        "ticker": "TEST",
         "precision": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "deadbeef",
         "name": "Bitcoin",
         "ticker": "BTC",
         "precision": 8
@@ -20,7 +20,7 @@
       "price_decimals": 8,
       "invert": false,
       "fee_bps": 30,
-      "min_base_amount": 0,
+      "min_base_amount": 1000,
       "max_base_amount": 5000000
     }
   ]
