@@ -6,9 +6,11 @@ Status: draft. Scope: how makers discover solver markets, prices, fees, and limi
 
 The execution path already needs no interactivity: the maker funds a swap VTXO carrying the TLV offer, and any solver watching the arkd stream can fill it. The covenant enforces the terms and does not bind a specific filler. Discovery therefore only answers one question for the maker: what `wantAmount` for pair Y will clear right now?
 
-v0 is a single git repo (the **registry**) plus a GitHub Action (the **reducer**). Solvers PR a small unsigned JSON card describing their markets. CI validates the cards and reduces them into one flat, sorted `index.json`. Clients fetch exactly one URL, pick a market, price from its pinned feed, concede the fee plus a safety cushion, and fund the standard offer. No signatures, no relays, no messages to the solver, no solver-side tooling beyond writing a JSON file.
+v0 is a git repo format (the **registry**) plus a GitHub Action (the **reducer**). Solvers PR a small unsigned JSON card describing their markets. CI validates the cards and reduces them into one flat, sorted index per network. Clients fetch one URL per registry they follow, merge, pick a market, price from its pinned feed, concede the fee plus a safety cushion, and fund the standard offer. No signatures, no relays, no messages to the solver, no solver-side tooling beyond writing a JSON file.
 
-Trust anchors to the registry repo and its PR review, not to keys. A live-quote layer with signed events is specced as **v1, dormant** — see the appendix; keys enter the protocol there, not before.
+Anyone can run a registry: it's a repo layout and a workflow, not an instance. Clients follow a *set* of registries (shipping with well-known defaults) and can additionally pin solver cards directly, so no repo owner is a gatekeeper or single point of failure — a solver rejected or dropped by every registry is still reachable by any client that adds its card by hand (the token-list pattern).
+
+Trust anchors to each registry repo and its PR review, not to keys. A live-quote layer with signed events is specced as **v1, dormant** — see the appendix; keys enter the protocol there, not before.
 
 ## Solver card
 
@@ -85,10 +87,11 @@ PR validation runs the same schema checks, so a broken card can't merge. The per
 
 ## Maker flow
 
-1. Fetch the index for the wallet's network — `<base-url>/<network>.json` (one URL, TTL-cache ~10 min). Reject unknown `version` or a `network` mismatch; treat an old `generated_at` (suggested: > 7 days) as a staleness warning.
-2. Filter markets by pair and size bounds; entries arrive pre-sorted best-first. The sort is a static proxy — the actual execution price still comes from the feed.
-3. Fetch the chosen market's `price_feed`, derive `P` in quote-units-per-base-unit via `invert` and `price_decimals`.
-4. Compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension.
+1. For each followed registry, fetch the index for the wallet's network — `<base-url>/<network>.json` (TTL-cache ~10 min). Reject unknown `version` or a `network` mismatch; treat an old `generated_at` (suggested: > 7 days) as a staleness warning. Registry failures are isolated: one unreachable or invalid registry never blocks pricing from the others or from locally pinned cards.
+2. Merge: union of all markets across followed registries plus local cards, tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per pair ascending by `fee_bps`, source order as tiebreak. Filter by pair and size bounds. The ranking is a static proxy — the actual execution price still comes from the feed.
+3. Local cards: a client MUST let its user add solver cards directly (a URL to a raw card, or pasted JSON), validated against the same card schema, scoped to a network by the user. Local cards participate in the merge like any registry entry, marked as user-added in any UI.
+4. Fetch the chosen market's `price_feed`, derive `P` in quote-units-per-base-unit via `invert` and `price_decimals`.
+5. Compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension.
 
 There is no liveness signal in v0: solvers are not publicly reachable, so nothing can be probed before funding. `generated_at` and local fill history are the only heuristics. The cost of funding into a dead solver is one cancel transaction.
 
@@ -104,11 +107,13 @@ with `safety_bps` chosen by the client (suggested default: 50). The cushion abso
 
 ## Trust model and failure modes
 
-The trust anchor is the registry repo: PR review is the listing gate, git history is the audit log, HTTPS is transport integrity. Consequences, accepted for v0: a mirror of `index.json` is not self-authenticating (clients should pin the canonical URL), and a compromised repo or CI can serve a poisoned index — the blast radius is bounded because the index never controls funds, only which offers get created; the covenant still enforces every term, and the worst outcome of any bad index entry is an unfilled offer and a cancel tx. Feed unreachable from the wallet means the pair is unpriceable; surface the error. Front-running between solvers is harmless: the maker is indifferent to who fills.
+The trust anchor is each registry repo the client follows: PR review is the listing gate, git history is the audit log, HTTPS is transport integrity. No single repo owner is a chokepoint: registries are permissionlessly forkable, clients follow several, and local cards bypass registries entirely — curation power is capped at "not appearing in one list". Consequences, accepted for v0: an index is not self-authenticating from mirrors (clients pin each registry's canonical URL), and a compromised repo or CI can serve a poisoned index — the blast radius is bounded because indexes never control funds, only which offers get created; the covenant still enforces every term, and the worst outcome of any bad entry, poisoned or just wrong, is an unfilled offer and a cancel tx. The same bound is what makes local cards safe to allow. Feed unreachable from the wallet means the pair is unpriceable; surface the error. Front-running between solvers is harmless: the maker is indifferent to who fills.
 
 ## Rationale (FAQ)
 
-**Why one flat index instead of clients crawling solver files?** One fetch, no fan-out, no partial-failure handling in every wallet, and ranking computed once in CI instead of N times in N clients.
+**Why one flat index per registry instead of clients crawling solver files?** One fetch per followed registry, no per-card fan-out, and validation computed once in CI instead of N times in N clients. Merging a handful of pre-validated indexes client-side is cheap; crawling hundreds of cards is not.
+
+**Why multiple registries and local cards?** So no repo owner becomes a gatekeeper. A registry is a curation, not an authority: clients follow the curations they trust, union them, and can pin any solver's card directly. Delisting from every registry degrades a solver's reach, never its ability to serve clients that know it.
 
 **Why are signatures optional rather than required or absent?** Required would mean every solver needs keygen and signing tooling before it can list, for no v0 payoff — the client's decision doesn't depend on solver identity, since the covenant protects the funds either way, and the PR process already gates listing. Absent would break continuity with v1, where the same key must sign quotes. Optional costs nothing: bare cards list freely, signed cards get CI verification and a stable identity today.
 

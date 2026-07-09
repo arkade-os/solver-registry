@@ -1,31 +1,33 @@
-# Arkade Solver List
+# Arkade Solver Registry
 
-A community-maintained list of solver markets for Arkade Intents, in the
-spirit of [token lists](https://tokenlists.org/): a public, forkable JSON
-list that wallets can subscribe to — not a gatekeeper. Solvers publish a
+A community-maintained registry of solver markets for Arkade Intents, in the
+spirit of [token lists](https://tokenlists.org/): a public, forkable
+curation that wallets subscribe to — not a gatekeeper. Solvers publish a
 small JSON card describing the pairs, fees, and limits they quote; CI
 reduces each network's cards into one flat, sorted index that clients fetch
 from a single URL. See
 [`docs/arkade-discovery-spec.md`](docs/arkade-discovery-spec.md) for the
 full protocol.
 
-## Lists, not permission
+## A registry, not the registry
 
 Inclusion here is curation, not authorization. Nothing in the protocol
 requires a solver to be listed anywhere: the covenant enforces every trade's
 terms regardless of where the maker discovered the market, and any solver
-watching the arkd stream can fill any offer. A list only answers "which
+watching the arkd stream can fill any offer. A registry only answers "which
 markets should my wallet show?".
 
-This repo is one such list — the reference one, curated by PR review. It is
-fully forkable: the schema, reducer, and workflows carry no privileged
-state, so anyone can run their own list with their own curation policy.
-Clients are expected to treat solver lists the way wallets treat token
-lists: ship with one or more default lists, let users add or remove list
-URLs, and merge/deduplicate across them. Trust anchors to the list you
-subscribe to, not to this repo.
+A registry is a repo layout and a workflow, not an instance — this repo is
+the reference one, curated by PR review, and it is permissionlessly
+forkable: the schema, reducer, and workflows carry no privileged state.
+Clients are expected to treat solver registries the way wallets treat token
+lists: ship with one or more defaults, let users add or remove registry
+URLs, merge/deduplicate across them, and additionally let users pin
+individual solver cards directly — a solver listed nowhere is still
+reachable by any client that adds its card by hand. Trust anchors to the
+registries you follow, not to this repo.
 
-## Add a solver to this list
+## Add a solver to this registry
 
 1. Run `solver card` against your `solverd` (or hand-write one) to produce a
    card matching [`schema/card.schema.json`](schema/card.schema.json).
@@ -37,7 +39,7 @@ subscribe to, not to this repo.
 Signing (`discovery_pubkey` + `sig`) is optional in v0 — a bare card is fully
 valid, the PR is the authentication. See the spec for why.
 
-## Consume this list
+## Consume the index
 
 | Network | Index |
 |---|---|
@@ -47,8 +49,9 @@ valid, the PR is the authentication. See the spec for why.
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
 that network, stamped with `generated_at` and the source `commit`, matching
-[`schema/index.schema.json`](schema/index.schema.json). Fetch one URL,
-filter by pair, price from the market's `price_feed`.
+[`schema/index.schema.json`](schema/index.schema.json). Fetch one URL per
+registry you follow, merge, filter by pair, price from the market's
+`price_feed`.
 
 ## Repo layout
 
@@ -94,9 +97,9 @@ which card failed and why without digging through logs.
   failure), then builds and deploys `mainnet.json` / `signet.json` /
   `mutinynet.json` to GitHub Pages.
 
-## Run your own list
+## Run your own registry
 
 Fork this repo, replace the cards under `solvers/`, enable GitHub Pages
 (source: GitHub Actions), and publish your own curation policy. The index
-format is identical, so clients can subscribe to any list built with this
+format is identical, so clients can follow any registry built with this
 reducer by adding its Pages URL.
