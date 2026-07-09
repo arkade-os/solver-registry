@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ArkLabsHQ/solver-registry/schema/index.schema.json",
+  "title": "Per-network market index",
+  "description": "Reduced, flattened output for one network: <network>.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "network", "generated_at", "commit", "markets"],
+  "properties": {
+    "version": {
+      "const": 0
+    },
+    "network": {
+      "type": "string",
+      "enum": ["mainnet", "signet", "mutinynet"]
+    },
+    "generated_at": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unix seconds, set by CI."
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "markets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pair",
+          "solver",
+          "price_feed",
+          "price_decimals",
+          "invert",
+          "fee_bps",
+          "min_base_amount",
+          "max_base_amount"
+        ],
+        "properties": {
+          "pair": {
+            "type": "string",
+            "pattern": "^(btc|[0-9a-f]{68})/(btc|[0-9a-f]{68})$"
+          },
+          "solver": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "discovery_pubkey": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "price_feed": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          },
+          "price_decimals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "fee_bps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "min_base_amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_base_amount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

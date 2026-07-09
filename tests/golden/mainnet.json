@@ -1,0 +1,38 @@
+{
+  "version": 0,
+  "network": "mainnet",
+  "generated_at": 1700000000,
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "markets": [
+    {
+      "pair": "btc/btc",
+      "price_feed": "https://feed.example.com/alice",
+      "price_decimals": 8,
+      "invert": false,
+      "fee_bps": 10,
+      "min_base_amount": 1000,
+      "max_base_amount": 5000000,
+      "solver": "alice"
+    },
+    {
+      "pair": "btc/btc",
+      "price_feed": "https://feed.example.com/carol",
+      "price_decimals": 8,
+      "invert": false,
+      "fee_bps": 10,
+      "min_base_amount": 1000,
+      "max_base_amount": 5000000,
+      "solver": "carol"
+    },
+    {
+      "pair": "btc/btc",
+      "price_feed": "https://feed.example.com/bob",
+      "price_decimals": 8,
+      "invert": false,
+      "fee_bps": 30,
+      "min_base_amount": 1000,
+      "max_base_amount": 5000000,
+      "solver": "bob"
+    }
+  ]
+}

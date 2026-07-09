@@ -1,0 +1,5 @@
+node_modules/
+dist/
+/mainnet.json
+/signet.json
+/mutinynet.json

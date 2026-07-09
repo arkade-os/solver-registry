@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ArkLabsHQ/solver-registry/schema/card.schema.json",
+  "title": "Solver card",
+  "description": "One solver's market listing for one network. Path: solvers/<network>/<name>.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "markets"],
+  "dependencies": {
+    "sig": ["discovery_pubkey"]
+  },
+  "properties": {
+    "version": {
+      "const": 0
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique within the network directory; must equal the filename (without .json)."
+    },
+    "discovery_pubkey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "BIP340 x-only public key, lowercase hex."
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{128}$",
+      "description": "BIP340 Schnorr signature by discovery_pubkey over sha256(canonical_json)."
+    },
+    "markets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pair",
+          "price_feed",
+          "price_decimals",
+          "invert",
+          "fee_bps",
+          "min_base_amount",
+          "max_base_amount"
+        ],
+        "properties": {
+          "pair": {
+            "type": "string",
+            "pattern": "^(btc|[0-9a-f]{68})/(btc|[0-9a-f]{68})$",
+            "description": "<base-id>/<quote-id>. \"btc\" or a 68-hex-char AssetId, per side."
+          },
+          "price_feed": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          },
+          "price_decimals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "fee_bps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "min_base_amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_base_amount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}
