@@ -68,6 +68,8 @@
     padding: .1em .35em;
     border-radius: 4px;
   }
+  code a { color: var(--accent); text-decoration: none; }
+  code a:hover { text-decoration: underline; }
   .empty, .error { color: var(--muted); font-size: .9rem; padding: .75rem; }
   .error { color: #dc2626; }
   .price { color: var(--accent); }
@@ -113,8 +115,51 @@ function extractPrice(body) {
   return Number(v);
 }
 
+// Explorer per network: asset pages for links, /api/asset/<id> for metadata
+// (ticker/name). Metadata is best-effort — on any failure the short hash stays.
+const EXPLORERS = {
+  mainnet: "https://arkade.space",
+  signet: "https://explorer.signet.arkade.sh",
+  mutinynet: "https://explorer.mutinynet.arkade.sh",
+};
+
 function shortId(side) {
   return side === "btc" ? "BTC" : side.slice(0, 8) + "…" + side.slice(-6);
+}
+
+const assetMetaCache = new Map(); // `${network}:${id}` -> promise of metadata|null
+function fetchAssetMeta(network, id) {
+  const key = `${network}:${id}`;
+  if (!assetMetaCache.has(key)) {
+    const base = EXPLORERS[network];
+    const promise = base
+      ? fetch(`${base}/api/asset/${id}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((body) => body?.metadata ?? null)
+          .catch(() => null)
+      : Promise.resolve(null);
+    assetMetaCache.set(key, promise);
+  }
+  return assetMetaCache.get(key);
+}
+
+// A pair side: "BTC" as plain text, an asset as an explorer link whose label
+// upgrades from the short hash to the ticker once metadata resolves.
+function assetCell(network, side) {
+  if (side === "btc") return el("span", { text: "BTC" });
+  const base = EXPLORERS[network];
+  const link = el("a", {
+    href: base ? `${base}/asset/${side}` : "#",
+    target: "_blank",
+    rel: "noopener",
+    title: side,
+    text: shortId(side),
+  });
+  fetchAssetMeta(network, side).then((meta) => {
+    const label = meta?.ticker || meta?.name;
+    if (label) link.textContent = label;
+  });
+  return link;
 }
 
 function el(tag, attrs = {}, children = []) {
@@ -168,7 +213,11 @@ async function renderNetwork(network, container) {
     const priceCell = el("td", { class: "num price", text: "…" });
     priceCells.push([m.price_feed, priceCell]);
     tbody.appendChild(el("tr", {}, [
-      el("td", {}, [el("code", { title: m.pair, text: `${shortId(base)}/${shortId(quote)}` })]),
+      el("td", {}, [el("code", {}, [
+        assetCell(network, base),
+        el("span", { text: "/" }),
+        assetCell(network, quote),
+      ])]),
       el("td", { text: m.solver }),
       el("td", { class: "num", text: String(m.fee_bps) }),
       el("td", { class: "num", text: m.min_base_amount.toLocaleString("en-US") }),
