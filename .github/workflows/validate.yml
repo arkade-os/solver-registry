@@ -11,15 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
+      # The reducer appends its per-card validation report to the job summary
+      # via GITHUB_STEP_SUMMARY when that variable is set.
       - name: Validate cards and build indexes in-memory
-        run: node --experimental-strip-types scripts/reduce.ts --check
+        run: pnpm reduce --check
