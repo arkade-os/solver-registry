@@ -7,7 +7,8 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "reduce": "node --experimental-strip-types scripts/reduce.ts",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts packages/discovery-client/test/*.test.ts",
+    "test:client": "node --experimental-strip-types --test packages/discovery-client/test/*.test.ts"
   },
   "dependencies": {
     "@noble/curves": "^1.7.0",

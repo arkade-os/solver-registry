@@ -55,6 +55,14 @@ that network, stamped with `generated_at` and the source `commit`, matching
 registry you follow, merge, filter by pair, price from the market's
 `price_feed`.
 
+### Client library
+
+[`@arkade/solver-discovery`](packages/discovery-client/) implements the maker
+flow so you don't have to: a portable, zero-dependency ESM library (browser /
+Node / Expo) that fetches and merges registries, ranks markets, converts amounts
+using each asset's precision, and computes the `wantAmount` — down to a one-call
+`swap(market, { give: "base", giveAmount: "0.01" })`.
+
 ## Repo layout
 
 ```
@@ -67,6 +75,7 @@ index.html                 landing page served at the Pages base URL
 scripts/reduce.ts          the reducer: pnpm reduce
 scripts/canonical.ts       canonical JSON + BIP340 helpers
 tests/                     golden index, rejection cases, sort/determinism
+packages/discovery-client/ @arkade/solver-discovery: the maker-flow client lib
 ```
 
 ## Reducer

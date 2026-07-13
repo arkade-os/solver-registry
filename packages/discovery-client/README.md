@@ -1,0 +1,111 @@
+# @arkade/solver-discovery
+
+A tiny, portable **ESM** client for the consumer (maker) side of the
+[Arkade Market Discovery Protocol](../../docs/arkade-discovery-spec.md): discover
+the price feeds solvers advertise, rank markets, convert amounts, and compute the
+`wantAmount` for an offer.
+
+- **Runs everywhere** — browser, Node, and Expo / React Native. Zero runtime
+  dependencies; only global `fetch` is used (and it's injectable).
+- **No `eval` / `new Function`** — validation is hand-rolled, so it works under a
+  strict CSP and on Hermes (React Native), where JSON-Schema engines like Ajv
+  fail.
+- **Exact math** — prices are `BigInt` rationals and amounts are `BigInt`, so no
+  float error ever touches an amount.
+
+## Install
+
+```sh
+npm install @arkade/solver-discovery
+```
+
+## Quick start
+
+```ts
+import { discover, bestMarket, swap } from "@arkade/solver-discovery";
+
+// 1. Fetch + merge the registries you follow (plus any pinned local cards).
+const { markets, warnings } = await discover({
+  registries: ["https://arklabshq.github.io/solver-registry/mainnet.json"],
+  network: "mainnet",
+});
+
+// 2. Pick the best market for a pair (grouped by canonical asset id, best fee first).
+const market = bestMarket(markets, {
+  baseId: "btc",
+  quoteId: "47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
+});
+
+// 3. Swap a human amount — fetches the advertised feed and returns a ready plan.
+const plan = await swap(market, { give: "base", giveAmount: "0.01" }); // 0.01 BTC
+console.log(`${plan.deposit.display} ${plan.deposit.asset.ticker}`
+  + ` -> ${plan.receive.display} ${plan.receive.asset.ticker}`);
+// plan.receive.atomic is the wantAmount to request; then createOffer(...) as usual.
+if (!plan.withinLimits) console.warn("amount is outside the market's size limits");
+```
+
+## Amount conversion (Arkade Assets)
+
+Each asset carries a `precision` (8 for BTC and most Arkade assets). Conversion
+between human and atomic units is exact:
+
+```ts
+import { toAtomic, fromAtomic } from "@arkade/solver-discovery";
+
+toAtomic("1.5", 8);          // => 150000000n
+fromAtomic(150000000n, 8);   // => "1.5"
+toAtomic("1.123456789", 8);  // throws: more precision than 8 decimals allow
+```
+
+Pricing math always stays in atomic units; `swap()` does the human⇄atomic
+conversion for you using each side's precision.
+
+## Pin a local card
+
+Users can pin a solver card directly (a raw card, validated against the card
+schema), participating in the merge like any registry entry:
+
+```ts
+const { markets } = await discover({
+  registries: ["https://arklabshq.github.io/solver-registry/mainnet.json"],
+  localCards: [{ card: pastedCardJson, network: "mainnet" }],
+  network: "mainnet",
+});
+```
+
+## Expo / React Native
+
+Works out of the box — Hermes ships `fetch`, `AbortController`, and `BigInt`. If
+you target an older runtime without global `fetch`, inject one:
+
+```ts
+import { discover } from "@arkade/solver-discovery";
+await discover({ registries, network: "mainnet", fetchImpl: myFetch });
+```
+
+## API
+
+| Export | Purpose |
+|---|---|
+| `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Registry failures are isolated. |
+| `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). |
+| `selectMarkets(markets, {baseId, quoteId, baseAmount?})` / `bestMarket(...)` | Filter to one id pair (and size), keeping the ranking. |
+| `swap(market, {give, giveAmount, safetyBps?})` | Fetch the feed and build a full `SwapPlan` (human in/out). |
+| `planSwap({market, give, giveAmount, feedValue, safetyBps?})` | Same, from an already-fetched feed value (pure/sync). |
+| `priceMarket(market, {deposit, direction, safetyBps?})` | Lower-level: fetch feed → atomic `Quote` (`wantAmount`). |
+| `quoteMarket` / `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
+| `toAtomic` / `fromAtomic` / `displayPrice` | Precision-aware conversion. |
+| `validateCard` / `validateIndex` | Dependency-free, `eval`-free schema validation. |
+
+`give: "base"` deposits the base asset and receives the quote; `give: "quote"`
+is the reverse (priced with `1/P`). `safetyBps` defaults to `50` — the cushion
+that absorbs feed movement between funding and fill.
+
+## Develop
+
+```sh
+pnpm install
+pnpm test        # node --test, dependency-free, runs the .ts directly
+pnpm typecheck
+pnpm build       # emits dist/*.js + *.d.ts
+```

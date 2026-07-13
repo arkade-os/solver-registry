@@ -1,0 +1,293 @@
+// The maker-side discovery flow: fetch per-network indexes from the registries a
+// client follows, merge in any user-pinned local cards, dedupe and rank, then
+// price a chosen market from its advertised feed.
+//
+// Isomorphic by design — see `feed.ts` for the injectable transport.
+
+import type { IndexMarket, Network, NetworkIndex } from "./types.ts";
+import { validateCard, validateIndex } from "./validate.ts";
+import { quoteMarket, DEFAULT_SAFETY_BPS, type Direction, type Quote } from "./pricing.ts";
+import {
+  fetchText,
+  fetchFeedValue,
+  type FetchLike,
+  type PriceExtractor,
+} from "./feed.ts";
+
+export type SourceType = "registry" | "local";
+
+/** A market plus provenance: which registry (or local card) advertised it. */
+export interface DiscoveredMarket extends IndexMarket {
+  source: string;
+  sourceType: SourceType;
+}
+
+const DEFAULT_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+
+export interface FetchIndexOptions {
+  /** Expected network; a mismatched index is rejected. */
+  network?: Network;
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** Unix seconds "now", for the staleness check. Defaults to the wall clock. */
+  now?: number;
+  /** Age past which an index is flagged stale. Defaults to 7 days. */
+  maxAgeSeconds?: number;
+}
+
+export interface FetchIndexResult {
+  url: string;
+  ok: boolean;
+  index?: NetworkIndex;
+  /** Set when ok === false. */
+  error?: string;
+  warnings: string[];
+}
+
+/**
+ * Fetch and validate one registry's per-network index. Never throws: transport,
+ * parse, and validation failures are returned as `{ ok: false, error }` so one
+ * bad registry never blocks pricing from the others.
+ */
+export async function fetchIndex(
+  url: string,
+  opts: FetchIndexOptions = {},
+): Promise<FetchIndexResult> {
+  const warnings: string[] = [];
+  let text: string;
+  try {
+    text = await fetchText(url, opts);
+  } catch (e) {
+    return { url, ok: false, error: `fetch failed: ${(e as Error).message}`, warnings };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { url, ok: false, error: `invalid JSON: ${(e as Error).message}`, warnings };
+  }
+
+  const result = validateIndex(parsed, opts.network);
+  if (!result.ok) {
+    return { url, ok: false, error: `invalid index: ${result.errors.join("; ")}`, warnings };
+  }
+
+  const index = result.value!;
+  const now = opts.now ?? Math.floor(Date.now() / 1000);
+  const maxAge = opts.maxAgeSeconds ?? DEFAULT_MAX_AGE_SECONDS;
+  if (now - index.generated_at > maxAge) {
+    const ageDays = Math.floor((now - index.generated_at) / 86400);
+    warnings.push(`index is stale: generated ${ageDays} day(s) ago`);
+  }
+
+  return { url, ok: true, index, warnings };
+}
+
+/** A user-pinned local card (raw JSON), scoped to a network by the user. */
+export interface LocalCardInput {
+  card: unknown;
+  network: Network;
+  /** Optional provenance label; defaults to `local:<card.name>`. */
+  label?: string;
+}
+
+export interface DiscoverOptions {
+  /** Registry URLs to follow, in priority order (used as the ranking tiebreak). */
+  registries?: Array<string | { url: string }>;
+  /** Locally pinned solver cards, validated against the card schema. */
+  localCards?: LocalCardInput[];
+  network: Network;
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  now?: number;
+  maxAgeSeconds?: number;
+}
+
+export interface SourceReport {
+  source: string;
+  sourceType: SourceType;
+  ok: boolean;
+  marketCount: number;
+  error?: string;
+  warnings: string[];
+}
+
+export interface DiscoverResult {
+  /** Merged, deduped, ranked markets across all sources. */
+  markets: DiscoveredMarket[];
+  /** Per-source outcome (which registries/cards loaded, failed, or warned). */
+  sources: SourceReport[];
+  /** Flattened warnings across all sources (staleness, skipped cards, …). */
+  warnings: string[];
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const body = Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+      .join(",");
+    return `{${body}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function idPair(m: IndexMarket): string {
+  return `${m.base_asset.id}/${m.quote_asset.id}`;
+}
+
+/**
+ * Discover markets across the followed registries plus any pinned local cards.
+ * Registry failures are isolated; local cards are schema-validated and those
+ * that fail (or target another network) are skipped with a warning. The result
+ * is deduped (byte-identical entries collapsed) and ranked per id pair by
+ * `fee_bps`, with source order as the tiebreak.
+ */
+export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
+  const registries = (opts.registries ?? []).map((r) => (typeof r === "string" ? r : r.url));
+  const sources: SourceReport[] = [];
+  const warnings: string[] = [];
+
+  // Tag each entry with the index of its source so ties rank by follow order.
+  const tagged: Array<{ market: IndexMarket; source: string; sourceType: SourceType; order: number }> = [];
+  let order = 0;
+
+  const indexResults = await Promise.all(
+    registries.map((url) =>
+      fetchIndex(url, {
+        network: opts.network,
+        fetchImpl: opts.fetchImpl,
+        signal: opts.signal,
+        timeoutMs: opts.timeoutMs,
+        now: opts.now,
+        maxAgeSeconds: opts.maxAgeSeconds,
+      }),
+    ),
+  );
+
+  for (const r of indexResults) {
+    const currentOrder = order++;
+    for (const w of r.warnings) warnings.push(`${r.url}: ${w}`);
+    if (!r.ok) {
+      sources.push({ source: r.url, sourceType: "registry", ok: false, marketCount: 0, error: r.error, warnings: r.warnings });
+      continue;
+    }
+    const markets = r.index!.markets;
+    for (const m of markets) tagged.push({ market: m, source: r.url, sourceType: "registry", order: currentOrder });
+    sources.push({ source: r.url, sourceType: "registry", ok: true, marketCount: markets.length, warnings: r.warnings });
+  }
+
+  for (const local of opts.localCards ?? []) {
+    const currentOrder = order++;
+    const result = validateCard(local.card);
+    if (!result.ok) {
+      const src = local.label ?? "local:<invalid>";
+      const error = `invalid card: ${result.errors.join("; ")}`;
+      sources.push({ source: src, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
+      warnings.push(`${src}: ${error}`);
+      continue;
+    }
+    const card = result.value!;
+    const source = local.label ?? `local:${card.name}`;
+    if (local.network !== opts.network) {
+      const msg = `card targets ${local.network}, not ${opts.network}; skipped`;
+      sources.push({ source, sourceType: "local", ok: false, marketCount: 0, error: msg, warnings: [] });
+      warnings.push(`${source}: ${msg}`);
+      continue;
+    }
+    for (const m of card.markets) {
+      const entry: IndexMarket = { ...m, solver: card.name };
+      if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
+      tagged.push({ market: entry, source, sourceType: "local", order: currentOrder });
+    }
+    sources.push({ source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
+  }
+
+  // Drop byte-identical duplicates (same solver listed in two registries),
+  // keeping the earliest source.
+  const seen = new Set<string>();
+  const deduped = tagged.filter((t) => {
+    const key = stableStringify(t.market);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  deduped.sort((a, b) => {
+    const pa = idPair(a.market);
+    const pb = idPair(b.market);
+    if (pa !== pb) return pa < pb ? -1 : 1;
+    if (a.market.fee_bps !== b.market.fee_bps) return a.market.fee_bps - b.market.fee_bps;
+    if (a.order !== b.order) return a.order - b.order;
+    return a.market.solver < b.market.solver ? -1 : a.market.solver > b.market.solver ? 1 : 0;
+  });
+
+  const markets: DiscoveredMarket[] = deduped.map((t) => ({ ...t.market, source: t.source, sourceType: t.sourceType }));
+  return { markets, sources, warnings };
+}
+
+export interface SelectOptions {
+  /** Canonical base asset id (e.g. "btc"). */
+  baseId: string;
+  /** Canonical quote asset id. */
+  quoteId: string;
+  /**
+   * Optional base-side trade size (atomic units). When given, markets whose
+   * [min_base_amount, max_base_amount] do not admit it are filtered out.
+   */
+  baseAmount?: bigint | number;
+}
+
+/**
+ * Filter already-discovered markets to one id pair (and optionally a trade
+ * size), preserving discovery ranking so the first result is the best expected
+ * execution. Pricing still comes from the feed; this ranking is a static proxy.
+ */
+export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectOptions): T[] {
+  const amount = opts.baseAmount === undefined ? undefined : BigInt(opts.baseAmount);
+  return markets.filter((m) => {
+    if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
+    if (amount === undefined) return true;
+    return amount >= BigInt(m.min_base_amount) && amount <= BigInt(m.max_base_amount);
+  });
+}
+
+/** The best market for an id pair, or null if none match. */
+export function bestMarket<T extends IndexMarket>(markets: T[], opts: SelectOptions): T | null {
+  return selectMarkets(markets, opts)[0] ?? null;
+}
+
+export interface PriceMarketOptions {
+  deposit: bigint | number | string;
+  direction: Direction;
+  safetyBps?: number;
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** Override how the numeric price is pulled out of the feed body. */
+  extractPrice?: PriceExtractor;
+}
+
+/**
+ * Fetch a market's advertised `price_feed`, extract the price, and produce a
+ * fully-computed {@link Quote} (want amount + limit check) in atomic units. The
+ * maker MUST price from this exact URL. See `swap()` for a human-amount API.
+ */
+export async function priceMarket(
+  market: IndexMarket,
+  opts: PriceMarketOptions,
+): Promise<Quote> {
+  const feedValue = await fetchFeedValue(market.price_feed, opts);
+  return quoteMarket({
+    market,
+    feedValue,
+    deposit: opts.deposit,
+    direction: opts.direction,
+    safetyBps: opts.safetyBps ?? DEFAULT_SAFETY_BPS,
+  });
+}
