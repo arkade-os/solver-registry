@@ -23,18 +23,21 @@ npm install @arkade-os/solver-discovery
 ## Quick start
 
 ```ts
-import { discover, bestMarket, quoteOffer } from "@arkade-os/solver-discovery";
+import { discover, listMarkets, bestMarket, quoteOffer } from "@arkade-os/solver-discovery";
 
 // 1. Fetch + merge the registries you follow (plus any pinned local cards).
 const { markets, warnings } = await discover({
   registries: ["https://arkade-os.github.io/solver-registry/bitcoin.json"],
 });
+if (warnings.length) console.warn(warnings);
 
-// 2. Pick the best market for a pair (grouped by canonical asset id, best fee first).
+// 2. List pairs for UI selection, then pick the best market for one pair.
+console.log(listMarkets(markets).map((p) => p.pair));
 const market = bestMarket(markets, {
   baseId: "btc",
   quoteId: "47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
 });
+if (!market) throw new Error("no market for pair");
 
 // 3. Quote an offer — fetches the advertised feed and returns a ready plan.
 const plan = await quoteOffer(market, { give: "base", giveAmount: "0.01" }); // 0.01 BTC
@@ -104,12 +107,15 @@ function QuoteForm({ market }) {
 }
 ```
 
-`quote.plan?.receive.atomic` is the `wantAmount` to request. The package does
-not install React for you: importing `@arkade-os/solver-discovery/react`
-requires React in the app, while the root package entrypoint does not import
-React.
+`useOfferQuote(market, opts)` returns the active input, both display amounts,
+the latest `OfferPlan`, loading/error state, and setters for base/quote or
+give/want fields. `quote.plan?.receive.atomic` is the `wantAmount` to request.
 
-## API
+The package does not install React for you: importing
+`@arkade-os/solver-discovery/react` requires React in the app, while the root
+package entrypoint does not import React.
+
+## Core API
 
 | Export | Purpose |
 |---|---|
@@ -124,12 +130,6 @@ React.
 | `quoteMarket` / `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
 | `toAtomic` / `fromAtomic` / `displayPrice` | Precision-aware conversion. |
 | `validateCard` / `validateIndex` | Dependency-free, `eval`-free schema validation. |
-
-React-only export from `@arkade-os/solver-discovery/react`:
-
-| Export | Purpose |
-|---|---|
-| `useOfferQuote(market, opts)` | Hook for linked base/quote inputs. The last edited side drives the quote and updates the other side. |
 
 `give: "base"` deposits the base asset and receives the quote; `give: "quote"`
 is the reverse (priced with `1/P`). Pass exactly one of `giveAmount` or

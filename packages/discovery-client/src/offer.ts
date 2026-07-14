@@ -65,6 +65,10 @@ type OfferAmountInput =
       wantAmount: AmountValue;
     };
 
+type ResolvedOfferAmount =
+  | { kind: "give"; value: AmountValue }
+  | { kind: "want"; value: AmountValue };
+
 export type PlanOfferInput = {
   market: Market;
   /** Which side the maker deposits. */
@@ -84,6 +88,15 @@ function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
 
 function inputAmount(value: AmountValue, precision: number): bigint {
   return typeof value === "bigint" ? value : toAtomic(value, precision);
+}
+
+function resolveOfferAmount(input: { giveAmount?: AmountValue; wantAmount?: AmountValue }): ResolvedOfferAmount {
+  if (input.giveAmount !== undefined) {
+    if (input.wantAmount !== undefined) throw new Error("pass exactly one of giveAmount or wantAmount");
+    return { kind: "give", value: input.giveAmount };
+  }
+  if (input.wantAmount !== undefined) return { kind: "want", value: input.wantAmount };
+  throw new Error("pass exactly one of giveAmount or wantAmount");
 }
 
 function ceilDiv(num: bigint, den: bigint): bigint {
@@ -124,16 +137,14 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const direction: Direction = give === "base" ? "baseToQuote" : "quoteToBase";
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const price = deriveAtomicPrice(input.feedValue, market);
-  const hasGiveAmount = input.giveAmount !== undefined;
-  const hasWantAmount = input.wantAmount !== undefined;
-  if (hasGiveAmount === hasWantAmount) throw new Error("pass exactly one of giveAmount or wantAmount");
+  const offerAmount = resolveOfferAmount(input);
 
   let depositAtomic: bigint;
   let receiveAtomic: bigint;
   let baseAmount: bigint;
 
-  if (hasGiveAmount) {
-    depositAtomic = inputAmount(input.giveAmount, depositAsset.precision);
+  if (offerAmount.kind === "give") {
+    depositAtomic = inputAmount(offerAmount.value, depositAsset.precision);
     receiveAtomic = computeWantAmount({
       deposit: depositAtomic,
       direction,
@@ -143,7 +154,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     });
     baseAmount = direction === "baseToQuote" ? depositAtomic : receiveAtomic;
   } else {
-    receiveAtomic = inputAmount(input.wantAmount, receiveAsset.precision);
+    receiveAtomic = inputAmount(offerAmount.value, receiveAsset.precision);
     depositAtomic = depositForWant({
       wantAmount: receiveAtomic,
       direction,
@@ -188,15 +199,13 @@ export type QuoteOfferOptions = FetchFeedOptions & {
  * quotes an offer; it does not submit or fund anything.
  */
 export async function quoteOffer(market: Market, opts: QuoteOfferOptions): Promise<OfferPlan> {
-  const hasGiveAmount = opts.giveAmount !== undefined;
-  const hasWantAmount = opts.wantAmount !== undefined;
-  if (hasGiveAmount === hasWantAmount) throw new Error("pass exactly one of giveAmount or wantAmount");
+  const offerAmount = resolveOfferAmount(opts);
   const feedValue = await fetchFeedValue(market.price_feed, opts);
-  if (hasGiveAmount) {
+  if (offerAmount.kind === "give") {
     return planOffer({
       market,
       give: opts.give,
-      giveAmount: opts.giveAmount,
+      giveAmount: offerAmount.value,
       feedValue,
       safetyBps: opts.safetyBps,
     });
@@ -204,7 +213,7 @@ export async function quoteOffer(market: Market, opts: QuoteOfferOptions): Promi
   return planOffer({
     market,
     give: opts.give,
-    wantAmount: opts.wantAmount,
+    wantAmount: offerAmount.value,
     feedValue,
     safetyBps: opts.safetyBps,
   });

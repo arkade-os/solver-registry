@@ -59,11 +59,16 @@ registry you follow, merge, filter by pair, price from the market's
 
 [![npm](https://img.shields.io/npm/v/%40arkade-os%2Fsolver-discovery)](https://www.npmjs.com/package/@arkade-os/solver-discovery)
 
-[`@arkade-os/solver-discovery`](packages/discovery-client/) implements the maker
-flow so you don't have to: a portable, zero-dependency ESM library (browser /
-Node / Expo) that fetches and merges registries, ranks markets, converts amounts
-using each asset's precision, and computes the `wantAmount` — down to a one-call
-`quoteOffer(market, { give: "base", giveAmount: "0.01" })`.
+[`@arkade-os/solver-discovery`](packages/discovery-client/) is the maker-flow
+client package. It provides:
+
+- `discover`, `listMarkets`, and `bestMarket` for registry discovery and market
+  selection.
+- `quoteOffer` / `planOffer` for exact `wantAmount` planning from solver feeds.
+- `@arkade-os/solver-discovery/react` with `useOfferQuote` for linked
+  base/quote inputs in React apps.
+
+See the package README for install, API, and release instructions.
 
 ## Repo layout
 
