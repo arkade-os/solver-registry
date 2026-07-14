@@ -4,7 +4,7 @@
 // assets) describes how many decimals its atomic unit carries and is used only
 // for *rendering* — pricing math stays in atomic units. These helpers make the
 // human⇄atomic conversion first-class and exact (BigInt / rational), so a UI can
-// accept "1.5" and a swap can report human amounts without float error.
+// accept "1.5" and offer quotes can report human amounts without float error.
 
 import { parseDecimal, rationalToDecimalString, pow10, type Rational } from "./pricing.ts";
 

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { toAtomic, fromAtomic, displayPrice, displayPriceString } from "../src/assets.ts";
-import { planSwap, swap } from "../src/swap.ts";
+import { planOffer, quoteOffer } from "../src/offer.ts";
 import type { Market } from "../src/types.ts";
 import { makeMarket, mockFetch } from "./helpers.ts";
 
@@ -43,7 +43,7 @@ test("displayPrice: equal precision is identity, cross precision scales", () => 
   );
 });
 
-// --- swaps ---
+// --- offer quotes ---
 
 const DEPIX_ID = "4".repeat(68);
 
@@ -55,8 +55,8 @@ function arkadeMarket(): Market {
   });
 }
 
-test("planSwap: give base, receive quote (human amounts, precision 8)", () => {
-  const plan = planSwap({
+test("planOffer: give base, receive quote (human amounts, precision 8)", () => {
+  const plan = planOffer({
     market: arkadeMarket(),
     give: "base",
     giveAmount: "0.01", // 0.01 BTC
@@ -73,13 +73,13 @@ test("planSwap: give base, receive quote (human amounts, precision 8)", () => {
   assert.equal(plan.receive.display, "3739.84");
   assert.equal(plan.receive.asset.ticker, "DePix");
   assert.equal(plan.priceDisplay, "377000.00000000");
-  assert.equal(plan.withinLimits, true);
+  assert.equal(plan.limits.withinLimits, true);
   assert.equal(plan.limits.minBase.display, "0.00001"); // 1000 sats
   assert.equal(plan.limits.maxBase.display, "0.05"); // 5_000_000 sats
 });
 
-test("planSwap: give quote, receive base (reverse, priced with 1/P)", () => {
-  const plan = planSwap({
+test("planOffer: give quote, receive base (reverse, priced with 1/P)", () => {
+  const plan = planOffer({
     market: arkadeMarket(),
     give: "quote",
     giveAmount: "3770", // DePix
@@ -92,11 +92,11 @@ test("planSwap: give quote, receive base (reverse, priced with 1/P)", () => {
   assert.equal(plan.receive.atomic, 992_000n);
   assert.equal(plan.receive.display, "0.00992");
   assert.equal(plan.receive.asset.ticker, "BTC");
-  assert.equal(plan.withinLimits, true); // base side (received) 992_000 within [1000, 5_000_000]
+  assert.equal(plan.limits.withinLimits, true); // base side (received) 992_000 within [1000, 5_000_000]
 });
 
-test("planSwap: accepts a raw atomic bigint give amount", () => {
-  const plan = planSwap({
+test("planOffer: accepts a raw atomic bigint give amount", () => {
+  const plan = planOffer({
     market: arkadeMarket(),
     give: "base",
     giveAmount: 1_000_000n,
@@ -107,11 +107,39 @@ test("planSwap: accepts a raw atomic bigint give amount", () => {
   assert.equal(plan.receive.atomic, 373_984_000_000n);
 });
 
-test("swap: one call fetches the feed then plans (mock fetch)", async () => {
+test("planOffer: can plan from a desired receive amount", () => {
+  const plan = planOffer({
+    market: arkadeMarket(),
+    give: "base",
+    wantAmount: "3739.84",
+    feedValue: "377000",
+    safetyBps: 50,
+  });
+  assert.equal(plan.deposit.atomic, 1_000_000n);
+  assert.equal(plan.deposit.display, "0.01");
+  assert.equal(plan.receive.atomic, 373_984_000_000n);
+  assert.equal(plan.receive.display, "3739.84");
+});
+
+test("planOffer: rejects impossible wanted amounts", () => {
+  assert.throws(
+    () =>
+      planOffer({
+        market: arkadeMarket(),
+        give: "base",
+        wantAmount: "1",
+        feedValue: "377000",
+        safetyBps: 10_000,
+      }),
+    /cannot satisfy wantAmount/,
+  );
+});
+
+test("quoteOffer: one call fetches the feed then plans (mock fetch)", async () => {
   const fetchImpl = mockFetch({
     "https://feed.example.com/depix": { body: JSON.stringify({ symbol: "BTCBRL", price: "377000" }) },
   });
-  const plan = await swap(arkadeMarket(), { give: "base", giveAmount: "0.01", safetyBps: 50, fetchImpl });
+  const plan = await quoteOffer(arkadeMarket(), { give: "base", giveAmount: "0.01", safetyBps: 50, fetchImpl });
   assert.equal(plan.receive.display, "3739.84");
   assert.equal(plan.receive.atomic, 373_984_000_000n);
 });

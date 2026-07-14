@@ -5,7 +5,7 @@
 // Typical flow:
 //   const { markets } = await discover({ registries: [url] }); // defaults to bitcoin
 //   const market = bestMarket(markets, { baseId: "btc", quoteId: DEPIX_ID });
-//   const plan   = await swap(market, { give: "base", giveAmount: "0.01" });
+//   const plan   = await quoteOffer(market, { give: "base", giveAmount: "0.01" });
 //   // plan.receive.display is the human amount received; plan.receive.atomic the
 //   // wantAmount to request; then createOffer(...) as usual.
 
@@ -51,14 +51,14 @@ export {
 } from "./assets.ts";
 
 export {
-  planSwap,
-  swap,
-  type SwapSide,
-  type SwapAmount,
-  type SwapPlan,
-  type PlanSwapInput,
-  type SwapOptions,
-} from "./swap.ts";
+  planOffer,
+  quoteOffer,
+  type OfferSide,
+  type OfferAmount,
+  type OfferPlan,
+  type PlanOfferInput,
+  type QuoteOfferOptions,
+} from "./offer.ts";
 
 export {
   fetchText,
@@ -73,6 +73,7 @@ export {
 export {
   fetchIndex,
   discover,
+  listMarketPairs,
   selectMarkets,
   bestMarket,
   priceMarket,
@@ -86,6 +87,8 @@ export {
   type DiscoverOptions,
   type SourceReport,
   type DiscoverResult,
+  type MarketPair,
+  type BestMarketOptions,
   type SelectOptions,
   type PriceMarketOptions,
 } from "./discovery.ts";

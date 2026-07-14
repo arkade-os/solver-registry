@@ -4,7 +4,7 @@
 //
 // Isomorphic by design — see `feed.ts` for the injectable transport.
 
-import { DEFAULT_NETWORK, type IndexMarket, type Network, type NetworkIndex } from "./types.ts";
+import { DEFAULT_NETWORK, type AssetInfo, type IndexMarket, type Network, type NetworkIndex } from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
 import { quoteMarket, withinBaseLimits, type Direction, type Quote } from "./pricing.ts";
 import { fetchText, fetchFeedValue, type FetchLike, type FetchFeedOptions } from "./feed.ts";
@@ -248,6 +248,14 @@ export interface SelectOptions {
   baseAmount?: bigint | number;
 }
 
+export interface MarketPair {
+  /** Display label from the first ranked market for this id pair. */
+  pair: string;
+  base_asset: AssetInfo;
+  quote_asset: AssetInfo;
+  marketCount: number;
+}
+
 function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
   const amount = opts.baseAmount === undefined ? undefined : BigInt(opts.baseAmount);
   return (m) => {
@@ -265,9 +273,47 @@ export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectO
   return markets.filter(selectionPredicate(opts));
 }
 
-/** The best market for an id pair, or null if none match. Short-circuits on the first match. */
-export function bestMarket<T extends IndexMarket>(markets: T[], opts: SelectOptions): T | null {
-  return markets.find(selectionPredicate(opts)) ?? null;
+/**
+ * List available id pairs from a ranked market set. The first market for each
+ * pair supplies the display labels, and `marketCount` tells UIs how many solver
+ * candidates are available for that pair.
+ */
+export function listMarketPairs<T extends IndexMarket>(markets: T[]): MarketPair[] {
+  const byPair = new Map<string, MarketPair>();
+  for (const market of markets) {
+    const key = idPair(market);
+    const existing = byPair.get(key);
+    if (existing) {
+      existing.marketCount++;
+      continue;
+    }
+    byPair.set(key, {
+      pair: market.pair,
+      base_asset: market.base_asset,
+      quote_asset: market.quote_asset,
+      marketCount: 1,
+    });
+  }
+  return [...byPair.values()];
+}
+
+export interface BestMarketOptions extends SelectOptions {
+  /** Zero-based match offset. Use 1 to retry with the second-ranked market. */
+  cursor?: number;
+}
+
+/** The best matching market, or a later match when `cursor` is set. */
+export function bestMarket<T extends IndexMarket>(markets: T[], opts: BestMarketOptions): T | null {
+  const cursor = opts.cursor ?? 0;
+  if (!Number.isInteger(cursor) || cursor < 0) throw new Error(`cursor must be a non-negative integer, got ${cursor}`);
+  const matches = selectionPredicate(opts);
+  let seen = 0;
+  for (const market of markets) {
+    if (!matches(market)) continue;
+    if (seen === cursor) return market;
+    seen++;
+  }
+  return null;
 }
 
 export interface PriceMarketOptions extends FetchFeedOptions {
@@ -279,7 +325,7 @@ export interface PriceMarketOptions extends FetchFeedOptions {
 /**
  * Fetch a market's advertised `price_feed`, extract the price, and produce a
  * fully-computed {@link Quote} (want amount + limit check) in atomic units. The
- * maker MUST price from this exact URL. See `swap()` for a human-amount API.
+ * maker MUST price from this exact URL. See `quoteOffer()` for a human-amount API.
  */
 export async function priceMarket(
   market: IndexMarket,

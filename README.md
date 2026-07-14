@@ -63,7 +63,7 @@ registry you follow, merge, filter by pair, price from the market's
 flow so you don't have to: a portable, zero-dependency ESM library (browser /
 Node / Expo) that fetches and merges registries, ranks markets, converts amounts
 using each asset's precision, and computes the `wantAmount` — down to a one-call
-`swap(market, { give: "base", giveAmount: "0.01" })`.
+`quoteOffer(market, { give: "base", giveAmount: "0.01" })`.
 
 ## Repo layout
 
