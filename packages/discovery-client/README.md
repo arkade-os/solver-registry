@@ -5,8 +5,9 @@ A tiny, portable **ESM** client for the consumer (maker) side of the
 the price feeds solvers advertise, rank markets, convert amounts, and compute the
 `wantAmount` for an offer.
 
-- **Runs everywhere** — browser, Node, and Expo / React Native. Zero runtime
-  dependencies; only global `fetch` is used (and it's injectable).
+- **Runs everywhere** — browser, Node, and Expo / React Native. The root
+  entrypoint has zero runtime dependencies; only global `fetch` is used (and
+  it's injectable).
 - **No `eval` / `new Function`** — validation is hand-rolled, so it works under a
   strict CSP and on Hermes (React Native), where JSON-Schema engines like Ajv
   fail.
@@ -81,13 +82,40 @@ import { discover } from "@arkade-os/solver-discovery";
 await discover({ registries, fetchImpl: myFetch });
 ```
 
+## React
+
+The optional React entrypoint keeps a two-input quote form synchronized. It
+fetches the market feed and recalculates the other field whenever the user edits
+base or quote:
+
+```tsx
+import { useOfferQuote } from "@arkade-os/solver-discovery/react";
+
+function QuoteForm({ market }) {
+  const quote = useOfferQuote(market, { give: "base" });
+
+  return (
+    <>
+      <input value={quote.baseAmount} onChange={(e) => quote.setBaseAmount(e.target.value)} />
+      <input value={quote.quoteAmount} onChange={(e) => quote.setQuoteAmount(e.target.value)} />
+      <button disabled={!quote.plan}>Create offer</button>
+    </>
+  );
+}
+```
+
+`quote.plan?.receive.atomic` is the `wantAmount` to request. The package does
+not install React for you: importing `@arkade-os/solver-discovery/react`
+requires React in the app, while the root package entrypoint does not import
+React.
+
 ## API
 
 | Export | Purpose |
 |---|---|
 | `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. Registry failures are isolated. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
-| `listMarketPairs(markets)` | List available id pairs and how many solver candidates each pair has. |
+| `listMarkets(markets)` / `listMarketPairs(markets)` | List available id pairs and how many solver candidates each pair has. |
 | `selectMarkets(markets, {baseId, quoteId, baseAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair (and size), keeping the ranking. `cursor: 1` selects the second-ranked market. |
 | `quoteOffer(market, {give, giveAmount \| wantAmount, safetyBps?})` | Fetch the feed and build a full `OfferPlan` (human in/out). |
 | `planOffer({market, give, giveAmount \| wantAmount, feedValue, safetyBps?})` | Same, from an already-fetched feed value (pure/sync). |
@@ -96,6 +124,12 @@ await discover({ registries, fetchImpl: myFetch });
 | `quoteMarket` / `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
 | `toAtomic` / `fromAtomic` / `displayPrice` | Precision-aware conversion. |
 | `validateCard` / `validateIndex` | Dependency-free, `eval`-free schema validation. |
+
+React-only export from `@arkade-os/solver-discovery/react`:
+
+| Export | Purpose |
+|---|---|
+| `useOfferQuote(market, opts)` | Hook for linked base/quote inputs. The last edited side drives the quote and updates the other side. |
 
 `give: "base"` deposits the base asset and receives the quote; `give: "quote"`
 is the reverse (priced with `1/P`). Pass exactly one of `giveAmount` or

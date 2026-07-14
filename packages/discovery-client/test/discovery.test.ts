@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   fetchIndex,
   discover,
+  listMarkets,
   listMarketPairs,
   selectMarkets,
   bestMarket,
@@ -142,11 +143,12 @@ test("selectMarkets / bestMarket: filter by id pair and size, keep ranking", asy
   assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, baseAmount: 2000 }).length, 4);
   assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: "nope" }).length, 0);
 
-  const pairs = listMarketPairs(res.markets);
+  const pairs = listMarkets(res.markets);
   assert.deepEqual(
     pairs.map((p) => ({ pair: p.pair, count: p.marketCount })),
     [{ pair: "BTC/USDT", count: 4 }],
   );
+  assert.deepEqual(listMarketPairs(res.markets), pairs);
 });
 
 test("priceMarket: end-to-end from discovered market to exact want amount", async () => {

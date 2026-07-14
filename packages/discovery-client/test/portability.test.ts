@@ -21,6 +21,10 @@ const FORBIDDEN: Array<{ pattern: RegExp; why: string }> = [
   { pattern: /\b__dirname\b|\b__filename\b/, why: "uses CommonJS module globals" },
 ];
 
+const ALLOWED_EXTERNAL_IMPORTS: Record<string, Set<string>> = {
+  "react.ts": new Set(["react"]),
+};
+
 test("source files exist to check", () => {
   assert.ok(files.length >= 5, `expected several src files, found ${files.join(", ")}`);
 });
@@ -36,6 +40,7 @@ for (const file of files) {
     const importRe = /(?:import|export)[^"']*from\s+["']([^"']+)["']/g;
     for (const m of code.matchAll(importRe)) {
       const spec = m[1];
+      if (ALLOWED_EXTERNAL_IMPORTS[file]?.has(spec)) continue;
       assert.ok(spec.startsWith("./") || spec.startsWith("../"), `${file} imports non-relative "${spec}"`);
       assert.ok(spec.endsWith(".ts"), `${file} import "${spec}" should carry the .ts extension`);
     }

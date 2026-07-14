@@ -297,6 +297,9 @@ export function listMarketPairs<T extends IndexMarket>(markets: T[]): MarketPair
   return [...byPair.values()];
 }
 
+/** Alias for UI code that wants the available market list. */
+export const listMarkets = listMarketPairs;
+
 export interface BestMarketOptions extends SelectOptions {
   /** Zero-based match offset. Use 1 to select the second-ranked market. */
   cursor?: number;
