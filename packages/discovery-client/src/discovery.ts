@@ -278,7 +278,7 @@ export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectO
  * pair supplies the display labels, and `marketCount` tells UIs how many solver
  * candidates are available for that pair.
  */
-export function listMarketPairs<T extends IndexMarket>(markets: T[]): MarketPair[] {
+export function listMarkets<T extends IndexMarket>(markets: T[]): MarketPair[] {
   const byPair = new Map<string, MarketPair>();
   for (const market of markets) {
     const key = idPair(market);
@@ -296,9 +296,6 @@ export function listMarketPairs<T extends IndexMarket>(markets: T[]): MarketPair
   }
   return [...byPair.values()];
 }
-
-/** Alias for UI code that wants the available market list. */
-export const listMarkets = listMarketPairs;
 
 export interface BestMarketOptions extends SelectOptions {
   /** Zero-based match offset. Use 1 to select the second-ranked market. */

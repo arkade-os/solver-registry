@@ -115,7 +115,7 @@ React.
 |---|---|
 | `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. Registry failures are isolated. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
-| `listMarkets(markets)` / `listMarketPairs(markets)` | List available id pairs and how many solver candidates each pair has. |
+| `listMarkets(markets)` | List available id pairs and how many solver candidates each pair has. |
 | `selectMarkets(markets, {baseId, quoteId, baseAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair (and size), keeping the ranking. `cursor: 1` selects the second-ranked market. |
 | `quoteOffer(market, {give, giveAmount \| wantAmount, safetyBps?})` | Fetch the feed and build a full `OfferPlan` (human in/out). |
 | `planOffer({market, give, giveAmount \| wantAmount, feedValue, safetyBps?})` | Same, from an already-fetched feed value (pure/sync). |

@@ -4,7 +4,6 @@ import {
   fetchIndex,
   discover,
   listMarkets,
-  listMarketPairs,
   selectMarkets,
   bestMarket,
   priceMarket,
@@ -148,7 +147,6 @@ test("selectMarkets / bestMarket: filter by id pair and size, keep ranking", asy
     pairs.map((p) => ({ pair: p.pair, count: p.marketCount })),
     [{ pair: "BTC/USDT", count: 4 }],
   );
-  assert.deepEqual(listMarketPairs(res.markets), pairs);
 });
 
 test("priceMarket: end-to-end from discovered market to exact want amount", async () => {

@@ -74,7 +74,6 @@ export {
   fetchIndex,
   discover,
   listMarkets,
-  listMarketPairs,
   selectMarkets,
   bestMarket,
   priceMarket,
