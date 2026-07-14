@@ -1,6 +1,6 @@
 {
   "name": "@arkade-os/solver-discovery",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Portable ESM client for discovering solver price feeds from Arkade solver registries (browser / Node / Expo).",
   "license": "MIT",
   "type": "module",
