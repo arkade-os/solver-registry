@@ -57,6 +57,8 @@ registry you follow, merge, filter by pair, price from the market's
 
 ### Client library
 
+[![npm](https://img.shields.io/npm/v/%40arkade-os%2Fsolver-discovery)](https://www.npmjs.com/package/@arkade-os/solver-discovery)
+
 [`@arkade-os/solver-discovery`](packages/discovery-client/) implements the maker
 flow so you don't have to: a portable, zero-dependency ESM library (browser /
 Node / Expo) that fetches and merges registries, ranks markets, converts amounts
@@ -109,25 +111,6 @@ which card failed and why without digging through logs.
 - `publish.yml` runs on pushes to `master` that change `solvers/**`:
   re-validates (never publishes on failure), then builds and deploys
   `bitcoin.json` / `signet.json` / `mutinynet.json` to GitHub Pages.
-
-## Release the client package
-
-Publish [`@arkade-os/solver-discovery`](packages/discovery-client/) manually
-from the command line:
-
-```sh
-cd packages/discovery-client
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm build
-npm publish --access public
-```
-
-Before publishing, update `packages/discovery-client/package.json` to the new
-version and make sure you are logged in to npm with publish rights for the
-`@arkade-os` scope. After publishing, tag the release from the repo root, for
-example `git tag solver-discovery-v0.1.0`.
 
 ## Run your own registry
 

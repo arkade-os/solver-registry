@@ -119,3 +119,20 @@ pnpm test        # node --test, dependency-free, runs the .ts directly
 pnpm typecheck
 pnpm build       # emits dist/*.js + *.d.ts
 ```
+
+## Release
+
+Publish manually from this package directory:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm build
+npm publish --access public
+```
+
+Before publishing, update `package.json` to the new version and make sure you
+are logged in to npm with publish rights for the `@arkade-os` scope. After
+publishing, tag the release from the repo root, for example
+`git tag solver-discovery-v0.1.0`.
