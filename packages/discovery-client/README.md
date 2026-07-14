@@ -101,6 +101,18 @@ await discover({ registries, network: "mainnet", fetchImpl: myFetch });
 is the reverse (priced with `1/P`). `safetyBps` defaults to `50` — the cushion
 that absorbs feed movement between funding and fill.
 
+## Roadmap
+
+**Chained (multi-hop) swaps** — not yet supported: `bestMarket`/`swap` match
+direct `(baseId, quoteId)` pairs only. Planned: treat markets as directed edges
+over canonical asset ids and route through intermediates (BTC → USDT → USDC)
+via `findRoutes` / `planRoute` / `swapRoute`, ranking routes by the compounded
+net multiplier `∏(1 − (fee_bps + safety_bps)/10000)` and checking size limits
+per hop at plan time. Note the protocol caveat: each hop executes as a separate
+Arkade offer, so a chained swap is **not atomic** — plans are indicative and
+routing will be opt-in, never a silent fallback inside `swap()`. Full spec and
+API design: [#1](https://github.com/ArkLabsHQ/solver-registry/issues/1).
+
 ## Develop
 
 ```sh
