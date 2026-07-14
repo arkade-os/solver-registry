@@ -49,6 +49,14 @@ function assertCleanGitTree() {
   }
 }
 
+function assertOnMaster() {
+  const branch = capture("git", ["branch", "--show-current"], rootDir);
+  if (branch !== "master") {
+    console.error(`Release must be run from master, got ${branch || "detached HEAD"}.`);
+    process.exit(1);
+  }
+}
+
 function readPackageVersion() {
   return JSON.parse(readFileSync(packageJson, "utf8")).version;
 }
@@ -59,6 +67,7 @@ if (!RELEASE_TYPES.has(bump)) {
 }
 
 assertCleanGitTree();
+assertOnMaster();
 
 run("npm", ["test"], packageDir);
 run("npm", ["run", "typecheck"], packageDir);
@@ -83,8 +92,8 @@ const versionFiles = [
 run("git", ["add", ...versionFiles], rootDir);
 run("git", ["commit", "-m", `Release solver discovery v${version}`], rootDir);
 run("git", ["tag", tag], rootDir);
+run("git", ["push", "origin", "master"], rootDir);
+run("git", ["push", "origin", tag], rootDir);
 
 console.log(`\nPublished @arkade-os/solver-discovery v${version}.`);
-console.log("Push the release commit and tag with:");
-console.log("  git push origin HEAD");
-console.log(`  git push origin ${tag}`);
+console.log(`Pushed master and ${tag}.`);
