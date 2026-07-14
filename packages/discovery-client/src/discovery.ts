@@ -6,13 +6,8 @@
 
 import type { IndexMarket, Network, NetworkIndex } from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
-import { quoteMarket, DEFAULT_SAFETY_BPS, type Direction, type Quote } from "./pricing.ts";
-import {
-  fetchText,
-  fetchFeedValue,
-  type FetchLike,
-  type PriceExtractor,
-} from "./feed.ts";
+import { quoteMarket, type Direction, type Quote } from "./pricing.ts";
+import { fetchText, fetchFeedValue, type FetchLike, type FetchFeedOptions } from "./feed.ts";
 
 export type SourceType = "registry" | "local";
 
@@ -141,6 +136,13 @@ function idPair(m: IndexMarket): string {
   return `${m.base_asset.id}/${m.quote_asset.id}`;
 }
 
+/** Record one source's outcome and mirror its error/warnings into the flat `warnings` list. */
+function recordSource(sources: SourceReport[], warnings: string[], report: SourceReport): void {
+  sources.push(report);
+  if (report.error) warnings.push(`${report.source}: ${report.error}`);
+  for (const w of report.warnings) warnings.push(`${report.source}: ${w}`);
+}
+
 /**
  * Discover markets across the followed registries plus any pinned local cards.
  * Registry failures are isolated; local cards are schema-validated and those
@@ -172,32 +174,29 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
 
   for (const r of indexResults) {
     const currentOrder = order++;
-    for (const w of r.warnings) warnings.push(`${r.url}: ${w}`);
     if (!r.ok) {
-      sources.push({ source: r.url, sourceType: "registry", ok: false, marketCount: 0, error: r.error, warnings: r.warnings });
+      recordSource(sources, warnings, { source: r.url, sourceType: "registry", ok: false, marketCount: 0, error: r.error, warnings: r.warnings });
       continue;
     }
     const markets = r.index!.markets;
     for (const m of markets) tagged.push({ market: m, source: r.url, sourceType: "registry", order: currentOrder });
-    sources.push({ source: r.url, sourceType: "registry", ok: true, marketCount: markets.length, warnings: r.warnings });
+    recordSource(sources, warnings, { source: r.url, sourceType: "registry", ok: true, marketCount: markets.length, warnings: r.warnings });
   }
 
   for (const local of opts.localCards ?? []) {
     const currentOrder = order++;
     const result = validateCard(local.card);
     if (!result.ok) {
-      const src = local.label ?? "local:<invalid>";
+      const source = local.label ?? "local:<invalid>";
       const error = `invalid card: ${result.errors.join("; ")}`;
-      sources.push({ source: src, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
-      warnings.push(`${src}: ${error}`);
+      recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
       continue;
     }
     const card = result.value!;
     const source = local.label ?? `local:${card.name}`;
     if (local.network !== opts.network) {
-      const msg = `card targets ${local.network}, not ${opts.network}; skipped`;
-      sources.push({ source, sourceType: "local", ok: false, marketCount: 0, error: msg, warnings: [] });
-      warnings.push(`${source}: ${msg}`);
+      const error = `card targets ${local.network}, not ${opts.network}; skipped`;
+      recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
       continue;
     }
     for (const m of card.markets) {
@@ -205,7 +204,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
       tagged.push({ market: entry, source, sourceType: "local", order: currentOrder });
     }
-    sources.push({ source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
+    recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
   }
 
   // Drop byte-identical duplicates (same solver listed in two registries),
@@ -218,16 +217,16 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     return true;
   });
 
-  deduped.sort((a, b) => {
-    const pa = idPair(a.market);
-    const pb = idPair(b.market);
-    if (pa !== pb) return pa < pb ? -1 : 1;
-    if (a.market.fee_bps !== b.market.fee_bps) return a.market.fee_bps - b.market.fee_bps;
-    if (a.order !== b.order) return a.order - b.order;
-    return a.market.solver < b.market.solver ? -1 : a.market.solver > b.market.solver ? 1 : 0;
+  // Precompute each entry's sort key once rather than rebuilding it on every comparison.
+  const withKey = deduped.map((t) => ({ t, key: idPair(t.market) }));
+  withKey.sort((a, b) => {
+    if (a.key !== b.key) return a.key < b.key ? -1 : 1;
+    if (a.t.market.fee_bps !== b.t.market.fee_bps) return a.t.market.fee_bps - b.t.market.fee_bps;
+    if (a.t.order !== b.t.order) return a.t.order - b.t.order;
+    return a.t.market.solver < b.t.market.solver ? -1 : a.t.market.solver > b.t.market.solver ? 1 : 0;
   });
 
-  const markets: DiscoveredMarket[] = deduped.map((t) => ({ ...t.market, source: t.source, sourceType: t.sourceType }));
+  const markets: DiscoveredMarket[] = withKey.map(({ t }) => ({ ...t.market, source: t.source, sourceType: t.sourceType }));
   return { markets, sources, warnings };
 }
 
@@ -243,6 +242,12 @@ export interface SelectOptions {
   baseAmount?: bigint | number;
 }
 
+function matchesSelection(m: IndexMarket, opts: SelectOptions, amount: bigint | undefined): boolean {
+  if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
+  if (amount === undefined) return true;
+  return amount >= BigInt(m.min_base_amount) && amount <= BigInt(m.max_base_amount);
+}
+
 /**
  * Filter already-discovered markets to one id pair (and optionally a trade
  * size), preserving discovery ranking so the first result is the best expected
@@ -250,27 +255,19 @@ export interface SelectOptions {
  */
 export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectOptions): T[] {
   const amount = opts.baseAmount === undefined ? undefined : BigInt(opts.baseAmount);
-  return markets.filter((m) => {
-    if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
-    if (amount === undefined) return true;
-    return amount >= BigInt(m.min_base_amount) && amount <= BigInt(m.max_base_amount);
-  });
+  return markets.filter((m) => matchesSelection(m, opts, amount));
 }
 
-/** The best market for an id pair, or null if none match. */
+/** The best market for an id pair, or null if none match. Short-circuits on the first match. */
 export function bestMarket<T extends IndexMarket>(markets: T[], opts: SelectOptions): T | null {
-  return selectMarkets(markets, opts)[0] ?? null;
+  const amount = opts.baseAmount === undefined ? undefined : BigInt(opts.baseAmount);
+  return markets.find((m) => matchesSelection(m, opts, amount)) ?? null;
 }
 
-export interface PriceMarketOptions {
+export interface PriceMarketOptions extends FetchFeedOptions {
   deposit: bigint | number | string;
   direction: Direction;
   safetyBps?: number;
-  fetchImpl?: FetchLike;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  /** Override how the numeric price is pulled out of the feed body. */
-  extractPrice?: PriceExtractor;
 }
 
 /**
@@ -288,6 +285,6 @@ export async function priceMarket(
     feedValue,
     deposit: opts.deposit,
     direction: opts.direction,
-    safetyBps: opts.safetyBps ?? DEFAULT_SAFETY_BPS,
+    safetyBps: opts.safetyBps,
   });
 }

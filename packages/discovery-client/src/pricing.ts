@@ -40,7 +40,8 @@ function normalize({ num, den }: Rational): Rational {
   return g > 1n ? { num: num / g, den: den / g } : { num, den };
 }
 
-function pow10(n: number): bigint {
+/** 10^n as an exact bigint. Shared with `assets.ts`'s precision conversion. */
+export function pow10(n: number): bigint {
   if (n < 0) throw new Error(`pow10 requires n >= 0, got ${n}`);
   return 10n ** BigInt(n);
 }
@@ -170,7 +171,6 @@ export interface Quote {
   price: Rational;
   /** Human-readable price at 8 decimals (display only). */
   priceDecimalString: string;
-  feeBps: number;
   safetyBps: number;
   /** The base-side amount the size limits apply to (deposit if base is deposited, else wantAmount). */
   baseAmount: bigint;
@@ -208,7 +208,6 @@ export function quoteMarket(input: QuoteInput): Quote {
     wantAmount,
     price,
     priceDecimalString: rationalToDecimalString(price, 8),
-    feeBps: market.fee_bps,
     safetyBps,
     baseAmount,
     withinLimits,

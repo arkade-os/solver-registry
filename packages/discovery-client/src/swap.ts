@@ -10,7 +10,7 @@
 import type { AssetInfo, Market } from "./types.ts";
 import { quoteMarket, type Direction, type Rational } from "./pricing.ts";
 import { toAtomic, fromAtomic, displayPriceString } from "./assets.ts";
-import { fetchFeedValue, type FetchLike, type PriceExtractor } from "./feed.ts";
+import { fetchFeedValue, type FetchFeedOptions } from "./feed.ts";
 
 /** Which side of the pair the maker deposits. `base` = give base, receive quote. */
 export type SwapSide = "base" | "quote";
@@ -34,7 +34,6 @@ export interface SwapPlan {
   price: Rational;
   /** Human price (quote-display per base-display) at 8 decimals. */
   priceDisplay: string;
-  feeBps: number;
   safetyBps: number;
   /** The market's size limits, which always apply to the base side. */
   limits: {
@@ -105,7 +104,6 @@ export function planSwap(input: PlanSwapInput): SwapPlan {
     receive: amount(receiveAsset, q.wantAmount),
     price: q.price,
     priceDisplay,
-    feeBps: q.feeBps,
     safetyBps: q.safetyBps,
     limits: {
       baseAsset: base,
@@ -118,14 +116,10 @@ export function planSwap(input: PlanSwapInput): SwapPlan {
   };
 }
 
-export interface SwapOptions {
+export interface SwapOptions extends FetchFeedOptions {
   give: SwapSide;
   giveAmount: string | number | bigint;
   safetyBps?: number;
-  fetchImpl?: FetchLike;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  extractPrice?: PriceExtractor;
 }
 
 /**

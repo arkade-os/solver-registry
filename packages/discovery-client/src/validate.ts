@@ -39,23 +39,42 @@ class Errors {
   }
 }
 
-function checkAsset(err: Errors, path: string, v: unknown): void {
+function checkIntRange(err: Errors, path: string, v: unknown, min: number, max: number): void {
+  if (!isInt(v) || v < min || v > max) {
+    err.add(path, `must be an integer in ${min}..${max}`);
+  }
+}
+
+function checkIntMin(err: Errors, path: string, v: unknown, min: number): void {
+  if (!isInt(v) || v < min) {
+    err.add(path, `must be an integer >= ${min}`);
+  }
+}
+
+function checkStringLength(err: Errors, path: string, v: unknown, min: number, max: number): void {
+  if (typeof v !== "string" || v.length < min || v.length > max) {
+    err.add(path, `must be a string of length ${min}..${max}`);
+  }
+}
+
+const ASSET_KEYS = new Set(["id", "name", "ticker", "precision"]);
+
+function checkAsset(err: Errors, path: string, v: unknown, strict: boolean): void {
   if (!isObject(v)) {
     err.add(path, "must be an object");
     return;
   }
+  if (strict) {
+    for (const key of Object.keys(v)) {
+      if (!ASSET_KEYS.has(key)) err.add(`${path}/${key}`, "is not an allowed property");
+    }
+  }
   if (typeof v.id !== "string" || !ASSET_ID.test(v.id)) {
     err.add(`${path}/id`, 'must be "btc" or 68 lowercase hex chars');
   }
-  if (typeof v.name !== "string" || v.name.length < 1 || v.name.length > 64) {
-    err.add(`${path}/name`, "must be a string of length 1..64");
-  }
-  if (typeof v.ticker !== "string" || v.ticker.length < 1 || v.ticker.length > 16) {
-    err.add(`${path}/ticker`, "must be a string of length 1..16");
-  }
-  if (!isInt(v.precision) || v.precision < 0 || v.precision > 18) {
-    err.add(`${path}/precision`, "must be an integer in 0..18");
-  }
+  checkStringLength(err, `${path}/name`, v.name, 1, 64);
+  checkStringLength(err, `${path}/ticker`, v.ticker, 1, 16);
+  checkIntRange(err, `${path}/precision`, v.precision, 0, 18);
 }
 
 const MARKET_KEYS = new Set([
@@ -71,34 +90,26 @@ const MARKET_KEYS = new Set([
 ]);
 
 /**
- * Validate the market fields common to cards and index entries.
- * `extraKeys` lists keys allowed beyond the core market fields (e.g. `solver`);
- * any other key is rejected only when `strict` is set (cards), so index
- * consumers stay forward-compatible with new fields.
+ * Validate the market fields common to cards and index entries. Unknown keys
+ * are rejected only when `strict` is set (cards); index consumers stay
+ * forward-compatible with new fields the reducer might add.
  */
-function checkMarket(
-  err: Errors,
-  path: string,
-  v: unknown,
-  opts: { strict: boolean; extraKeys?: string[] },
-): void {
+function checkMarket(err: Errors, path: string, v: unknown, opts: { strict: boolean }): void {
   if (!isObject(v)) {
     err.add(path, "must be an object");
     return;
   }
-  const allowed = new Set(MARKET_KEYS);
-  for (const k of opts.extraKeys ?? []) allowed.add(k);
   if (opts.strict) {
     for (const key of Object.keys(v)) {
-      if (!allowed.has(key)) err.add(`${path}/${key}`, "is not an allowed property");
+      if (!MARKET_KEYS.has(key)) err.add(`${path}/${key}`, "is not an allowed property");
     }
   }
 
   if (typeof v.pair !== "string" || !PAIR.test(v.pair)) {
     err.add(`${path}/pair`, 'must match "<base>/<quote>"');
   }
-  checkAsset(err, `${path}/base_asset`, v.base_asset);
-  checkAsset(err, `${path}/quote_asset`, v.quote_asset);
+  checkAsset(err, `${path}/base_asset`, v.base_asset, opts.strict);
+  checkAsset(err, `${path}/quote_asset`, v.quote_asset, opts.strict);
 
   // pair label must equal the two tickers (identity still lives in the ids).
   const base = v.base_asset as AssetInfo | undefined;
@@ -113,21 +124,13 @@ function checkMarket(
   if (typeof v.price_feed !== "string" || !v.price_feed.startsWith("https://")) {
     err.add(`${path}/price_feed`, "must be an https:// URL");
   }
-  if (!isInt(v.price_decimals) || v.price_decimals < 0 || v.price_decimals > 18) {
-    err.add(`${path}/price_decimals`, "must be an integer in 0..18");
-  }
+  checkIntRange(err, `${path}/price_decimals`, v.price_decimals, 0, 18);
   if (typeof v.invert !== "boolean") {
     err.add(`${path}/invert`, "must be a boolean");
   }
-  if (!isInt(v.fee_bps) || v.fee_bps < 0 || v.fee_bps > 10000) {
-    err.add(`${path}/fee_bps`, "must be an integer in 0..10000");
-  }
-  if (!isInt(v.min_base_amount) || v.min_base_amount < 1) {
-    err.add(`${path}/min_base_amount`, "must be an integer >= 1");
-  }
-  if (!isInt(v.max_base_amount) || v.max_base_amount < 1) {
-    err.add(`${path}/max_base_amount`, "must be an integer >= 1");
-  }
+  checkIntRange(err, `${path}/fee_bps`, v.fee_bps, 0, 10000);
+  checkIntMin(err, `${path}/min_base_amount`, v.min_base_amount, 1);
+  checkIntMin(err, `${path}/max_base_amount`, v.max_base_amount, 1);
   if (
     isInt(v.min_base_amount) &&
     isInt(v.max_base_amount) &&

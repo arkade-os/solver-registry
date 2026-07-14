@@ -6,12 +6,7 @@
 // human⇄atomic conversion first-class and exact (BigInt / rational), so a UI can
 // accept "1.5" and a swap can report human amounts without float error.
 
-import { parseDecimal, rationalToDecimalString, type Rational } from "./pricing.ts";
-
-function pow10(n: number): bigint {
-  if (n < 0) throw new Error(`precision must be >= 0, got ${n}`);
-  return 10n ** BigInt(n);
-}
+import { parseDecimal, rationalToDecimalString, pow10, type Rational } from "./pricing.ts";
 
 /**
  * Convert a human display amount to atomic units for an asset of the given
