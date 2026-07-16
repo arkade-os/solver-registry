@@ -162,40 +162,19 @@ export function otherSide(side: Side): Side {
   return side === "base" ? "quote" : "base";
 }
 
-// The only side -> field-name mapping in the client; every limit check flows
-// through these two accessors.
-function sideMin(market: MarketLimits, side: Side): number {
-  return side === "base" ? market.min_base_amount : market.min_quote_amount;
-}
-
-function sideMax(market: MarketLimits, side: Side): number {
-  return side === "base" ? market.max_base_amount : market.max_quote_amount;
-}
-
 /**
  * A market's [min, max] bounds for one side, in that side's atomic units, or
  * null when the side is disabled (`max = 0`) — i.e. the solver cannot pay out
  * (solve) that side and makers must not take the direction that receives it.
+ *
+ * The only side -> field-name mapping in the client. Bounds are plain numbers;
+ * bigint amounts compare exactly against them (`amount >= limits.min`), so
+ * callers inline the range check rather than going through another helper.
  */
-export function sideLimits(market: MarketLimits, side: Side): { min: bigint; max: bigint } | null {
-  const max = sideMax(market, side);
-  if (max === 0) return null;
-  return { min: BigInt(sideMin(market, side)), max: BigInt(max) };
-}
-
-/** Whether the solver can pay out (solve) `side`: its `max` bound is > 0. */
-export function solvesSide(market: MarketLimits, side: Side): boolean {
-  return sideMax(market, side) > 0;
-}
-
-/**
- * Whether an amount sits within a side's inclusive [min, max] bounds. Always
- * false when the side is disabled (the solver does not solve it).
- * BigInt/number relational comparison is exact, so no conversion is needed.
- */
-export function withinSideLimits(market: MarketLimits, side: Side, amount: bigint): boolean {
-  const max = sideMax(market, side);
-  return max > 0 && amount >= sideMin(market, side) && amount <= max;
+export function sideLimits(market: MarketLimits, side: Side): { min: number; max: number } | null {
+  const min = side === "base" ? market.min_base_amount : market.min_quote_amount;
+  const max = side === "base" ? market.max_base_amount : market.max_quote_amount;
+  return max > 0 ? { min, max } : null;
 }
 
 /** Render a rational to a fixed-decimal string (for display only, never pricing). */
@@ -251,6 +230,7 @@ export function quoteMarket(input: QuoteInput): Quote {
   const price = deriveAtomicPrice(input.feedValue, market);
   const wantAmount = computeWantAmount({ deposit, direction, price, feeBps: market.fee_bps, safetyBps });
   const wantSide = wantSideOf(direction);
+  const limits = sideLimits(market, wantSide);
   return {
     market,
     direction,
@@ -260,7 +240,7 @@ export function quoteMarket(input: QuoteInput): Quote {
     priceDecimalString: rationalToDecimalString(price, 8),
     safetyBps,
     wantSide,
-    solvable: solvesSide(market, wantSide),
-    withinLimits: withinSideLimits(market, wantSide, wantAmount),
+    solvable: limits !== null,
+    withinLimits: limits !== null && wantAmount >= limits.min && wantAmount <= limits.max,
   };
 }

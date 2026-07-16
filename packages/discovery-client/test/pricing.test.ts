@@ -5,9 +5,8 @@ import {
   deriveAtomicPrice,
   computeWantAmount,
   wantSideOf,
+  otherSide,
   sideLimits,
-  solvesSide,
-  withinSideLimits,
   quoteMarket,
 } from "../src/pricing.ts";
 import { makeMarket as market, makeOneSidedMarket } from "./helpers.ts";
@@ -55,24 +54,21 @@ test("deriveAtomicPrice: rejects a zero/negative price", () => {
   assert.throws(() => deriveAtomicPrice("-1", { price_decimals: 0 }), /must be positive/);
 });
 
-test("side helpers: max > 0 marks a side solvable, max = 0 disables it", () => {
+test("sideLimits: max > 0 returns bounds, max = 0 (disabled) returns null", () => {
   const both = market();
-  assert.equal(solvesSide(both, "base"), true);
-  assert.equal(solvesSide(both, "quote"), true);
-  assert.deepEqual(sideLimits(both, "base"), { min: 1000n, max: 5_000_000n });
+  assert.deepEqual(sideLimits(both, "base"), { min: 1000, max: 5_000_000 });
+  assert.deepEqual(sideLimits(both, "quote"), { min: 1_000_000, max: 1_000_000_000_000_000 });
 
   const quoteOnly = makeOneSidedMarket("quote"); // base bounds zeroed
-  assert.equal(solvesSide(quoteOnly, "base"), false);
   assert.equal(sideLimits(quoteOnly, "base"), null);
-  assert.equal(withinSideLimits(quoteOnly, "base", 0n), false); // disabled side never passes, even at 0
-  assert.equal(withinSideLimits(quoteOnly, "base", 2000n), false);
-  assert.equal(withinSideLimits(quoteOnly, "quote", 1_000_000n), true);
-  assert.equal(withinSideLimits(quoteOnly, "quote", 999_999n), false);
+  assert.deepEqual(sideLimits(quoteOnly, "quote"), { min: 1_000_000, max: 1_000_000_000_000_000 });
 });
 
-test("wantSideOf: maps a direction to the side the maker receives", () => {
+test("side mapping: wantSideOf (from direction) and otherSide (from give) agree", () => {
   assert.equal(wantSideOf("baseToQuote"), "quote");
   assert.equal(wantSideOf("quoteToBase"), "base");
+  assert.equal(otherSide("base"), "quote");
+  assert.equal(otherSide("quote"), "base");
 });
 
 test("computeWantAmount: baseToQuote concedes fee + safety and floors", () => {

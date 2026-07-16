@@ -6,7 +6,7 @@
 
 import { DEFAULT_NETWORK, type AssetInfo, type IndexMarket, type Network, type NetworkIndex, type Side } from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
-import { quoteMarket, solvesSide, withinSideLimits, type Direction, type Quote } from "./pricing.ts";
+import { quoteMarket, sideLimits, type Direction, type Quote } from "./pricing.ts";
 import { fetchText, fetchFeedValue, type FetchLike, type FetchFeedOptions } from "./feed.ts";
 
 export type SourceType = "registry" | "local";
@@ -281,8 +281,9 @@ function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
   return (m) => {
     if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
     if (wantSide === undefined) return true;
-    if (amount === undefined) return solvesSide(m, wantSide);
-    return withinSideLimits(m, wantSide, amount);
+    const limits = sideLimits(m, wantSide);
+    if (limits === null) return false;
+    return amount === undefined || (amount >= limits.min && amount <= limits.max);
   };
 }
 
@@ -318,8 +319,8 @@ export function listMarkets<T extends IndexMarket>(markets: T[]): MarketPair[] {
       byPair.set(key, entry);
     }
     entry.marketCount++;
-    if (solvesSide(market, "base")) entry.solvable.base++;
-    if (solvesSide(market, "quote")) entry.solvable.quote++;
+    if (sideLimits(market, "base")) entry.solvable.base++;
+    if (sideLimits(market, "quote")) entry.solvable.quote++;
   }
   return [...byPair.values()];
 }

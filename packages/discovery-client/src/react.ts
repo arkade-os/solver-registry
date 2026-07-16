@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchFeedValue, type FetchFeedOptions } from "./feed.ts";
 import { planOffer, type OfferPlan, type OfferSide } from "./offer.ts";
-import { otherSide, solvesSide } from "./pricing.ts";
+import { otherSide, sideLimits } from "./pricing.ts";
 import type { Market } from "./types.ts";
 
 type InitialAmount = string | number | bigint;
@@ -117,12 +117,18 @@ export function useOfferQuote(
 
   const activeAmount = activeInput === "give" ? giveAmount : wantAmount;
   // Solvability is a static market property — known before any feed fetch.
-  const solvable = market ? solvesSide(market, otherSide(give)) : null;
+  const solvable = market ? sideLimits(market, otherSide(give)) !== null : null;
 
   useEffect(() => {
     if (!market || !solvable) {
       // No market, or the market cannot pay out the side the maker receives:
       // no feed fetch, no plan — `solvable` tells the UI which case it is.
+      // Clear the computed counterpart so a switch to an unsolvable market
+      // doesn't leave the previous market's mirrored amount on screen.
+      if (market) {
+        if (activeInput === "give") setWantAmountValue("");
+        else setGiveAmountValue("");
+      }
       setFeedValue(null);
       setPlan(null);
       setStatus("idle");

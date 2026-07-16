@@ -10,9 +10,8 @@ import {
   DEFAULT_SAFETY_BPS,
   computeWantAmount,
   deriveAtomicPrice,
+  otherSide,
   sideLimits,
-  wantSideOf,
-  withinSideLimits,
   type Direction,
   type Rational,
 } from "./pricing.ts";
@@ -147,8 +146,8 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const quote = market.quote_asset;
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
+  const receiveSide = otherSide(give);
   const direction: Direction = give === "base" ? "baseToQuote" : "quoteToBase";
-  const receiveSide = wantSideOf(direction);
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const price = deriveAtomicPrice(input.feedValue, market);
   const offerAmount = resolveOfferAmount(input);
@@ -193,10 +192,10 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     safetyBps,
     limits: {
       side: receiveSide,
-      min: bounds && amount(receiveAsset, bounds.min),
-      max: bounds && amount(receiveAsset, bounds.max),
+      min: bounds && amount(receiveAsset, BigInt(bounds.min)),
+      max: bounds && amount(receiveAsset, BigInt(bounds.max)),
       solvable: bounds !== null,
-      withinLimits: withinSideLimits(market, receiveSide, receiveAtomic),
+      withinLimits: bounds !== null && receiveAtomic >= bounds.min && receiveAtomic <= bounds.max,
     },
   };
 }

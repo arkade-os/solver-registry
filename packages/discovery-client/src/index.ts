@@ -39,8 +39,6 @@ export {
   wantSideOf,
   otherSide,
   sideLimits,
-  solvesSide,
-  withinSideLimits,
   quoteMarket,
   type Rational,
   type Direction,
