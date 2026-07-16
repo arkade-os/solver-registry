@@ -52,7 +52,8 @@ if (!plan.limits.withinLimits) console.warn("amount is outside the market's size
 
 ## Amount conversion (Arkade Assets)
 
-Each asset carries a `precision` (8 for BTC and most Arkade assets). Conversion
+Each asset carries a `decimals` (8 for BTC and most Arkade assets, matching the
+asset registry metadata field). Conversion
 between human and atomic units is exact:
 
 ```ts
@@ -64,7 +65,7 @@ toAtomic("1.123456789", 8);  // throws: more precision than 8 decimals allow
 ```
 
 Pricing math always stays in atomic units; `quoteOffer()` does the human⇄atomic
-conversion for you using each side's precision.
+conversion for you using each side's `decimals`.
 
 ## Price feed responses
 
@@ -150,7 +151,7 @@ package entrypoint does not import React.
 | `priceMarket(market, {deposit, direction, safetyBps?})` | Lower-level: fetch feed → atomic `Quote` (`wantAmount`). |
 | `fetchFeedValue(url, schema, opts?)` | Fetch a raw feed and extract the numeric price using the market's `price_feed_schema`. |
 | `quoteMarket` / `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
-| `toAtomic` / `fromAtomic` / `displayPrice` | Precision-aware conversion. |
+| `toAtomic` / `fromAtomic` / `displayPrice` | Decimals-aware conversion. |
 | `validateCard` / `validateIndex` | Dependency-free, `eval`-free schema validation. |
 
 `give: "base"` deposits the base asset and receives the quote; `give: "quote"`

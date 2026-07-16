@@ -40,7 +40,7 @@ function normalize({ num, den }: Rational): Rational {
   return g > 1n ? { num: num / g, den: den / g } : { num, den };
 }
 
-/** 10^n as an exact bigint. Shared with `assets.ts`'s precision conversion. */
+/** 10^n as an exact bigint. Shared with `assets.ts`'s decimals conversion. */
 export function pow10(n: number): bigint {
   if (n < 0) throw new Error(`pow10 requires n >= 0, got ${n}`);
   return 10n ** BigInt(n);
@@ -85,7 +85,7 @@ export function parseDecimal(value: string | number): Rational {
  * Derive the market price as an exact rational in quote-atomic-units per
  * base-atomic-unit, applying `price_decimals`. The feed is always advertised in
  * quote-per-base terms. Per the spec, pricing stays in atomic units and asset
- * `precision` plays no role here — `price_decimals` already encodes the
+ * `decimals` plays no role here — `price_decimals` already encodes the
  * solver's intended scaling.
  *
  * Throws if the resulting price is not strictly positive (a zero/negative feed

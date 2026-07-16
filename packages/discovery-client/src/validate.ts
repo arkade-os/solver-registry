@@ -59,7 +59,7 @@ function checkAllowedKeys(errors: string[], path: string, obj: Record<string, un
   }
 }
 
-const ASSET_KEYS = new Set(["id", "name", "ticker", "precision"]);
+const ASSET_KEYS = new Set(["id", "name", "ticker", "decimals"]);
 const PRICE_FEED_SCHEMA_KEYS = new Set(["type", "price_path"]);
 
 function checkAsset(errors: string[], path: string, v: unknown, strict: boolean): void {
@@ -71,7 +71,7 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
   checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
-  checkIntRange(errors, `${path}/precision`, v.precision, 0, 18);
+  checkIntRange(errors, `${path}/decimals`, v.decimals, 0, 18);
 }
 
 function checkPriceFeedSchema(errors: string[], path: string, v: unknown, strict: boolean): void {

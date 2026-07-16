@@ -23,7 +23,7 @@
         "id",
         "name",
         "ticker",
-        "precision"
+        "decimals"
       ],
       "properties": {
         "id": {
@@ -41,11 +41,11 @@
           "minLength": 1,
           "maxLength": 16
         },
-        "precision": {
+        "decimals": {
           "type": "integer",
           "minimum": 0,
           "maximum": 18,
-          "description": "Number of decimals: base-units per display unit = 10^precision."
+          "description": "Decimals of the atomic unit: atomic units per display unit = 10^decimals. Matches the asset registry metadata field."
         }
       }
     },

@@ -8,13 +8,13 @@
         "id": "btc",
         "name": "Test Asset",
         "ticker": "TEST",
-        "precision": 8
+        "decimals": 8
       },
       "quote_asset": {
         "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "precision": 8
+        "decimals": 8
       },
       "price_feed": "https://feed.example.com/x",
       "price_feed_schema": {

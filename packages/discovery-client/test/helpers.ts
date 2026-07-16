@@ -3,10 +3,10 @@
 import type { AssetInfo, Market, Side } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
 
-export const BTC: AssetInfo = { id: "btc", name: "Bitcoin", ticker: "BTC", precision: 8 };
+export const BTC: AssetInfo = { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 };
 
 export const USDT_ID = "a".repeat(68);
-export const USDT: AssetInfo = { id: USDT_ID, name: "Tether USD", ticker: "USDT", precision: 6 };
+export const USDT: AssetInfo = { id: USDT_ID, name: "Tether USD", ticker: "USDT", decimals: 6 };
 
 export function makeMarket(overrides: Partial<Market> = {}): Market {
   return {

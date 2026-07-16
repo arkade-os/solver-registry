@@ -21,8 +21,11 @@ export interface AssetInfo {
   id: string;
   name: string;
   ticker: string;
-  /** Decimals of the atomic unit (display-only; plays no role in pricing math). */
-  precision: number;
+  /**
+   * Decimals of the atomic unit (display-only; plays no role in pricing math).
+   * Named after the asset registry metadata field it mirrors.
+   */
+  decimals: number;
 }
 
 /** How to read a numeric price from the `price_feed` response. */
@@ -39,7 +42,7 @@ export type Side = "base" | "quote";
  * Canonical wire encoding for atomic amounts: an unsigned decimal string with
  * no leading zeros, bounded to 30 digits. Strings keep amounts exact — JSON
  * numbers silently round past 2^53, which cannot even hold one whole token of
- * an 18-precision asset. One canonical form also keeps card signatures stable.
+ * an 18-decimal asset. One canonical form also keeps card signatures stable.
  */
 export const AMOUNT_PATTERN = /^(0|[1-9][0-9]{0,29})$/;
 

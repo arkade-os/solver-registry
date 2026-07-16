@@ -5,16 +5,16 @@ import { planOffer, quoteOffer } from "../src/offer.ts";
 import type { Market } from "../src/types.ts";
 import { makeMarket, mockFetch } from "./helpers.ts";
 
-// --- conversion (Arkade Assets are precision 8) ---
+// --- conversion (Arkade Assets are 8-decimal) ---
 
-test("toAtomic: exact display -> atomic at precision 8", () => {
+test("toAtomic: exact display -> atomic at 8 decimals", () => {
   assert.equal(toAtomic("1.5", 8), 150_000_000n);
   assert.equal(toAtomic("1", 8), 100_000_000n);
   assert.equal(toAtomic(0.01, 8), 1_000_000n);
   assert.equal(toAtomic("0.00000001", 8), 1n);
 });
 
-test("toAtomic: cross precision and rejection of over-precise amounts", () => {
+test("toAtomic: cross decimals and rejection of over-precise amounts", () => {
   assert.equal(toAtomic("1.5", 6), 1_500_000n); // e.g. USDT
   assert.throws(() => toAtomic("1.123456789", 8), /more precision/);
   assert.throws(() => toAtomic("-1", 8), /non-negative/);
@@ -33,12 +33,12 @@ test("conversion round-trips", () => {
   }
 });
 
-test("displayPrice: equal precision is identity, cross precision scales", () => {
+test("displayPrice: equal decimals is identity, cross decimals scales", () => {
   const p = { num: 377000n, den: 1n };
-  assert.deepEqual(displayPrice(p, { basePrecision: 8, quotePrecision: 8 }), p);
+  assert.deepEqual(displayPrice(p, { baseDecimals: 8, quoteDecimals: 8 }), p);
   // 1 BTC = 65000 USDT => atomic price 650 (quote 6dp / base 8dp) displays as 65000.
   assert.equal(
-    displayPriceString({ num: 650n, den: 1n }, { basePrecision: 8, quotePrecision: 6 }),
+    displayPriceString({ num: 650n, den: 1n }, { baseDecimals: 8, quoteDecimals: 6 }),
     "65000.00000000",
   );
 });
@@ -50,13 +50,13 @@ const DEPIX_ID = "4".repeat(68);
 function arkadeMarket(overrides: Partial<Market> = {}): Market {
   return makeMarket({
     pair: "BTC/DePix",
-    quote_asset: { id: DEPIX_ID, name: "Decentralized Pix", ticker: "DePix", precision: 8 },
+    quote_asset: { id: DEPIX_ID, name: "Decentralized Pix", ticker: "DePix", decimals: 8 },
     price_feed: "https://feed.example.com/depix",
     ...overrides,
   });
 }
 
-test("planOffer: give base, receive quote (human amounts, precision 8)", () => {
+test("planOffer: give base, receive quote (human amounts, 8 decimals)", () => {
   const plan = planOffer({
     market: arkadeMarket(),
     give: "base",

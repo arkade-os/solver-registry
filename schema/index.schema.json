@@ -20,7 +20,7 @@
         "id",
         "name",
         "ticker",
-        "precision"
+        "decimals"
       ],
       "properties": {
         "id": {
@@ -38,7 +38,7 @@
           "minLength": 1,
           "maxLength": 16
         },
-        "precision": {
+        "decimals": {
           "type": "integer",
           "minimum": 0,
           "maximum": 18

@@ -8,13 +8,13 @@
         "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "precision": 8
+        "decimals": 8
       },
       "quote_asset": {
         "id": "47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
         "name": "Decentralized Pix",
         "ticker": "DePix",
-        "precision": 8
+        "decimals": 8
       },
       "price_feed": "https://api.binance.com/api/v3/ticker/price?symbol=BTCBRL",
       "price_feed_schema": {

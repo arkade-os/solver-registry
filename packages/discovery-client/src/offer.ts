@@ -59,13 +59,13 @@ type AmountValue = string | number | bigint;
 
 type OfferAmountInput =
   | {
-      /** Amount to give: a display string/number (converted via precision) or bigint atomic units. */
+      /** Amount to give: a display string/number (converted via the asset's decimals) or bigint atomic units. */
       giveAmount: AmountValue;
       wantAmount?: never;
     }
   | {
       giveAmount?: never;
-      /** Amount to receive: a display string/number (converted via precision) or bigint atomic units. */
+      /** Amount to receive: a display string/number (converted via the asset's decimals) or bigint atomic units. */
       wantAmount: AmountValue;
     };
 
@@ -86,12 +86,12 @@ function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
   return {
     asset,
     atomic,
-    display: fromAtomic(atomic, asset.precision),
+    display: fromAtomic(atomic, asset.decimals),
   };
 }
 
-function inputAmount(value: AmountValue, precision: number): bigint {
-  return typeof value === "bigint" ? value : toAtomic(value, precision);
+function inputAmount(value: AmountValue, decimals: number): bigint {
+  return typeof value === "bigint" ? value : toAtomic(value, decimals);
 }
 
 function resolveOfferAmount(input: { giveAmount?: AmountValue; wantAmount?: AmountValue }): ResolvedOfferAmount {
@@ -149,7 +149,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   let receiveAtomic: bigint;
 
   if (offerAmount.kind === "give") {
-    depositAtomic = inputAmount(offerAmount.value, depositAsset.precision);
+    depositAtomic = inputAmount(offerAmount.value, depositAsset.decimals);
     receiveAtomic = computeWantAmount({
       deposit: depositAtomic,
       direction,
@@ -158,7 +158,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       safetyBps,
     });
   } else {
-    receiveAtomic = inputAmount(offerAmount.value, receiveAsset.precision);
+    receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
     depositAtomic = depositForWant({
       wantAmount: receiveAtomic,
       direction,
@@ -169,8 +169,8 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   }
 
   const priceDisplay = displayPriceString(price, {
-    basePrecision: base.precision,
-    quotePrecision: quote.precision,
+    baseDecimals: base.decimals,
+    quoteDecimals: quote.decimals,
   });
 
   const bounds = sideLimits(market, otherSide(give));
