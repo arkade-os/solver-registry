@@ -11,10 +11,7 @@ export interface FetchResponse {
 }
 
 /** Minimal structural subset of `fetch` this library needs; injectable for tests/polyfills. */
-export type FetchLike = (
-  input: string,
-  init?: { signal?: AbortSignal },
-) => Promise<FetchResponse>;
+export type FetchLike = (input: string, init?: { signal?: AbortSignal }) => Promise<FetchResponse>;
 
 export interface FetchTextOptions {
   fetchImpl?: FetchLike;
@@ -33,22 +30,26 @@ function resolveFetch(fetchImpl?: FetchLike): FetchLike {
 /** GET a URL as text with a timeout, honoring an optional caller-supplied abort signal. */
 export async function fetchText(url: string, opts: FetchTextOptions = {}): Promise<string> {
   const doFetch = resolveFetch(opts.fetchImpl);
-  const controller = new AbortController();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const timer = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
   const outer = opts.signal;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
-  if (outer) {
-    onAbort = () => controller.abort(outer.reason);
-    if (outer.aborted) controller.abort(outer.reason);
-    else outer.addEventListener("abort", onAbort, { once: true });
-  }
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
+  });
+  const abortPromise = outer
+    ? new Promise<never>((_, reject) => {
+        onAbort = () => reject(outer.reason instanceof Error ? outer.reason : new Error("aborted"));
+        if (outer.aborted) onAbort();
+        else outer.addEventListener("abort", onAbort, { once: true });
+      })
+    : undefined;
   try {
-    const res = await doFetch(url, { signal: controller.signal });
+    const res = await Promise.race([doFetch(url), timeoutPromise, ...(abortPromise ? [abortPromise] : [])]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.text();
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     if (outer && onAbort) outer.removeEventListener("abort", onAbort);
   }
 }
@@ -74,11 +75,7 @@ export function parseJsonPointer(pointer: string): string[] {
 export function readJsonPointer(body: unknown, pointer: string): unknown {
   let value = body;
   for (const token of parseJsonPointer(pointer)) {
-    if (
-      value === null ||
-      typeof value !== "object" ||
-      !Object.prototype.hasOwnProperty.call(value, token)
-    ) {
+    if (value === null || typeof value !== "object" || !Object.prototype.hasOwnProperty.call(value, token)) {
       throw new Error(`price path ${JSON.stringify(pointer)} not found in feed response`);
     }
     value = (value as Record<string, unknown>)[token];
