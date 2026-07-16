@@ -5,7 +5,7 @@
 //
 // Typical flow:
 //   const { markets } = await discover({ registries: [url] }); // defaults to bitcoin
-//   const market = bestMarket(markets, { baseId: "btc", quoteId: DEPIX_ID });
+//   const market = bestMarket(markets, { baseId: "btc", quoteId: DEPIX_ID, wantSide: "quote" });
 //   const plan   = await quoteOffer(market, { give: "base", giveAmount: "0.01" });
 //   // plan.receive.display is the human amount received; plan.receive.atomic the
 //   // wantAmount to request; then createOffer(...) as usual.
@@ -17,6 +17,7 @@ export {
   type Network,
   type AssetInfo,
   type PriceFeedSchema,
+  type Side,
   type Market,
   type Card,
   type IndexMarket,
@@ -35,10 +36,14 @@ export {
   deriveAtomicPrice,
   computeWantAmount,
   rationalToDecimalString,
-  withinBaseLimits,
+  wantSideOf,
+  sideLimits,
+  solvesSide,
+  withinSideLimits,
   quoteMarket,
   type Rational,
   type Direction,
+  type MarketLimits,
   type WantAmountInput,
   type Quote,
   type QuoteInput,
@@ -58,6 +63,7 @@ export {
   type OfferSide,
   type OfferAmount,
   type OfferPlan,
+  type OfferPlanLimits,
   type PlanOfferInput,
   type QuoteOfferOptions,
 } from "./offer.ts";

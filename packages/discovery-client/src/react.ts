@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchFeedValue, type FetchFeedOptions } from "./feed.ts";
 import { planOffer, type OfferPlan, type OfferSide } from "./offer.ts";
+import { solvesSide } from "./pricing.ts";
 import type { Market } from "./types.ts";
 
 type InitialAmount = string | number | bigint;
@@ -22,6 +23,13 @@ export type UseOfferQuoteOptions = FetchFeedOptions & {
 export interface UseOfferQuoteResult {
   market: Market | null;
   give: OfferSide;
+  /**
+   * Whether the market can pay out the side the maker receives (the opposite of
+   * `give`): it declared size bounds for it. `null` while no market is selected.
+   * A `false` here means this give-direction can never fill on this market —
+   * UIs should disable the form or switch market/direction.
+   */
+  solvable: boolean | null;
   activeInput: OfferQuoteInputSide;
   setActiveInput(input: OfferQuoteInputSide): void;
   giveAmount: string;
@@ -194,9 +202,11 @@ export function useOfferQuote(
   return useMemo(() => {
     const baseAmount = give === "base" ? giveAmount : wantAmount;
     const quoteAmount = give === "base" ? wantAmount : giveAmount;
+    const solvable = market ? solvesSide(market, give === "base" ? "quote" : "base") : null;
     return {
       market: market ?? null,
       give,
+      solvable,
       activeInput,
       setActiveInput,
       giveAmount,

@@ -22,10 +22,11 @@
         "price_path": "/bitcoin/usd"
       },
       "price_decimals": 6,
-      "invert": false,
       "fee_bps": 30,
       "min_base_amount": 1000,
-      "max_base_amount": 5000000
+      "max_base_amount": 5000000,
+      "min_quote_amount": 100,
+      "max_quote_amount": 500000
     },
     {
       "pair": "BTC/FDPIX",
@@ -47,10 +48,11 @@
         "price_path": "/price"
       },
       "price_decimals": 0,
-      "invert": false,
       "fee_bps": 30,
       "min_base_amount": 1000,
-      "max_base_amount": 5000000
+      "max_base_amount": 5000000,
+      "min_quote_amount": 100000000,
+      "max_quote_amount": 2000000000000
     }
   ]
 }

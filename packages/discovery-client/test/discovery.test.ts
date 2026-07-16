@@ -8,7 +8,7 @@ import {
   bestMarket,
   priceMarket,
 } from "../src/discovery.ts";
-import { makeMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
+import { makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
 const GENERATED_AT = 1_700_000_000;
@@ -138,15 +138,42 @@ test("selectMarkets / bestMarket: filter by id pair and size, keep ranking", asy
   assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, cursor: 4 }), null);
   assert.throws(() => bestMarket(res.markets, { baseId: "btc", quoteId: USDT, cursor: -1 }), /cursor/);
 
-  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, baseAmount: 500 }).length, 0);
-  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, baseAmount: 2000 }).length, 4);
+  // A want-side size filter is checked against that side's declared bounds.
+  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base", wantAmount: 500 }).length, 0);
+  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base", wantAmount: 2000 }).length, 4);
   assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: "nope" }).length, 0);
+  assert.throws(() => selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantAmount: 2000 }), /wantSide/);
 
   const pairs = listMarkets(res.markets);
   assert.deepEqual(
-    pairs.map((p) => ({ pair: p.pair, count: p.marketCount })),
-    [{ pair: "BTC/USDT", count: 4 }],
+    pairs.map((p) => ({ pair: p.pair, count: p.marketCount, solvable: p.solvable })),
+    [{ pair: "BTC/USDT", count: 4, solvable: { base: 4, quote: 4 } }],
   );
+});
+
+test("one-sided markets: selection and listing avoid a side no solver can pay out", async () => {
+  // erin only pays out quote (serves base->quote makers); frank only pays out base.
+  const erin = { version: 0, name: "erin", markets: [makeOneSidedMarket("quote", { fee_bps: 5 })] };
+  const frank = { version: 0, name: "frank", markets: [makeOneSidedMarket("base", { fee_bps: 15 })] };
+
+  const res = await discover({
+    localCards: [{ card: erin }, { card: frank }],
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+
+  const pairs = listMarkets(res.markets);
+  assert.deepEqual(pairs[0].solvable, { base: 1, quote: 1 });
+
+  // Wanting quote can only be served by erin; wanting base only by frank.
+  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "quote" })!.solver, "erin");
+  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base" })!.solver, "frank");
+
+  // With only erin present, the base side is not solvable by any market: no pick.
+  const onlyErin = await discover({ localCards: [{ card: erin }], fetchImpl: mockFetch(routes), now: NOW });
+  assert.equal(bestMarket(onlyErin.markets, { baseId: "btc", quoteId: USDT, wantSide: "base" }), null);
+  assert.equal(selectMarkets(onlyErin.markets, { baseId: "btc", quoteId: USDT, wantSide: "base" }).length, 0);
+  assert.deepEqual(listMarkets(onlyErin.markets)[0].solvable, { base: 0, quote: 1 });
 });
 
 test("priceMarket: end-to-end from discovered market to exact want amount", async () => {

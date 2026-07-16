@@ -23,11 +23,12 @@
         "price_path": "/price"
       },
       "price_decimals": 8,
-      "invert": false,
       "fee_bps": 25,
       "min_base_amount": 1000,
-      "max_base_amount": 5000000
+      "max_base_amount": 5000000,
+      "min_quote_amount": 1000,
+      "max_quote_amount": 5000000
     }
   ],
-  "sig": "22175db6ea3e7581c5306a02c04ccbbc2bf844d8f0670534c403d979f05f781f26986434e8a2a6d46abc4ab984e73c82e64de2175e5de5dd869a3a284fb624cd"
+  "sig": "31a75df3d639dc90a4e626435d9e4554a2c57c12897b5fbb2de082527d7ce0d9040722deacf7d572c63ec72411fa328efac6ed68cabae9b1995bc3651de3763d"
 }

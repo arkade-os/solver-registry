@@ -1,6 +1,6 @@
 {
   "version": 0,
-  "name": "example",
+  "name": "solver1",
   "markets": [
     {
       "pair": "BTC/BTC",
@@ -16,17 +16,15 @@
         "ticker": "BTC",
         "precision": 8
       },
-      "price_feed": "https://example.com/price?pair=btc-btc",
+      "price_feed": "https://feed.example.com/x",
       "price_feed_schema": {
         "type": "json",
         "price_path": "/price"
       },
       "price_decimals": 8,
       "fee_bps": 30,
-      "min_base_amount": 1000,
-      "max_base_amount": 5000000,
-      "min_quote_amount": 1000,
-      "max_quote_amount": 5000000
+      "min_quote_amount": 5000000,
+      "max_quote_amount": 1000
     }
   ]
 }

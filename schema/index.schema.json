@@ -99,10 +99,17 @@
           "price_feed",
           "price_feed_schema",
           "price_decimals",
-          "invert",
-          "fee_bps",
-          "min_base_amount",
-          "max_base_amount"
+          "fee_bps"
+        ],
+        "dependencies": {
+          "min_base_amount": ["max_base_amount"],
+          "max_base_amount": ["min_base_amount"],
+          "min_quote_amount": ["max_quote_amount"],
+          "max_quote_amount": ["min_quote_amount"]
+        },
+        "anyOf": [
+          { "required": ["min_base_amount", "max_base_amount"] },
+          { "required": ["min_quote_amount", "max_quote_amount"] }
         ],
         "properties": {
           "pair": {
@@ -135,10 +142,8 @@
           "price_decimals": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 18
-          },
-          "invert": {
-            "type": "boolean"
+            "maximum": 18,
+            "description": "The feed value divided by 10^price_decimals is the price in quote-atomic-units per base-atomic-unit."
           },
           "fee_bps": {
             "type": "integer",
@@ -147,9 +152,19 @@
           },
           "min_base_amount": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Lower trade-size bound for the base side, in base atomic units. Declared together with max_base_amount; presence means the solver can pay out (solve) the base side."
           },
           "max_base_amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "min_quote_amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Lower trade-size bound for the quote side, in quote atomic units. Declared together with max_quote_amount; presence means the solver can pay out (solve) the quote side."
+          },
+          "max_quote_amount": {
             "type": "integer",
             "minimum": 1
           }

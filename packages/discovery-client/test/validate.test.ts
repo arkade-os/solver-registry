@@ -31,6 +31,18 @@ test("validateCard: accepts an optionally signed card", () => {
   assert.equal(validateCard(c).ok, true);
 });
 
+test("validateCard: accepts a one-sided market (only one side's limits declared)", () => {
+  const quoteOnly = validCard();
+  delete quoteOnly.markets[0].min_base_amount;
+  delete quoteOnly.markets[0].max_base_amount;
+  assert.equal(validateCard(quoteOnly).ok, true, JSON.stringify(validateCard(quoteOnly).errors));
+
+  const baseOnly = validCard();
+  delete baseOnly.markets[0].min_quote_amount;
+  delete baseOnly.markets[0].max_quote_amount;
+  assert.equal(validateCard(baseOnly).ok, true, JSON.stringify(validateCard(baseOnly).errors));
+});
+
 const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: RegExp }> = [
   { name: "bad version", mutate: (c) => (c.version = 1), expect: /version/ },
   { name: "bad name pattern", mutate: (c) => (c.name = "Alice"), expect: /name/ },
@@ -40,7 +52,27 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     mutate: (c) => (c.markets[0].base_asset.extra = true),
     expect: /base_asset\/extra is not an allowed property/,
   },
-  { name: "min > max", mutate: (c) => (c.markets[0].min_base_amount = 9_000_000), expect: /min_base_amount/ },
+  { name: "base min > max", mutate: (c) => (c.markets[0].min_base_amount = 9_000_000), expect: /min_base_amount \(9000000\) > max_base_amount/ },
+  {
+    name: "quote min > max",
+    mutate: (c) => (c.markets[0].min_quote_amount = 2_000_000_000_000_000),
+    expect: /min_quote_amount \(2000000000000000\) > max_quote_amount/,
+  },
+  {
+    name: "unpaired limits",
+    mutate: (c) => delete c.markets[0].max_quote_amount,
+    expect: /min_quote_amount and max_quote_amount must be declared together/,
+  },
+  {
+    name: "no limits on either side",
+    mutate: (c) => {
+      delete c.markets[0].min_base_amount;
+      delete c.markets[0].max_base_amount;
+      delete c.markets[0].min_quote_amount;
+      delete c.markets[0].max_quote_amount;
+    },
+    expect: /at least one side/,
+  },
   {
     name: "pair/ticker mismatch",
     mutate: (c) => (c.markets[0].pair = "BTC/USD"),

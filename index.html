@@ -208,8 +208,12 @@ async function renderNetwork(network, container) {
   }
 
   const thead = el("thead", {}, [el("tr", {}, [
-    "Pair", "Solver", "Fee (bps)", "Min (base)", "Max (base)", "Feed price",
+    "Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price",
   ].map((h) => el("th", { text: h })))]);
+
+  // A side with no declared bounds is one the solver does not pay out.
+  const limitsText = (min, max) =>
+    min === undefined ? "—" : `${min.toLocaleString("en-US")} – ${max.toLocaleString("en-US")}`;
   const tbody = el("tbody");
   const priceCells = [];
 
@@ -224,8 +228,8 @@ async function renderNetwork(network, container) {
       ])]),
       el("td", { text: m.solver }),
       el("td", { class: "num", text: String(m.fee_bps) }),
-      el("td", { class: "num", text: m.min_base_amount.toLocaleString("en-US") }),
-      el("td", { class: "num", text: m.max_base_amount.toLocaleString("en-US") }),
+      el("td", { class: "num", text: limitsText(m.min_base_amount, m.max_base_amount) }),
+      el("td", { class: "num", text: limitsText(m.min_quote_amount, m.max_quote_amount) }),
       priceCell,
     ]));
   }

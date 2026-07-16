@@ -24,10 +24,11 @@
         "price_path": "/price"
       },
       "price_decimals": 8,
-      "invert": false,
       "fee_bps": 25,
       "min_base_amount": 1000,
       "max_base_amount": 5000000,
+      "min_quote_amount": 1000,
+      "max_quote_amount": 5000000,
       "solver": "signed-solver",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659"
     }

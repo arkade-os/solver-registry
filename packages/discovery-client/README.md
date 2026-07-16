@@ -32,12 +32,15 @@ const { markets, warnings } = await discover({
 if (warnings.length) console.warn(warnings);
 
 // 2. List pairs for UI selection, then pick the best market for one pair.
-console.log(listMarkets(markets).map((p) => p.pair));
+//    `solvable` counts how many markets can pay out each side — don't offer a
+//    direction whose receive side is at 0.
+console.log(listMarkets(markets).map((p) => `${p.pair} base:${p.solvable.base} quote:${p.solvable.quote}`));
 const market = bestMarket(markets, {
   baseId: "btc",
   quoteId: "47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
+  wantSide: "quote", // we give base and receive quote; skips markets that can't pay out quote
 });
-if (!market) throw new Error("no market for pair");
+if (!market) throw new Error("no market solves this side of the pair");
 
 // 3. Quote an offer — fetches the advertised feed and returns a ready plan.
 const plan = await quoteOffer(market, { give: "base", giveAmount: "0.01" }); // 0.01 BTC
@@ -112,11 +115,12 @@ import { useOfferQuote } from "@arkade-os/solver-discovery/react";
 function QuoteForm({ market }) {
   const quote = useOfferQuote(market, { give: "base" });
 
+  if (quote.solvable === false) return <p>This market cannot pay out the side you want.</p>;
   return (
     <>
       <input value={quote.baseAmount} onChange={(e) => quote.setBaseAmount(e.target.value)} />
       <input value={quote.quoteAmount} onChange={(e) => quote.setQuoteAmount(e.target.value)} />
-      <button disabled={!quote.plan}>Create offer</button>
+      <button disabled={!quote.plan?.limits.withinLimits}>Create offer</button>
     </>
   );
 }
@@ -124,7 +128,9 @@ function QuoteForm({ market }) {
 
 `useOfferQuote(market, opts)` returns the active input, both display amounts,
 the latest `OfferPlan`, loading/error state, and setters for base/quote or
-give/want fields. `quote.plan?.receive.atomic` is the `wantAmount` to request.
+give/want fields. `quote.solvable` says whether the market declares limits for
+— can pay out — the side received under `give` (null while no market is
+selected), and `quote.plan?.receive.atomic` is the `wantAmount` to request.
 
 The package does not install React for you: importing
 `@arkade-os/solver-discovery/react` requires React in the app, while the root
@@ -136,8 +142,9 @@ package entrypoint does not import React.
 |---|---|
 | `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. Registry failures are isolated. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
-| `listMarkets(markets)` | List available id pairs and how many solver candidates each pair has. |
-| `selectMarkets(markets, {baseId, quoteId, baseAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair (and size), keeping the ranking. `cursor: 1` selects the second-ranked market. |
+| `listMarkets(markets)` | List available id pairs, how many solver candidates each pair has, and how many can pay out each side (`solvable.base` / `solvable.quote`). |
+| `selectMarkets(markets, {baseId, quoteId, wantSide?, wantAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair — and optionally to markets that can pay out `wantSide`, sized by `wantAmount` on that side — keeping the ranking. `cursor: 1` selects the second-ranked market. |
+| `solvesSide(market, side)` / `sideLimits(market, side)` / `withinSideLimits(market, side, amount)` | Per-side solvability and size-bound checks. A side with no declared bounds is one the solver cannot pay out. |
 | `quoteOffer(market, {give, giveAmount \| wantAmount, safetyBps?})` | Fetch the feed and build a full `OfferPlan` (human in/out). |
 | `planOffer({market, give, giveAmount \| wantAmount, feedValue, safetyBps?})` | Same, from an already-fetched feed value (pure/sync). |
 | `priceMarket(market, {deposit, direction, safetyBps?})` | Lower-level: fetch feed → atomic `Quote` (`wantAmount`). |
@@ -152,6 +159,13 @@ is the reverse (priced with `1/P`). Pass exactly one of `giveAmount` or
 receive amount, while `wantAmount` fixes the requested receive amount and
 computes the minimum deposit. `safetyBps` defaults to `50` — the cushion that
 absorbs feed movement between funding and fill.
+
+Markets declare size limits per side (`min|max_base_amount`,
+`min|max_quote_amount`), and a declared side is one the solver can pay out: a
+market with only quote bounds only serves `give: "base"`. Plans check the
+received side — `plan.limits.solvable` says whether the market can pay that
+side at all, and `plan.limits.withinLimits` whether the received amount sits
+inside its `[min, max]`.
 
 ## Roadmap
 

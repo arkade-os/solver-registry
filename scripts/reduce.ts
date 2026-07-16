@@ -32,11 +32,19 @@ export interface Market {
   price_feed: string;
   price_feed_schema: PriceFeedSchema;
   price_decimals: number;
-  invert: boolean;
   fee_bps: number;
-  min_base_amount: number;
-  max_base_amount: number;
+  // Per-side size bounds, each side declared as a min/max pair (or not at all).
+  // A declared side is one the solver can pay out; at least one side is present.
+  min_base_amount?: number;
+  max_base_amount?: number;
+  min_quote_amount?: number;
+  max_quote_amount?: number;
 }
+
+const LIMIT_SIDES = [
+  ["min_base_amount", "max_base_amount"],
+  ["min_quote_amount", "max_quote_amount"],
+] as const;
 
 export interface Card {
   version: 0;
@@ -71,7 +79,9 @@ export interface NetworkResult {
   index?: NetworkIndex;
 }
 
-const ajv = new Ajv({ allErrors: true, strict: true });
+// strictRequired would reject the market schema's anyOf branches, which require
+// limit properties declared on the parent schema rather than in the branch.
+const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false });
 addFormats(ajv);
 const validateCardSchema = ajv.compile(cardSchema);
 
@@ -120,10 +130,12 @@ export function reduceNetwork(
         );
       }
       for (const [i, market] of card.markets.entries()) {
-        if (market.min_base_amount > market.max_base_amount) {
-          messages.push(
-            `markets[${i}]: min_base_amount (${market.min_base_amount}) > max_base_amount (${market.max_base_amount})`,
-          );
+        for (const [minKey, maxKey] of LIMIT_SIDES) {
+          const min = market[minKey];
+          const max = market[maxKey];
+          if (min !== undefined && max !== undefined && min > max) {
+            messages.push(`markets[${i}]: ${minKey} (${min}) > ${maxKey} (${max})`);
+          }
         }
         const expectedPair = `${market.base_asset.ticker}/${market.quote_asset.ticker}`;
         if (market.pair !== expectedPair) {

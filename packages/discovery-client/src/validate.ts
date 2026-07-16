@@ -95,11 +95,17 @@ const MARKET_KEYS = new Set([
   "price_feed",
   "price_feed_schema",
   "price_decimals",
-  "invert",
   "fee_bps",
   "min_base_amount",
   "max_base_amount",
+  "min_quote_amount",
+  "max_quote_amount",
 ]);
+
+const LIMIT_SIDES = [
+  ["min_base_amount", "max_base_amount"],
+  ["min_quote_amount", "max_quote_amount"],
+] as const;
 
 /**
  * Validate the market fields common to cards and index entries. Unknown keys
@@ -132,18 +138,28 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   }
   checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
   checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
-  if (typeof v.invert !== "boolean") {
-    add(errors, `${path}/invert`, "must be a boolean");
-  }
   checkIntRange(errors, `${path}/fee_bps`, v.fee_bps, 0, 10000);
-  checkIntMin(errors, `${path}/min_base_amount`, v.min_base_amount, 1);
-  checkIntMin(errors, `${path}/max_base_amount`, v.max_base_amount, 1);
-  if (
-    isInt(v.min_base_amount) &&
-    isInt(v.max_base_amount) &&
-    v.min_base_amount > v.max_base_amount
-  ) {
-    add(errors, path, `min_base_amount (${v.min_base_amount}) > max_base_amount (${v.max_base_amount})`);
+
+  // Per-side size bounds: each side's min/max are declared together, and at
+  // least one side must be present (a market with no solvable side is useless).
+  let declaredSides = 0;
+  for (const [minKey, maxKey] of LIMIT_SIDES) {
+    const min = v[minKey];
+    const max = v[maxKey];
+    if (min === undefined && max === undefined) continue;
+    if (min === undefined || max === undefined) {
+      add(errors, path, `${minKey} and ${maxKey} must be declared together`);
+      continue;
+    }
+    declaredSides++;
+    checkIntMin(errors, `${path}/${minKey}`, min, 1);
+    checkIntMin(errors, `${path}/${maxKey}`, max, 1);
+    if (isInt(min) && isInt(max) && min > max) {
+      add(errors, path, `${minKey} (${min}) > ${maxKey} (${max})`);
+    }
+  }
+  if (declaredSides === 0) {
+    add(errors, path, "must declare size limits for at least one side (base and/or quote)");
   }
 }
 

@@ -6,7 +6,7 @@
 // amount of 10^14 atomic units round-trip without loss. BigInt is available in
 // every target (modern browsers, Node, and Hermes / React Native).
 
-import type { Market } from "./types.ts";
+import type { Market, Side } from "./types.ts";
 
 /** An exact non-negative rational number. `den` is always > 0. */
 export interface Rational {
@@ -83,24 +83,21 @@ export function parseDecimal(value: string | number): Rational {
 
 /**
  * Derive the market price as an exact rational in quote-atomic-units per
- * base-atomic-unit, applying `price_decimals` and `invert`. Per the spec,
- * pricing stays in atomic units and asset `precision` plays no role here —
- * `price_decimals` already encodes the solver's intended scaling.
+ * base-atomic-unit, applying `price_decimals`. The feed is always advertised in
+ * quote-per-base terms. Per the spec, pricing stays in atomic units and asset
+ * `precision` plays no role here — `price_decimals` already encodes the
+ * solver's intended scaling.
  *
  * Throws if the resulting price is not strictly positive (a zero/negative feed
- * value, especially with `invert`, cannot price a trade).
+ * value cannot price a trade).
  */
 export function deriveAtomicPrice(
   feedValue: string | number,
-  opts: Pick<Market, "price_decimals" | "invert">,
+  opts: Pick<Market, "price_decimals">,
 ): Rational {
   const f = parseDecimal(feedValue);
   // value / 10^price_decimals
-  let price: Rational = normalize({ num: f.num, den: f.den * pow10(opts.price_decimals) });
-  if (opts.invert) {
-    if (price.num === 0n) throw new Error("cannot invert a zero price feed value");
-    price = normalize({ num: price.den, den: price.num });
-  }
+  const price: Rational = normalize({ num: f.num, den: f.den * pow10(opts.price_decimals) });
   if (price.num <= 0n) throw new Error("price feed value must be positive");
   return price;
 }
@@ -149,12 +146,41 @@ export function computeWantAmount(input: WantAmountInput): bigint {
   return (deposit * price.den * net) / (price.num * 10000n);
 }
 
-/** Whether a base-side amount sits within a market's inclusive [min, max] size bounds. */
-export function withinBaseLimits(
-  market: Pick<Market, "min_base_amount" | "max_base_amount">,
-  baseAmount: bigint,
-): boolean {
-  return baseAmount >= BigInt(market.min_base_amount) && baseAmount <= BigInt(market.max_base_amount);
+/** The market fields carrying the per-side size bounds. */
+export type MarketLimits = Pick<
+  Market,
+  "min_base_amount" | "max_base_amount" | "min_quote_amount" | "max_quote_amount"
+>;
+
+/** The side the maker receives — and the solver pays out — for a direction. */
+export function wantSideOf(direction: Direction): Side {
+  return direction === "baseToQuote" ? "quote" : "base";
+}
+
+/**
+ * A market's declared [min, max] bounds for one side, in that side's atomic
+ * units, or null when the side has no bounds — i.e. the solver cannot pay out
+ * (solve) that side and makers must not take the direction that receives it.
+ */
+export function sideLimits(market: MarketLimits, side: Side): { min: bigint; max: bigint } | null {
+  const min = side === "base" ? market.min_base_amount : market.min_quote_amount;
+  const max = side === "base" ? market.max_base_amount : market.max_quote_amount;
+  if (min === undefined || max === undefined) return null;
+  return { min: BigInt(min), max: BigInt(max) };
+}
+
+/** Whether the solver can pay out (solve) `side`: it declared size bounds for it. */
+export function solvesSide(market: MarketLimits, side: Side): boolean {
+  return sideLimits(market, side) !== null;
+}
+
+/**
+ * Whether an amount sits within a side's inclusive [min, max] bounds. Always
+ * false when the side declares no bounds (the solver does not solve it).
+ */
+export function withinSideLimits(market: MarketLimits, side: Side, amount: bigint): boolean {
+  const limits = sideLimits(market, side);
+  return limits !== null && amount >= limits.min && amount <= limits.max;
 }
 
 /** Render a rational to a fixed-decimal string (for display only, never pricing). */
@@ -180,9 +206,11 @@ export interface Quote {
   /** Human-readable price at 8 decimals (display only). */
   priceDecimalString: string;
   safetyBps: number;
-  /** The base-side amount the size limits apply to (deposit if base is deposited, else wantAmount). */
-  baseAmount: bigint;
-  /** Whether `baseAmount` sits within [min_base_amount, max_base_amount]. */
+  /** The side the maker receives; size limits are checked on this side. */
+  wantSide: Side;
+  /** Whether the market declares bounds for — can pay out — the want side. */
+  solvable: boolean;
+  /** Whether `wantAmount` sits within the want side's [min, max]. Always false when not solvable. */
   withinLimits: boolean;
 }
 
@@ -197,8 +225,9 @@ export interface QuoteInput {
 
 /**
  * Price one market from an already-fetched feed value: derive the price, compute
- * the want amount, and check the base-side size limits. Pure and synchronous —
- * `priceMarket` in `discovery.ts` wraps this with the network fetch.
+ * the want amount, and check the want side's size limits (the side the solver
+ * pays out). Pure and synchronous — `priceMarket` in `discovery.ts` wraps this
+ * with the network fetch.
  */
 export function quoteMarket(input: QuoteInput): Quote {
   const { market, direction } = input;
@@ -206,8 +235,7 @@ export function quoteMarket(input: QuoteInput): Quote {
   const deposit = toBigIntAmount(input.deposit, "deposit");
   const price = deriveAtomicPrice(input.feedValue, market);
   const wantAmount = computeWantAmount({ deposit, direction, price, feeBps: market.fee_bps, safetyBps });
-  const baseAmount = direction === "baseToQuote" ? deposit : wantAmount;
-  const withinLimits = withinBaseLimits(market, baseAmount);
+  const wantSide = wantSideOf(direction);
   return {
     market,
     direction,
@@ -216,7 +244,8 @@ export function quoteMarket(input: QuoteInput): Quote {
     price,
     priceDecimalString: rationalToDecimalString(price, 8),
     safetyBps,
-    baseAmount,
-    withinLimits,
+    wantSide,
+    solvable: solvesSide(market, wantSide),
+    withinLimits: withinSideLimits(market, wantSide, wantAmount),
   };
 }

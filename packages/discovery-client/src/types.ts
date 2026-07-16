@@ -31,6 +31,9 @@ export interface PriceFeedSchema {
   price_path: string;
 }
 
+/** One side of a market pair. */
+export type Side = "base" | "quote";
+
 /** A single market as advertised by a solver. */
 export interface Market {
   /** Display label "<base-ticker>/<quote-ticker>"; identity is (base_asset.id, quote_asset.id). */
@@ -41,14 +44,20 @@ export interface Market {
   price_feed: string;
   /** Response contract for `price_feed`; clients MUST use this to extract the feed value. */
   price_feed_schema: PriceFeedSchema;
-  /** How to normalize the feed value to quote-atomic-units per base-atomic-unit. */
+  /** Feed value / 10^price_decimals = price in quote-atomic-units per base-atomic-unit. */
   price_decimals: number;
-  invert: boolean;
   /** The solver's spread, in basis points. Sort key: lower is better expected execution. */
   fee_bps: number;
-  /** Trade-size bounds in base-asset atomic units, applied to the base side regardless of direction. */
-  min_base_amount: number;
-  max_base_amount: number;
+  /**
+   * Per-side trade-size bounds in that side's atomic units. A side's min/max are
+   * always declared together, and a declared side is one the solver can pay out
+   * (solve): makers can only receive a side whose bounds are present. At least
+   * one side is always declared.
+   */
+  min_base_amount?: number;
+  max_base_amount?: number;
+  min_quote_amount?: number;
+  max_quote_amount?: number;
 }
 
 /** A card is one solver's market listing for one network (what a solver PRs / a user pins). */

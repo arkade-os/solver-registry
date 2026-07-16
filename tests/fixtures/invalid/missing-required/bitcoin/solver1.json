@@ -17,7 +17,6 @@
         "precision": 8
       },
       "price_decimals": 8,
-      "invert": false,
       "fee_bps": 30,
       "min_base_amount": 1000,
       "max_base_amount": 5000000
