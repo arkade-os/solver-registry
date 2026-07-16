@@ -199,11 +199,12 @@ function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   // Unknown keys are tolerated for forward-compat, but `invert` is a known
   // legacy semantic modifier: pricing no longer reads it, so silently
   // accepting an entry that declares an inverted feed would misprice by P².
-  // An explicit `false` is byte-identical to the new fixed quote-per-base
-  // contract and stays accepted, so a transition index can serve old and new
-  // clients at once.
-  if (v.invert !== undefined && v.invert !== false) {
-    add(errors, `${path}/invert`, "legacy inverted feeds are not supported; feeds must be quote-per-base");
+  // No carve-out for `invert: false`: the string-amount encoding already
+  // makes new indexes unreadable to old clients, and the published index
+  // schema rejects any `invert` key — tolerating it here would just make the
+  // two validation layers disagree.
+  if (v.invert !== undefined) {
+    add(errors, `${path}/invert`, "is a removed legacy field; feeds are always quote-per-base");
   }
   checkPattern(errors, `${path}/solver`, v.solver, NAME, 'must match "^[a-z0-9-]+$"');
   if (v.discovery_pubkey !== undefined) {

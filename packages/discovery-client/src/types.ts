@@ -48,6 +48,25 @@ export function isAmount(v: unknown): v is string {
   return typeof v === "string" && AMOUNT_PATTERN.test(v);
 }
 
+/**
+ * Canonical value identity for JSON trees: keys sorted, no whitespace. This is
+ * the library's definition of market identity — discovery dedupes with it and
+ * the React hook keys quote state with it, so two byte-equal markets are the
+ * same market regardless of object reference.
+ */
+export function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const body = Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+      .join(",");
+    return `{${body}}`;
+  }
+  return JSON.stringify(value);
+}
+
 /** The per-side limit field names — the single side -> field mapping. */
 export const LIMIT_KEYS = {
   base: { min: "min_base_amount", max: "max_base_amount" },

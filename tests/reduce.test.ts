@@ -100,10 +100,14 @@ test("NETWORKS constant covers bitcoin, signet, mutinynet", () => {
 });
 
 // The amount encoding is declared once per artifact (client AMOUNT_PATTERN,
-// each schema's definitions.amount); this pins them byte-identical.
-test("the schemas' amount definition matches the client's AMOUNT_PATTERN", () => {
+// each schema's definitions.amount, and its positive subset enabledAmount that
+// backs the at-least-one-side anyOf); this pins them all to one source.
+test("the schemas' amount definitions match the client's AMOUNT_PATTERN", () => {
+  // "^(0|[1-9][0-9]{0,29})$" minus the zero alternative.
+  const enabled = AMOUNT_PATTERN.source.replace("(0|", "").replace(")$", "$");
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
     assert.equal(schema.definitions.amount.pattern, AMOUNT_PATTERN.source, name);
+    assert.equal(schema.definitions.enabledAmount.pattern, enabled, name);
   }
 });

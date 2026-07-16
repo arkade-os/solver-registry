@@ -21,8 +21,7 @@ import {
   type NetworkIndex,
 } from "../packages/discovery-client/src/types.ts";
 
-export { NETWORKS, type Network };
-export type { Card, IndexMarket, NetworkIndex };
+export { NETWORKS };
 
 export interface CardError {
   file: string;
@@ -92,19 +91,15 @@ export function reduceNetwork(
       }
     }
 
-    // Name, signature, and duplicate checks need a structurally valid card but
-    // not a cross-field-clean one — reporting them alongside any limit/pair
-    // errors saves the solver a CI round-trip per masked error.
-    if (schemaOk) {
+    // Name and duplicate checks only need a name, not a schema-clean card —
+    // reporting them alongside any other errors saves the solver a CI
+    // round-trip per masked error. Only the signature check needs the whole
+    // card to be structurally valid.
+    if (typeof card.name === "string") {
       if (card.name !== expectedName) {
         messages.push(
           `name "${card.name}" does not match filename "${file}"`,
         );
-      }
-      if (card.sig) {
-        if (!verifyCardSig(card)) {
-          messages.push("sig does not verify against discovery_pubkey");
-        }
       }
       if (seenNames.has(card.name)) {
         messages.push(
@@ -112,6 +107,11 @@ export function reduceNetwork(
         );
       } else {
         seenNames.set(card.name, file);
+      }
+    }
+    if (schemaOk && card.sig) {
+      if (!verifyCardSig(card)) {
+        messages.push("sig does not verify against discovery_pubkey");
       }
     }
 

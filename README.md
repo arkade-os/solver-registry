@@ -109,11 +109,13 @@ which card failed and why without digging through logs.
 
 ## CI
 
-- `validate.yml` runs on PRs that change `solvers/**`: schema/signature checks
+- `validate.yml` runs on PRs that change the cards, schemas, reducer,
+  client package, or tests: schema/signature checks
   plus the reducer in `--check` mode, so a broken card can't merge. If you make
   this check required, scope that rule to solver changes; a globally required
   path-filtered workflow can block package-only PRs because GitHub skips it.
-- `publish.yml` runs on pushes to `master` that change `solvers/**`:
+- `publish.yml` runs on pushes to `master` that change anything shaping the
+  published artifacts (cards, schemas, reducer, client sources, landing page):
   re-validates (never publishes on failure), then builds and deploys
   `bitcoin.json` / `signet.json` / `mutinynet.json` to GitHub Pages.
 

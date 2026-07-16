@@ -165,7 +165,13 @@ export function sideLimits(market: Market, side: Side): { min: bigint; max: bigi
   const min = market[LIMIT_KEYS[side].min];
   const max = market[LIMIT_KEYS[side].max];
   if (!isAmount(min) || !isAmount(max) || max === "0") return null;
-  return { min: BigInt(min), max: BigInt(max) };
+  const minBig = BigInt(min);
+  const maxBig = BigInt(max);
+  // An enabled side must satisfy 1 <= min <= max (the validator's rule). A
+  // zero min would let a dust deposit pass withinLimits with a zero receive
+  // amount, and min > max is an unsatisfiable range — both read as disabled.
+  if (minBig === 0n || minBig > maxBig) return null;
+  return { min: minBig, max: maxBig };
 }
 
 /** Render a rational to a fixed-decimal string (for display only, never pricing). */

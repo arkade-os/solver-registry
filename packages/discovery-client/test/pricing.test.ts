@@ -70,6 +70,12 @@ test("sideLimits: max > 0 returns bounds, max = 0 (disabled) returns null", () =
   assert.equal(sideLimits({ ...market(), max_quote_amount: "1e6" } as never, "quote"), null); // non-canonical
   assert.equal(sideLimits({ ...market(), max_quote_amount: 1000 } as never, "quote"), null); // number, not string
   assert.equal(sideLimits({ ...market(), min_quote_amount: "0100" } as never, "quote"), null); // leading zero
+
+  // Validation-rejected shapes fail closed too: a zero min on an enabled side
+  // would let a dust deposit pass withinLimits with a zero receive amount, and
+  // min > max is an unsatisfiable range.
+  assert.equal(sideLimits(market({ min_quote_amount: "0" }), "quote"), null);
+  assert.equal(sideLimits(market({ min_base_amount: "5000001", max_base_amount: "5000000" }), "base"), null);
 });
 
 test("computeWantAmount: baseToQuote concedes fee + safety and floors", () => {

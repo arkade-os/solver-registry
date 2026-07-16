@@ -211,10 +211,13 @@ async function renderNetwork(network, container) {
     "Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price",
   ].map((h) => el("th", { text: h })))]);
 
-  // Amounts are decimal strings (exact past 2^53); max "0" disables the side.
-  const fmtAmount = (v) => { try { return BigInt(v).toLocaleString("en-US"); } catch { return "?"; } };
-  const limitsText = (min, max) =>
-    !max || max === "0" ? "—" : `${fmtAmount(min)} – ${fmtAmount(max)}`;
+  // Amounts are canonical decimal strings (exact past 2^53, mirrors the
+  // schemas' amount definition); max "0" disables the side. Anything
+  // non-canonical renders "?" — BigInt alone would decode hex/whitespace/"".
+  const AMOUNT = /^(0|[1-9][0-9]{0,29})$/;
+  const fmtAmount = (v) =>
+    typeof v === "string" && AMOUNT.test(v) ? BigInt(v).toLocaleString("en-US") : "?";
+  const limitsText = (min, max) => (max === "0" ? "—" : `${fmtAmount(min)} – ${fmtAmount(max)}`);
   const tbody = el("tbody");
   const priceCells = [];
 

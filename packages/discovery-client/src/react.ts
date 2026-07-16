@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchFeedValue, type FetchFeedOptions } from "./feed.ts";
 import { planOffer, type OfferPlan } from "./offer.ts";
 import { otherSide, sideLimits } from "./pricing.ts";
-import type { Market, Side } from "./types.ts";
+import { stableStringify, type Market, type Side } from "./types.ts";
 
 type InitialAmount = string | number | bigint;
 
@@ -57,18 +57,27 @@ function asError(error: unknown): Error {
 }
 
 /**
- * Everything derived from a feed fetch, tagged with the (market, give) it was
- * computed for. The hook only exposes it while that identity still matches the
- * current props, so a market or direction switch can never show the previous
- * market's plan, price, or status — not even for one render frame.
+ * Everything derived from a feed fetch, tagged with the (market, give)
+ * identity it was computed for. The hook only exposes it while that identity
+ * still matches the current props, so a market or direction switch can never
+ * show the previous market's plan, price, or status — not even for one render
+ * frame. Identity is the market's VALUE (stableStringify, the same identity
+ * discovery dedupes with), not its object reference: a background discover()
+ * refresh that re-creates a byte-identical market keeps the quote alive with
+ * no refetch, while an in-place content change is detected and invalidates it.
  */
 interface QuoteState {
-  market: Market;
+  key: string;
   give: Side;
   feedValue: string | number | null;
   plan: OfferPlan | null;
   status: OfferQuoteStatus;
   error: Error | null;
+}
+
+/** The state, but only if it was computed for the current (market, give) identity. */
+function matching(s: QuoteState | null, key: string | null, give: Side): QuoteState | null {
+  return s && s.key === key && s.give === give ? s : null;
 }
 
 /**
@@ -130,12 +139,12 @@ export function useOfferQuote(
   const activeAmount = activeInput === "give" ? giveAmount : wantAmount;
   // Solvability is a static market property — known before any feed fetch.
   const solvable = market ? sideLimits(market, otherSide(give)) !== null : null;
+  // Recomputed every render (not memoized by reference) so even an in-place
+  // mutation of the market object changes the identity.
+  const marketKey = market ? stableStringify(market) : null;
 
   useEffect(() => {
-    // The carry-forward for state updates below: the previous quote state, but
-    // only if it belongs to the current (market, give) identity.
-    const carried = (s: QuoteState | null) =>
-      s && s.market === market && s.give === give ? s : null;
+    const carried = (s: QuoteState | null) => matching(s, marketKey, give);
 
     if (!market || !solvable || activeAmount.trim() === "") {
       // Nothing to quote: no market, a receive side the market cannot pay out
@@ -149,10 +158,13 @@ export function useOfferQuote(
         else setGiveAmountValue("");
       }
       // Keep a solvable market's last feed value across an emptied input;
-      // everything else resets to idle.
+      // everything else resets to idle. Return the same object when nothing
+      // changes so React can bail out of the update.
       setQuoteState((s) => {
         const cur = market && solvable ? carried(s) : null;
-        return cur && { ...cur, plan: null, status: "idle", error: null };
+        if (cur === null) return null;
+        if (cur.plan === null && cur.status === "idle" && cur.error === null) return s;
+        return { ...cur, plan: null, status: "idle", error: null };
       });
       return;
     }
@@ -168,14 +180,21 @@ export function useOfferQuote(
     }
 
     // Loading: keep the same identity's previous feed value and plan visible.
-    setQuoteState((s) => ({
-      market: selectedMarket,
-      give,
-      feedValue: carried(s)?.feedValue ?? null,
-      plan: carried(s)?.plan ?? null,
-      status: "loading",
-      error: null,
-    }));
+    // Bail out (same object) when already loading, so an unstable dep (inline
+    // fetchImpl, re-created market prop) cannot self-sustain a render loop.
+    const key = marketKey as string;
+    setQuoteState((s) => {
+      const cur = carried(s);
+      if (cur && cur.status === "loading") return s;
+      return {
+        key,
+        give,
+        feedValue: cur?.feedValue ?? null,
+        plan: cur?.plan ?? null,
+        status: "loading",
+        error: null,
+      };
+    });
 
     async function quote() {
       try {
@@ -207,7 +226,7 @@ export function useOfferQuote(
 
         if (cancelled) return;
         setQuoteState({
-          market: selectedMarket,
+          key,
           give,
           feedValue: nextFeedValue,
           plan: nextPlan,
@@ -219,7 +238,7 @@ export function useOfferQuote(
       } catch (err) {
         if (cancelled || controller.signal.aborted) return;
         setQuoteState((s) => ({
-          market: selectedMarket,
+          key,
           give,
           feedValue: carried(s)?.feedValue ?? null,
           plan: null,
@@ -236,14 +255,16 @@ export function useOfferQuote(
       if (signal && relayAbort) signal.removeEventListener("abort", relayAbort);
       controller.abort();
     };
-  }, [activeAmount, activeInput, fetchImpl, give, market, refreshNonce, safetyBps, signal, solvable, timeoutMs]);
+    // `market` is deliberately keyed by value (marketKey): a re-created but
+    // byte-identical market object must not abort and refetch.
+  }, [activeAmount, activeInput, fetchImpl, give, marketKey, refreshNonce, safetyBps, signal, solvable, timeoutMs]);
 
   return useMemo(() => {
     const baseAmount = give === "base" ? giveAmount : wantAmount;
     const quoteAmount = give === "base" ? wantAmount : giveAmount;
     // Expose quote state only while its identity matches the current props —
     // stale cross-market values are structurally unreachable.
-    const current = quoteState && quoteState.market === market && quoteState.give === give ? quoteState : null;
+    const current = matching(quoteState, marketKey, give);
     return {
       market: market ?? null,
       give,
@@ -269,6 +290,7 @@ export function useOfferQuote(
     give,
     giveAmount,
     market,
+    marketKey,
     quoteState,
     refresh,
     setBaseAmount,

@@ -71,7 +71,6 @@
     "amount": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]{0,29})$",
-      "maxLength": 30,
       "description": "A canonical decimal-string amount of atomic units: unsigned, no leading zeros. \"0\" disables the side it bounds."
     },
     "enabledAmount": {

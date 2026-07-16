@@ -1,6 +1,6 @@
 // Shared test fixtures. The Market shape mirrors the schemas; keeping one
 // canonical fixture means a schema change is a one-file edit for the suite.
-import type { AssetInfo, Market } from "../src/types.ts";
+import type { AssetInfo, Market, Side } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
 
 export const BTC: AssetInfo = { id: "btc", name: "Bitcoin", ticker: "BTC", precision: 8 };
@@ -27,7 +27,7 @@ export function makeMarket(overrides: Partial<Market> = {}): Market {
 }
 
 /** A one-sided market: the other side's bounds are zeroed (max = "0" disables). */
-export function makeOneSidedMarket(solves: "base" | "quote", overrides: Partial<Market> = {}): Market {
+export function makeOneSidedMarket(solves: Side, overrides: Partial<Market> = {}): Market {
   const disabled =
     solves === "base"
       ? { min_quote_amount: "0", max_quote_amount: "0" }

@@ -4,7 +4,7 @@
 //
 // Isomorphic by design — see `feed.ts` for the injectable transport.
 
-import { DEFAULT_NETWORK, type AssetInfo, type IndexMarket, type Network, type NetworkIndex, type Side } from "./types.ts";
+import { DEFAULT_NETWORK, stableStringify, type AssetInfo, type IndexMarket, type Network, type NetworkIndex, type Side } from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
 import { quoteMarket, sideLimits, type Direction, type Quote } from "./pricing.ts";
 import { fetchText, fetchFeedValue, type FetchLike, type FetchFeedOptions } from "./feed.ts";
@@ -127,19 +127,6 @@ export interface DiscoverResult {
   sources: SourceReport[];
   /** Flattened warnings across all sources (staleness, skipped cards, …). */
   warnings: string[];
-}
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    const body = Object.keys(obj)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
-      .join(",");
-    return `{${body}}`;
-  }
-  return JSON.stringify(value);
 }
 
 function idPair(m: IndexMarket): string {

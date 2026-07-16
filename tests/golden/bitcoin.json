@@ -28,7 +28,7 @@
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
       "min_quote_amount": "1000",
-      "max_quote_amount": "5000000",
+      "max_quote_amount": "2000000000000000000",
       "solver": "alice"
     },
     {
