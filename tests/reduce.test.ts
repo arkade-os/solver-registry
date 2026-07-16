@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
+import { AMOUNT_PATTERN } from "../packages/discovery-client/src/types.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXED_META = { generatedAt: 1700000000, commit: "a".repeat(40) };
@@ -96,4 +97,13 @@ test("a card placed outside a known network directory is flagged", () => {
 
 test("NETWORKS constant covers bitcoin, signet, mutinynet", () => {
   assert.deepEqual([...NETWORKS], ["bitcoin", "signet", "mutinynet"]);
+});
+
+// The amount encoding is declared once per artifact (client AMOUNT_PATTERN,
+// each schema's definitions.amount); this pins them byte-identical.
+test("the schemas' amount definition matches the client's AMOUNT_PATTERN", () => {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
+    const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
+    assert.equal(schema.definitions.amount.pattern, AMOUNT_PATTERN.source, name);
+  }
 });

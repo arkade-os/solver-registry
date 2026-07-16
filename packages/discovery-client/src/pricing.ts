@@ -6,7 +6,7 @@
 // amount of 10^14 atomic units round-trip without loss. BigInt is available in
 // every target (modern browsers, Node, and Hermes / React Native).
 
-import { AMOUNT_PATTERN, type Market, type Side } from "./types.ts";
+import { LIMIT_KEYS, isAmount, type Market, type Side } from "./types.ts";
 
 /** An exact non-negative rational number. `den` is always > 0. */
 export interface Rational {
@@ -158,22 +158,13 @@ export function otherSide(side: Side): Side {
  * direction that receives it. Malformed bounds (missing, non-canonical, not a
  * decimal string) also read as disabled, so unvalidated input fails safe
  * everywhere instead of crashing or coercing in one call site but not another.
- *
- * The only side -> field-name mapping in the client; callers inline the
- * bigint range check rather than going through another helper.
+ * Callers inline the bigint range check rather than going through another
+ * helper.
  */
 export function sideLimits(market: Market, side: Side): { min: bigint; max: bigint } | null {
-  const min = side === "base" ? market.min_base_amount : market.min_quote_amount;
-  const max = side === "base" ? market.max_base_amount : market.max_quote_amount;
-  if (
-    typeof min !== "string" ||
-    typeof max !== "string" ||
-    !AMOUNT_PATTERN.test(min) ||
-    !AMOUNT_PATTERN.test(max) ||
-    max === "0"
-  ) {
-    return null;
-  }
+  const min = market[LIMIT_KEYS[side].min];
+  const max = market[LIMIT_KEYS[side].max];
+  if (!isAmount(min) || !isAmount(max) || max === "0") return null;
   return { min: BigInt(min), max: BigInt(max) };
 }
 

@@ -43,6 +43,17 @@ export type Side = "base" | "quote";
  */
 export const AMOUNT_PATTERN = /^(0|[1-9][0-9]{0,29})$/;
 
+/** Whether `v` is a canonical decimal-string amount (see {@link AMOUNT_PATTERN}). */
+export function isAmount(v: unknown): v is string {
+  return typeof v === "string" && AMOUNT_PATTERN.test(v);
+}
+
+/** The per-side limit field names — the single side -> field mapping. */
+export const LIMIT_KEYS = {
+  base: { min: "min_base_amount", max: "max_base_amount" },
+  quote: { min: "min_quote_amount", max: "max_quote_amount" },
+} as const;
+
 /** A single market as advertised by a solver. */
 export interface Market {
   /** Display label "<base-ticker>/<quote-ticker>"; identity is (base_asset.id, quote_asset.id). */

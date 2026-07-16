@@ -57,6 +57,21 @@ function asError(error: unknown): Error {
 }
 
 /**
+ * Everything derived from a feed fetch, tagged with the (market, give) it was
+ * computed for. The hook only exposes it while that identity still matches the
+ * current props, so a market or direction switch can never show the previous
+ * market's plan, price, or status — not even for one render frame.
+ */
+interface QuoteState {
+  market: Market;
+  give: Side;
+  feedValue: string | number | null;
+  plan: OfferPlan | null;
+  status: OfferQuoteStatus;
+  error: Error | null;
+}
+
+/**
  * React helper for a two-input quote UI. The last edited amount drives the
  * quote: editing the base/give side updates the wanted side, and editing the
  * wanted side computes the minimum deposit.
@@ -79,10 +94,7 @@ export function useOfferQuote(
   );
   const [giveAmount, setGiveAmountValue] = useState(() => initialAmount(initialGiveAmount));
   const [wantAmount, setWantAmountValue] = useState(() => initialAmount(initialWantAmount));
-  const [feedValue, setFeedValue] = useState<string | number | null>(null);
-  const [plan, setPlan] = useState<OfferPlan | null>(null);
-  const [status, setStatus] = useState<OfferQuoteStatus>("idle");
-  const [error, setError] = useState<Error | null>(null);
+  const [quoteState, setQuoteState] = useState<QuoteState | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const setGiveAmount = useCallback((amount: string) => {
@@ -119,15 +131,12 @@ export function useOfferQuote(
   // Solvability is a static market property — known before any feed fetch.
   const solvable = market ? sideLimits(market, otherSide(give)) !== null : null;
 
-  // Derived state is only valid for the (market, give) it was computed from:
-  // drop it the moment either changes, so a market switch can never expose the
-  // previous market's plan or feed price while the new quote loads.
   useEffect(() => {
-    setFeedValue(null);
-    setPlan(null);
-  }, [give, market]);
+    // The carry-forward for state updates below: the previous quote state, but
+    // only if it belongs to the current (market, give) identity.
+    const carried = (s: QuoteState | null) =>
+      s && s.market === market && s.give === give ? s : null;
 
-  useEffect(() => {
     if (!market || !solvable || activeAmount.trim() === "") {
       // Nothing to quote: no market, a receive side the market cannot pay out
       // (`solvable` tells the UI which), or no input. With a market selected,
@@ -139,10 +148,12 @@ export function useOfferQuote(
         if (activeInput === "give") setWantAmountValue("");
         else setGiveAmountValue("");
       }
-      if (!market || !solvable) setFeedValue(null);
-      setPlan(null);
-      setStatus("idle");
-      setError(null);
+      // Keep a solvable market's last feed value across an emptied input;
+      // everything else resets to idle.
+      setQuoteState((s) => {
+        const cur = market && solvable ? carried(s) : null;
+        return cur && { ...cur, plan: null, status: "idle", error: null };
+      });
       return;
     }
 
@@ -156,8 +167,15 @@ export function useOfferQuote(
       else signal.addEventListener("abort", relayAbort, { once: true });
     }
 
-    setStatus("loading");
-    setError(null);
+    // Loading: keep the same identity's previous feed value and plan visible.
+    setQuoteState((s) => ({
+      market: selectedMarket,
+      give,
+      feedValue: carried(s)?.feedValue ?? null,
+      plan: carried(s)?.plan ?? null,
+      status: "loading",
+      error: null,
+    }));
 
     async function quote() {
       try {
@@ -188,16 +206,26 @@ export function useOfferQuote(
               });
 
         if (cancelled) return;
-        setFeedValue(nextFeedValue);
-        setPlan(nextPlan);
-        setStatus("success");
+        setQuoteState({
+          market: selectedMarket,
+          give,
+          feedValue: nextFeedValue,
+          plan: nextPlan,
+          status: "success",
+          error: null,
+        });
         if (activeInput === "give") setWantAmountValue(nextPlan.receive.display);
         else setGiveAmountValue(nextPlan.deposit.display);
       } catch (err) {
         if (cancelled || controller.signal.aborted) return;
-        setPlan(null);
-        setStatus("error");
-        setError(asError(err));
+        setQuoteState((s) => ({
+          market: selectedMarket,
+          give,
+          feedValue: carried(s)?.feedValue ?? null,
+          plan: null,
+          status: "error",
+          error: asError(err),
+        }));
       }
     }
 
@@ -213,6 +241,9 @@ export function useOfferQuote(
   return useMemo(() => {
     const baseAmount = give === "base" ? giveAmount : wantAmount;
     const quoteAmount = give === "base" ? wantAmount : giveAmount;
+    // Expose quote state only while its identity matches the current props —
+    // stale cross-market values are structurally unreachable.
+    const current = quoteState && quoteState.market === market && quoteState.give === give ? quoteState : null;
     return {
       market: market ?? null,
       give,
@@ -227,27 +258,24 @@ export function useOfferQuote(
       quoteAmount,
       setBaseAmount,
       setQuoteAmount,
-      feedValue,
-      plan,
-      status,
-      error,
+      feedValue: current?.feedValue ?? null,
+      plan: current?.plan ?? null,
+      status: current?.status ?? "idle",
+      error: current?.error ?? null,
       refresh,
     };
   }, [
     activeInput,
-    error,
-    feedValue,
     give,
     giveAmount,
     market,
-    plan,
+    quoteState,
     refresh,
     setBaseAmount,
     setGiveAmount,
     setQuoteAmount,
     setWantAmount,
     solvable,
-    status,
     wantAmount,
   ]);
 }

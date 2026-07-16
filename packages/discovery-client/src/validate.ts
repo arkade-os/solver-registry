@@ -7,7 +7,7 @@
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
 import type { AssetInfo, Card, NetworkIndex } from "./types.ts";
-import { AMOUNT_PATTERN, isNetwork } from "./types.ts";
+import { AMOUNT_PATTERN, LIMIT_KEYS, isAmount, isNetwork } from "./types.ts";
 
 export interface ValidationResult<T> {
   ok: boolean;
@@ -32,11 +32,6 @@ function isInt(v: unknown): v is number {
   return typeof v === "number" && Number.isSafeInteger(v);
 }
 
-/** A canonical decimal-string amount (see {@link AMOUNT_PATTERN}). */
-function isAmount(v: unknown): v is string {
-  return typeof v === "string" && AMOUNT_PATTERN.test(v);
-}
-
 // Errors accumulate as path-tagged strings in a plain array; these helpers
 // cover the repeated field-check shapes so each rule lives in one place.
 
@@ -50,10 +45,6 @@ function checkPattern(errors: string[], path: string, v: unknown, re: RegExp, me
 
 function checkIntRange(errors: string[], path: string, v: unknown, min: number, max: number): void {
   if (!isInt(v) || v < min || v > max) add(errors, path, `must be an integer in ${min}..${max}`);
-}
-
-function checkIntMin(errors: string[], path: string, v: unknown, min: number): void {
-  if (!isInt(v) || v < min) add(errors, path, `must be an integer >= ${min}`);
 }
 
 function checkStringLength(errors: string[], path: string, v: unknown, min: number, max: number): void {
@@ -107,12 +98,9 @@ const MARKET_KEYS = new Set([
   "max_quote_amount",
 ]);
 
-const LIMIT_SIDES = [
-  ["min_base_amount", "max_base_amount"],
-  ["min_quote_amount", "max_quote_amount"],
-] as const;
+const LIMIT_SIDES = [LIMIT_KEYS.base, LIMIT_KEYS.quote] as const;
 
-type LimitKey = (typeof LIMIT_SIDES)[number][number];
+type LimitKey = (typeof LIMIT_SIDES)[number]["min" | "max"];
 
 /**
  * Cross-field size-limit rules, shared with the reducer (`scripts/reduce.ts`
@@ -126,7 +114,7 @@ export function marketLimitErrors(market: { [key in LimitKey]?: unknown }): stri
   const errors: string[] = [];
   let checkedSides = 0;
   let enabledSides = 0;
-  for (const [minKey, maxKey] of LIMIT_SIDES) {
+  for (const { min: minKey, max: maxKey } of LIMIT_SIDES) {
     const minRaw = market[minKey];
     const maxRaw = market[maxKey];
     if (!isAmount(minRaw) || !isAmount(maxRaw)) continue;
@@ -196,9 +184,10 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // Per-side size bounds, always present as canonical decimal strings; the
   // cross-field rules (min <= max, min >= 1 when enabled, one side enabled)
   // live in marketLimitErrors, shared with the reducer.
-  for (const [minKey, maxKey] of LIMIT_SIDES) {
-    checkPattern(errors, `${path}/${minKey}`, v[minKey], AMOUNT_PATTERN, 'must be a decimal string of atomic units ("0" disables the side)');
-    checkPattern(errors, `${path}/${maxKey}`, v[maxKey], AMOUNT_PATTERN, 'must be a decimal string of atomic units ("0" disables the side)');
+  for (const { min, max } of LIMIT_SIDES) {
+    for (const key of [min, max]) {
+      checkPattern(errors, `${path}/${key}`, v[key], AMOUNT_PATTERN, 'must be a decimal string of atomic units ("0" disables the side)');
+    }
   }
   for (const message of marketLimitErrors(v)) add(errors, path, message);
 }

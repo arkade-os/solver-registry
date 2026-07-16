@@ -67,6 +67,17 @@
           "description": "RFC 6901 JSON Pointer to the numeric feed value, e.g. /price or /bitcoin/usd. Empty string selects the whole JSON document."
         }
       }
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,29})$",
+      "maxLength": 30,
+      "description": "A canonical decimal-string amount of atomic units: unsigned, no leading zeros. \"0\" disables the side it bounds."
+    },
+    "enabledAmount": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,29}$",
+      "description": "An amount that is strictly positive: the side it bounds is enabled."
     }
   },
   "properties": {
@@ -111,16 +122,14 @@
           {
             "properties": {
               "max_base_amount": {
-                "type": "string",
-                "pattern": "^[1-9][0-9]{0,29}$"
+                "$ref": "#/definitions/enabledAmount"
               }
             }
           },
           {
             "properties": {
               "max_quote_amount": {
-                "type": "string",
-                "pattern": "^[1-9][0-9]{0,29}$"
+                "$ref": "#/definitions/enabledAmount"
               }
             }
           }
@@ -159,28 +168,20 @@
             "maximum": 10000
           },
           "min_base_amount": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]{0,29})$",
-            "maxLength": 30,
-            "description": "Lower trade-size bound for the base side, as a decimal string of base atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
+            "$ref": "#/definitions/amount",
+            "description": "Lower trade-size bound for the base side, in base atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_base_amount": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]{0,29})$",
-            "maxLength": 30,
-            "description": "Upper trade-size bound for the base side, as a decimal string of base atomic units. \"0\" disables the side: the solver does not pay out base and makers cannot receive it."
+            "$ref": "#/definitions/amount",
+            "description": "Upper trade-size bound for the base side, in base atomic units. \"0\" disables the side: the solver does not pay out base and makers cannot receive it."
           },
           "min_quote_amount": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]{0,29})$",
-            "maxLength": 30,
-            "description": "Lower trade-size bound for the quote side, as a decimal string of quote atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
+            "$ref": "#/definitions/amount",
+            "description": "Lower trade-size bound for the quote side, in quote atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_quote_amount": {
-            "type": "string",
-            "pattern": "^(0|[1-9][0-9]{0,29})$",
-            "maxLength": 30,
-            "description": "Upper trade-size bound for the quote side, as a decimal string of quote atomic units. \"0\" disables the side: the solver does not pay out quote and makers cannot receive it."
+            "$ref": "#/definitions/amount",
+            "description": "Upper trade-size bound for the quote side, in quote atomic units. \"0\" disables the side: the solver does not pay out quote and makers cannot receive it."
           }
         }
       }

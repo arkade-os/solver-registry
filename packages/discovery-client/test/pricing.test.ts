@@ -150,7 +150,7 @@ test("quoteMarket: baseToQuote checks the received quote amount against quote li
 test("quoteMarket: quoteToBase checks limits against the received base amount", () => {
   // Deposit a tiny amount of quote so the resulting base wantAmount is below min.
   const q = quoteMarket({
-    market: market({ min_base_amount: "1000", max_base_amount: "5000000" }),
+    market: market(),
     feedValue: "65000",
     deposit: 100, // quote atomic; wantBase ~ 100/65000 < 1 => below min
     direction: "quoteToBase",

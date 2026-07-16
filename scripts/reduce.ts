@@ -69,7 +69,7 @@ export function reduceNetwork(
       continue;
     }
 
-    const schemaOk = validateCardSchema(parsed) as boolean;
+    const schemaOk = validateCardSchema(parsed);
     if (!schemaOk) {
       for (const err of validateCardSchema.errors ?? []) {
         messages.push(`${err.instancePath || "/"} ${err.message}`);
@@ -85,7 +85,8 @@ export function reduceNetwork(
     // "must enable size limits for at least one side") next to Ajv's output.
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
-        for (const message of [...marketLimitErrors(market ?? {}), marketPairError(market ?? {})]) {
+        const m = market ?? {};
+        for (const message of [...marketLimitErrors(m), marketPairError(m)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
       }
