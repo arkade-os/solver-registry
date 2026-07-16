@@ -4,10 +4,17 @@ import {
   parseDecimal,
   deriveAtomicPrice,
   computeWantAmount,
+  pow10,
   sideLimits,
   quoteMarket,
 } from "../src/pricing.ts";
 import { makeMarket as market, makeOneSidedMarket } from "./helpers.ts";
+
+test("pow10: rejects negatives, fractions, and NaN with a labeled error", () => {
+  assert.throws(() => pow10(-1), /non-negative integer/);
+  assert.throws(() => pow10(1.5), /non-negative integer/);
+  assert.throws(() => pow10(NaN), /non-negative integer/);
+});
 
 test("parseDecimal: integers, fixed-point, scientific, signs, and numbers", () => {
   assert.deepEqual(parseDecimal("377000.00000000"), { num: 377000n, den: 1n });

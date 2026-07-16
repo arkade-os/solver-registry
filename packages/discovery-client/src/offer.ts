@@ -138,6 +138,15 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const { market, give } = input;
   const base = market.base_asset;
   const quote = market.quote_asset;
+  // Fail fast with the field's name: on an unvalidated market a missing or
+  // non-integer decimals would otherwise surface deep in the BigInt math as an
+  // opaque "Cannot convert undefined to a BigInt".
+  for (const key of ["base_asset", "quote_asset"] as const) {
+    const d = market[key]?.decimals;
+    if (typeof d !== "number" || !Number.isInteger(d) || d < 0) {
+      throw new Error(`${key}.decimals must be a non-negative integer`);
+    }
+  }
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
   const direction: Direction = give === "base" ? "baseToQuote" : "quoteToBase";

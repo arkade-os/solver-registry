@@ -54,6 +54,7 @@ export {
   displayPrice,
   displayPriceString,
   type FromAtomicOptions,
+  type PairDecimals,
 } from "./assets.ts";
 
 export {

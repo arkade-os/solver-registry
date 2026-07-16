@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
-import { AMOUNT_PATTERN } from "../packages/discovery-client/src/types.ts";
+import { AMOUNT_PATTERN, ASSET_KEYS, MAX_ASSET_DECIMALS } from "../packages/discovery-client/src/types.ts";
+import { validateIndex } from "../packages/discovery-client/src/validate.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXED_META = { generatedAt: 1700000000, commit: "a".repeat(40) };
@@ -109,5 +110,28 @@ test("the schemas' amount definitions match the client's AMOUNT_PATTERN", () => 
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
     assert.equal(schema.definitions.amount.pattern, AMOUNT_PATTERN.source, name);
     assert.equal(schema.definitions.enabledAmount.pattern, enabled, name);
+  }
+});
+
+// The asset shape is likewise declared once per artifact. Without this pin a
+// skew in index.schema.json alone escapes the whole suite: that schema is
+// compiled against no document here — only third-party consumers run it.
+test("the schemas' asset definitions match the client's ASSET_KEYS and decimals bound", () => {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
+    const asset = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8")).definitions.asset;
+    assert.deepEqual(asset.required, [...ASSET_KEYS], name);
+    assert.deepEqual(Object.keys(asset.properties).sort(), [...ASSET_KEYS].sort(), name);
+    assert.equal(asset.properties.decimals.minimum, 0, name);
+    assert.equal(asset.properties.decimals.maximum, MAX_ASSET_DECIMALS, name);
+  }
+});
+
+// Nothing else runs an index through the client's hand-rolled validator, so a
+// reducer/validator skew would only ever surface in a browser at runtime.
+test("golden indexes validate under the client's validateIndex", () => {
+  for (const network of NETWORKS) {
+    const idx = JSON.parse(readFileSync(goldenOf(network), "utf8"));
+    const r = validateIndex(idx, network);
+    assert.equal(r.ok, true, `${network}: ${r.errors.join("; ")}`);
   }
 });

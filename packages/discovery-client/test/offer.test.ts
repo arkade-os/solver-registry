@@ -14,7 +14,7 @@ test("toAtomic: exact display -> atomic at 8 decimals", () => {
   assert.equal(toAtomic("0.00000001", 8), 1n);
 });
 
-test("toAtomic: cross decimals and rejection of over-precise amounts", () => {
+test("toAtomic: converts across decimals and rejects over-precise amounts", () => {
   assert.equal(toAtomic("1.5", 6), 1_500_000n); // e.g. USDT
   assert.throws(() => toAtomic("1.123456789", 8), /more precision/);
   assert.throws(() => toAtomic("-1", 8), /non-negative/);
@@ -33,13 +33,22 @@ test("conversion round-trips", () => {
   }
 });
 
-test("displayPrice: equal decimals is identity, cross decimals scales", () => {
+test("displayPrice: identity at equal decimals, scales across differing decimals", () => {
   const p = { num: 377000n, den: 1n };
   assert.deepEqual(displayPrice(p, { baseDecimals: 8, quoteDecimals: 8 }), p);
   // 1 BTC = 65000 USDT => atomic price 650 (quote 6dp / base 8dp) displays as 65000.
   assert.equal(
     displayPriceString({ num: 650n, den: 1n }, { baseDecimals: 8, quoteDecimals: 6 }),
     "65000.00000000",
+  );
+});
+
+test("planOffer: names the field when a market's asset decimals are malformed", () => {
+  const m = arkadeMarket() as any;
+  delete m.quote_asset.decimals;
+  assert.throws(
+    () => planOffer({ market: m, give: "base", giveAmount: "1", feedValue: "377000" }),
+    /quote_asset\.decimals must be a non-negative integer/,
   );
 });
 

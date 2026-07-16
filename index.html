@@ -155,7 +155,7 @@ const EXPLORERS = {
 // ticker; the canonical asset id lives in base_asset.id / quote_asset.id.
 function assetCell(network, asset) {
   const label = asset.ticker;
-  const title = `${asset.name} · decimals ${asset.decimals} · ${asset.id}`;
+  const title = `${asset.name} · decimals ${asset.decimals ?? "?"} · ${asset.id}`;
   const explorer = EXPLORERS[network];
   if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
   return el("a", {

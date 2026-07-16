@@ -15,6 +15,12 @@ export function isNetwork(value: unknown): value is Network {
   return (NETWORKS as readonly string[]).includes(value as string);
 }
 
+/** The asset descriptor's exact wire key set. Tests pin both schemas' asset definition to this. */
+export const ASSET_KEYS = ["id", "name", "ticker", "decimals"] as const;
+
+/** Inclusive upper bound for `AssetInfo.decimals`. Tests pin both schemas to this. */
+export const MAX_ASSET_DECIMALS = 18;
+
 /** Per-side asset descriptor. `id` is the canonical identity; the rest is display metadata. */
 export interface AssetInfo {
   /** Canonical asset identity: "btc" or a 68-hex-char AssetId. Group and price by this only. */

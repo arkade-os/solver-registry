@@ -1,9 +1,8 @@
 // Decimals-aware amount conversion for Arkade Assets.
 //
 // Per the discovery spec, an asset's `decimals` (8 for BTC and most Arkade
-// assets — the same field the asset registry metadata carries) describes how
-// many decimals its atomic unit has and is used only for *rendering* — pricing
-// math stays in atomic units. These helpers make the human⇄atomic conversion
+// assets) describes how many decimals its atomic unit has and is used only for
+// *rendering* — pricing math stays in atomic units. These helpers make the human⇄atomic conversion
 // first-class and exact (BigInt / rational), so a UI can accept "1.5" and offer
 // quotes can report human amounts without float error.
 
@@ -44,26 +43,29 @@ export function fromAtomic(atomic: bigint, decimals: number, opts: FromAtomicOpt
   return out;
 }
 
+/** The pair's asset `decimals`, for scaling atomic prices to display prices. */
+export interface PairDecimals {
+  baseDecimals: number;
+  quoteDecimals: number;
+}
+
 /**
  * Convert an atomic price (quote-atomic per base-atomic) to a human display
  * price (quote-display per base-display): `P × 10^(baseDecimals − quoteDecimals)`.
  * For assets with equal decimals (e.g. BTC/DePix, both 8) it equals the atomic price.
  */
-export function displayPrice(
-  price: Rational,
-  assetDecimals: { baseDecimals: number; quoteDecimals: number },
-): Rational {
+export function displayPrice(price: Rational, assetDecimals: PairDecimals): Rational {
   const diff = assetDecimals.baseDecimals - assetDecimals.quoteDecimals;
   const num = diff >= 0 ? price.num * pow10(diff) : price.num;
   const den = diff >= 0 ? price.den : price.den * pow10(-diff);
   return { num, den };
 }
 
-/** `displayPrice` rendered to a fixed-decimal string (display only). */
+/** `displayPrice` rendered to a fixed-decimal string of `fractionDigits` (display only). */
 export function displayPriceString(
   price: Rational,
-  assetDecimals: { baseDecimals: number; quoteDecimals: number },
-  decimals = 8,
+  assetDecimals: PairDecimals,
+  fractionDigits = 8,
 ): string {
-  return rationalToDecimalString(displayPrice(price, assetDecimals), decimals);
+  return rationalToDecimalString(displayPrice(price, assetDecimals), fractionDigits);
 }

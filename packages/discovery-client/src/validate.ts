@@ -7,7 +7,7 @@
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
 import type { AssetInfo, Card, NetworkIndex } from "./types.ts";
-import { AMOUNT_PATTERN, LIMIT_KEYS, isAmount, isNetwork } from "./types.ts";
+import { AMOUNT_PATTERN, ASSET_KEYS, LIMIT_KEYS, MAX_ASSET_DECIMALS, isAmount, isNetwork } from "./types.ts";
 
 export interface ValidationResult<T> {
   ok: boolean;
@@ -59,7 +59,7 @@ function checkAllowedKeys(errors: string[], path: string, obj: Record<string, un
   }
 }
 
-const ASSET_KEYS = new Set(["id", "name", "ticker", "decimals"]);
+const ASSET_KEY_SET = new Set<string>(ASSET_KEYS);
 const PRICE_FEED_SCHEMA_KEYS = new Set(["type", "price_path"]);
 
 function checkAsset(errors: string[], path: string, v: unknown, strict: boolean): void {
@@ -67,11 +67,11 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
     add(errors, path, "must be an object");
     return;
   }
-  if (strict) checkAllowedKeys(errors, path, v, ASSET_KEYS);
+  if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
   checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
-  checkIntRange(errors, `${path}/decimals`, v.decimals, 0, 18);
+  checkIntRange(errors, `${path}/decimals`, v.decimals, 0, MAX_ASSET_DECIMALS);
 }
 
 function checkPriceFeedSchema(errors: string[], path: string, v: unknown, strict: boolean): void {

@@ -52,9 +52,8 @@ if (!plan.limits.withinLimits) console.warn("amount is outside the market's size
 
 ## Amount conversion (Arkade Assets)
 
-Each asset carries a `decimals` (8 for BTC and most Arkade assets, matching the
-asset registry metadata field). Conversion
-between human and atomic units is exact:
+Each asset carries a `decimals` field (8 for BTC and most Arkade assets).
+Conversion between human and atomic units is exact:
 
 ```ts
 import { toAtomic, fromAtomic } from "@arkade-os/solver-discovery";

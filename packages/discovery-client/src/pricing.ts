@@ -42,7 +42,9 @@ function normalize({ num, den }: Rational): Rational {
 
 /** 10^n as an exact bigint. Shared with `assets.ts`'s decimals conversion. */
 export function pow10(n: number): bigint {
-  if (n < 0) throw new Error(`pow10 requires n >= 0, got ${n}`);
+  // NaN and fractions must be caught here, not by BigInt(n): a `n < 0` check
+  // alone is bypassed by NaN and the caller would see an unlabeled RangeError.
+  if (!Number.isInteger(n) || n < 0) throw new Error(`pow10 requires a non-negative integer, got ${n}`);
   return 10n ** BigInt(n);
 }
 
@@ -175,13 +177,13 @@ export function sideLimits(market: Market, side: Side): { min: bigint; max: bigi
 }
 
 /** Render a rational to a fixed-decimal string (for display only, never pricing). */
-export function rationalToDecimalString(r: Rational, decimals = 8): string {
+export function rationalToDecimalString(r: Rational, fractionDigits = 8): string {
   const neg = r.num < 0n;
   const num = neg ? -r.num : r.num;
-  const scaled = (num * pow10(decimals)) / r.den;
-  const s = scaled.toString().padStart(decimals + 1, "0");
-  const whole = s.slice(0, s.length - decimals);
-  const frac = decimals > 0 ? "." + s.slice(s.length - decimals) : "";
+  const scaled = (num * pow10(fractionDigits)) / r.den;
+  const s = scaled.toString().padStart(fractionDigits + 1, "0");
+  const whole = s.slice(0, s.length - fractionDigits);
+  const frac = fractionDigits > 0 ? "." + s.slice(s.length - fractionDigits) : "";
   return (neg ? "-" : "") + whole + frac;
 }
 
