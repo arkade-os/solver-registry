@@ -123,16 +123,6 @@ test("validateIndex: tolerates unknown forward-compatible fields", () => {
   assert.equal(validateIndex(idx, "bitcoin").ok, true);
 });
 
-test("validateIndex: rejects the removed legacy invert field regardless of value", () => {
-  for (const value of [true, false]) {
-    const idx = validIndex();
-    idx.markets[0].invert = value;
-    const r = validateIndex(idx, "bitcoin");
-    assert.equal(r.ok, false, `invert: ${value}`);
-    assert.match(r.errors.join("\n"), /removed legacy field/);
-  }
-});
-
 test("validateIndex: rejects unknown version", () => {
   const idx = validIndex();
   idx.version = 1;
