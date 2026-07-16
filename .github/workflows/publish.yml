@@ -10,6 +10,8 @@ on:
     paths:
       - solvers/**
       - schema/**
+      - package.json
+      - pnpm-lock.yaml
       - scripts/**
       - packages/discovery-client/src/**
       - index.html

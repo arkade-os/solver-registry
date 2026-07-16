@@ -209,8 +209,11 @@ function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   // Unknown keys are tolerated for forward-compat, but `invert` is a known
   // legacy semantic modifier: pricing no longer reads it, so silently
   // accepting an entry that declares an inverted feed would misprice by P².
-  if (v.invert !== undefined) {
-    add(errors, `${path}/invert`, "is a removed legacy field; feeds must be quote-per-base");
+  // An explicit `false` is byte-identical to the new fixed quote-per-base
+  // contract and stays accepted, so a transition index can serve old and new
+  // clients at once.
+  if (v.invert !== undefined && v.invert !== false) {
+    add(errors, `${path}/invert`, "legacy inverted feeds are not supported; feeds must be quote-per-base");
   }
   checkPattern(errors, `${path}/solver`, v.solver, NAME, 'must match "^[a-z0-9-]+$"');
   if (v.discovery_pubkey !== undefined) {

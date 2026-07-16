@@ -118,12 +118,18 @@ test("validateIndex: tolerates unknown forward-compatible fields", () => {
   assert.equal(validateIndex(idx, "bitcoin").ok, true);
 });
 
-test("validateIndex: rejects the removed legacy invert field instead of mispricing", () => {
-  const idx = validIndex();
-  idx.markets[0].invert = true;
-  const r = validateIndex(idx, "bitcoin");
+test("validateIndex: rejects legacy invert=true instead of mispricing, tolerates invert=false", () => {
+  const inverted = validIndex();
+  inverted.markets[0].invert = true;
+  const r = validateIndex(inverted, "bitcoin");
   assert.equal(r.ok, false);
-  assert.match(r.errors.join("\n"), /invert is a removed legacy field/);
+  assert.match(r.errors.join("\n"), /legacy inverted feeds are not supported/);
+
+  // invert: false matches the fixed quote-per-base contract — a transition
+  // index carrying it (for old clients) stays valid for new clients.
+  const transitional = validIndex();
+  transitional.markets[0].invert = false;
+  assert.equal(validateIndex(transitional, "bitcoin").ok, true);
 });
 
 test("validateIndex: rejects unknown version", () => {

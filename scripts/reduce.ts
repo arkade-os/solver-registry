@@ -69,7 +69,8 @@ export function reduceNetwork(
       continue;
     }
 
-    if (!validateCardSchema(parsed)) {
+    const schemaOk = validateCardSchema(parsed) as boolean;
+    if (!schemaOk) {
       for (const err of validateCardSchema.errors ?? []) {
         messages.push(`${err.instancePath || "/"} ${err.message}`);
       }
@@ -90,7 +91,10 @@ export function reduceNetwork(
       }
     }
 
-    if (messages.length === 0) {
+    // Name, signature, and duplicate checks need a structurally valid card but
+    // not a cross-field-clean one — reporting them alongside any limit/pair
+    // errors saves the solver a CI round-trip per masked error.
+    if (schemaOk) {
       if (card.name !== expectedName) {
         messages.push(
           `name "${card.name}" does not match filename "${file}"`,
