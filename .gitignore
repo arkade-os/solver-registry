@@ -3,3 +3,4 @@ dist/
 /mainnet.json
 /signet.json
 /mutinynet.json
+/regtest.json
