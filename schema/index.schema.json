@@ -84,7 +84,8 @@
       "enum": [
         "bitcoin",
         "signet",
-        "mutinynet"
+        "mutinynet",
+        "regtest"
       ]
     },
     "generated_at": {

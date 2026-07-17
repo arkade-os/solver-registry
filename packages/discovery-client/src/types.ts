@@ -7,7 +7,7 @@
 // Node dependencies — safe to bundle for browsers and Expo / React Native.
 // Keep them in sync with the schemas.
 
-export const NETWORKS = ["bitcoin", "signet", "mutinynet"] as const;
+export const NETWORKS = ["bitcoin", "signet", "mutinynet", "regtest"] as const;
 export type Network = (typeof NETWORKS)[number];
 export const DEFAULT_NETWORK = "bitcoin" as const satisfies Network;
 

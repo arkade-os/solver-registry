@@ -1,259 +1,348 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arkade Solver Registry</title>
-<style>
-  :root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #1a1a1a;
-    --muted: #6b7280;
-    --border: #e5e7eb;
-    --accent: #2563eb;
-    --row-hover: #f3f4f6;
-    --badge-bg: #eef2ff;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111827;
-      --fg: #e5e7eb;
-      --muted: #9ca3af;
-      --border: #374151;
-      --accent: #60a5fa;
-      --row-hover: #1f2937;
-      --badge-bg: #1e293b;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  main { max-width: 960px; margin: 0 auto; padding: 2rem 1rem 4rem; }
-  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-  .sub { color: var(--muted); margin: 0 0 2rem; }
-  .sub a { color: var(--accent); }
-  section { margin-bottom: 2.5rem; }
-  h2 {
-    font-size: 1.1rem;
-    margin: 0 0 .5rem;
-    display: flex;
-    align-items: baseline;
-    gap: .6rem;
-  }
-  h2 a { color: var(--accent); font-size: .8rem; font-weight: 400; text-decoration: none; }
-  h2 a:hover { text-decoration: underline; }
-  .meta { color: var(--muted); font-size: .8rem; margin: 0 0 .75rem; }
-  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-  table { border-collapse: collapse; width: 100%; min-width: 700px; }
-  th, td { padding: .5rem .75rem; text-align: left; white-space: nowrap; }
-  th {
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-  }
-  tbody tr:hover { background: var(--row-hover); }
-  td { border-bottom: 1px solid var(--border); }
-  tbody tr:last-child td { border-bottom: none; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  code {
-    font: .85em ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: var(--badge-bg);
-    padding: .1em .35em;
-    border-radius: 4px;
-  }
-  code a { color: var(--accent); text-decoration: none; }
-  code a:hover { text-decoration: underline; }
-  .empty, .error { color: var(--muted); font-size: .9rem; padding: .75rem; }
-  .error { color: #dc2626; }
-  .price { color: var(--accent); }
-  footer { color: var(--muted); font-size: .8rem; margin-top: 3rem; }
-  footer a { color: var(--accent); }
-</style>
-</head>
-<body>
-<main>
-  <h1>Arkade Solver Registry</h1>
-  <p class="sub">
-    A community-maintained registry of solver markets for Arkade Intents.
-    Wallets fetch one JSON index per network; feed prices refresh every 30s.
-    <a href="https://github.com/arkade-os/solver-registry">Source &amp; how to list a solver</a>
-  </p>
-  <div id="networks"></div>
-  <footer>
-    Prices come straight from each market's pinned <code>price_feed</code> and
-    are informational — makers must price from the same URL at offer time.
-  </footer>
-</main>
-<script>
-const NETWORKS = ["bitcoin", "signet", "mutinynet"];
-const REFRESH_MS = 30_000;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arkade Solver Registry</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #2563eb;
+        --row-hover: #f3f4f6;
+        --badge-bg: #eef2ff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111827;
+          --fg: #e5e7eb;
+          --muted: #9ca3af;
+          --border: #374151;
+          --accent: #60a5fa;
+          --row-hover: #1f2937;
+          --badge-bg: #1e293b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1rem 4rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 0.25rem;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 2rem;
+      }
+      .sub a {
+        color: var(--accent);
+      }
+      section {
+        margin-bottom: 2.5rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.5rem;
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+      }
+      h2 a {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 400;
+        text-decoration: none;
+      }
+      h2 a:hover {
+        text-decoration: underline;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.8rem;
+        margin: 0 0 0.75rem;
+      }
+      .tablewrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 700px;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        white-space: nowrap;
+      }
+      th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+      }
+      tbody tr:hover {
+        background: var(--row-hover);
+      }
+      td {
+        border-bottom: 1px solid var(--border);
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      code {
+        font:
+          0.85em ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        background: var(--badge-bg);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+      }
+      code a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      code a:hover {
+        text-decoration: underline;
+      }
+      .empty,
+      .error {
+        color: var(--muted);
+        font-size: 0.9rem;
+        padding: 0.75rem;
+      }
+      .error {
+        color: #dc2626;
+      }
+      .price {
+        color: var(--accent);
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.8rem;
+        margin-top: 3rem;
+      }
+      footer a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Arkade Solver Registry</h1>
+      <p class="sub">
+        A community-maintained registry of solver markets for Arkade Intents. Wallets fetch one JSON index per network;
+        feed prices refresh every 30s.
+        <a href="https://github.com/arkade-os/solver-registry">Source &amp; how to list a solver</a>
+      </p>
+      <div id="networks"></div>
+      <footer>
+        Prices come straight from each market's pinned <code>price_feed</code> and are informational — makers must price
+        from the same URL at offer time.
+      </footer>
+    </main>
+    <script>
+      const NETWORKS = ["bitcoin", "signet", "mutinynet", "regtest"];
+      const REFRESH_MS = 30_000;
 
-// One in-flight/settled promise per feed URL per refresh cycle, so N markets
-// sharing a feed cost one request and repaints never stack extra calls.
-const feedCache = new Map(); // url + schema -> { at: ms, promise }
-function fetchFeed(url, schema) {
-  const key = `${url}\n${schema?.type}\n${schema?.price_path}`;
-  const hit = feedCache.get(key);
-  if (hit && Date.now() - hit.at < REFRESH_MS) return hit.promise;
-  const promise = fetch(url)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
-    .then((body) => extractPrice(body, schema));
-  feedCache.set(key, { at: Date.now(), promise });
-  return promise;
-}
+      // One in-flight/settled promise per feed URL per refresh cycle, so N markets
+      // sharing a feed cost one request and repaints never stack extra calls.
+      const feedCache = new Map(); // url + schema -> { at: ms, promise }
+      function fetchFeed(url, schema) {
+        const key = `${url}\n${schema?.type}\n${schema?.price_path}`;
+        const hit = feedCache.get(key);
+        if (hit && Date.now() - hit.at < REFRESH_MS) return hit.promise;
+        const promise = fetch(url)
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+          .then((body) => extractPrice(body, schema));
+        feedCache.set(key, { at: Date.now(), promise });
+        return promise;
+      }
 
-function parseJsonPointer(pointer) {
-  if (!/^(?:\/(?:[^~/]|~0|~1)*)*$/.test(pointer)) {
-    throw new Error("invalid JSON Pointer");
-  }
-  if (pointer === "") return [];
-  return pointer
-    .slice(1)
-    .split("/")
-    .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
-}
+      function parseJsonPointer(pointer) {
+        if (!/^(?:\/(?:[^~/]|~0|~1)*)*$/.test(pointer)) {
+          throw new Error("invalid JSON Pointer");
+        }
+        if (pointer === "") return [];
+        return pointer
+          .slice(1)
+          .split("/")
+          .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+      }
 
-function readJsonPointer(body, pointer) {
-  let value = body;
-  for (const token of parseJsonPointer(pointer)) {
-    if (
-      value === null ||
-      typeof value !== "object" ||
-      !Object.prototype.hasOwnProperty.call(value, token)
-    ) {
-      throw new Error("price path not found");
-    }
-    value = value[token];
-  }
-  return value;
-}
+      function readJsonPointer(body, pointer) {
+        let value = body;
+        for (const token of parseJsonPointer(pointer)) {
+          if (value === null || typeof value !== "object" || !Object.prototype.hasOwnProperty.call(value, token)) {
+            throw new Error("price path not found");
+          }
+          value = value[token];
+        }
+        return value;
+      }
 
-function extractPrice(body, schema) {
-  if (schema?.type !== "json") throw new Error("unsupported price feed schema");
-  const v = readJsonPointer(body, schema.price_path);
-  if ((typeof v !== "number" && typeof v !== "string") || v === "" || !Number.isFinite(Number(v))) {
-    throw new Error("price path is not numeric");
-  }
-  return Number(v);
-}
+      function extractPrice(body, schema) {
+        if (schema?.type !== "json") throw new Error("unsupported price feed schema");
+        const v = readJsonPointer(body, schema.price_path);
+        if ((typeof v !== "number" && typeof v !== "string") || v === "" || !Number.isFinite(Number(v))) {
+          throw new Error("price path is not numeric");
+        }
+        return Number(v);
+      }
 
-// Explorer per network, for linking asset pair sides to their asset page.
-const EXPLORERS = {
-  bitcoin: "https://arkade.space",
-  signet: "https://explorer.signet.arkade.sh",
-  mutinynet: "https://explorer.mutinynet.arkade.sh",
-};
+      // Explorer per network, for linking asset pair sides to their asset page.
+      const EXPLORERS = {
+        bitcoin: "https://arkade.space",
+        signet: "https://explorer.signet.arkade.sh",
+        mutinynet: "https://explorer.mutinynet.arkade.sh",
+        regtest: "http://localhost:7080",
+      };
 
-// A pair side: BTC as plain text, an asset as an explorer link. Label is the
-// ticker; the canonical asset id lives in base_asset.id / quote_asset.id.
-function assetCell(network, asset) {
-  const label = asset.ticker;
-  const title = `${asset.name} · decimals ${asset.decimals ?? "?"} · ${asset.id}`;
-  const explorer = EXPLORERS[network];
-  if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
-  return el("a", {
-    href: `${explorer}/asset/${asset.id}`,
-    target: "_blank",
-    rel: "noopener",
-    title,
-    text: label,
-  });
-}
+      // A pair side: BTC as plain text, an asset as an explorer link. Label is the
+      // ticker; the canonical asset id lives in base_asset.id / quote_asset.id.
+      function assetCell(network, asset) {
+        const label = asset.ticker;
+        const title = `${asset.name} · decimals ${asset.decimals ?? "?"} · ${asset.id}`;
+        const explorer = EXPLORERS[network];
+        if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
+        return el("a", {
+          href: `${explorer}/asset/${asset.id}`,
+          target: "_blank",
+          rel: "noopener",
+          title,
+          text: label,
+        });
+      }
 
-function el(tag, attrs = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === "text") node.textContent = v;
-    else node.setAttribute(k, v);
-  }
-  for (const c of children) node.appendChild(c);
-  return node;
-}
+      function el(tag, attrs = {}, children = []) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === "text") node.textContent = v;
+          else node.setAttribute(k, v);
+        }
+        for (const c of children) node.appendChild(c);
+        return node;
+      }
 
-async function renderNetwork(network, container) {
-  const section = el("section", {}, [
-    el("h2", {}, [
-      el("span", { text: network }),
-      el("a", { href: `./${network}.json`, text: `${network}.json` }),
-    ]),
-  ]);
-  container.appendChild(section);
+      async function renderNetwork(network, container) {
+        const section = el("section", {}, [
+          el("h2", {}, [
+            el("span", { text: network }),
+            el("a", { href: `./${network}.json`, text: `${network}.json` }),
+          ]),
+        ]);
+        container.appendChild(section);
 
-  let index;
-  try {
-    const res = await fetch(`./${network}.json`, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    index = await res.json();
-  } catch (e) {
-    section.appendChild(el("p", { class: "error", text: `Failed to load index: ${e.message}` }));
-    return;
-  }
+        let index;
+        try {
+          const res = await fetch(`./${network}.json`, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          index = await res.json();
+        } catch (e) {
+          section.appendChild(el("p", { class: "error", text: `Failed to load index: ${e.message}` }));
+          return;
+        }
 
-  const when = new Date(index.generated_at * 1000).toISOString().replace("T", " ").slice(0, 19);
-  section.appendChild(el("p", {
-    class: "meta",
-    text: `generated ${when} UTC · commit ${String(index.commit).slice(0, 7)} · ${index.markets.length} market(s)`,
-  }));
+        const when = new Date(index.generated_at * 1000).toISOString().replace("T", " ").slice(0, 19);
+        section.appendChild(
+          el("p", {
+            class: "meta",
+            text: `generated ${when} UTC · commit ${String(index.commit).slice(0, 7)} · ${index.markets.length} market(s)`,
+          }),
+        );
 
-  if (index.markets.length === 0) {
-    section.appendChild(el("p", { class: "empty", text: "No markets listed." }));
-    return;
-  }
+        if (index.markets.length === 0) {
+          section.appendChild(el("p", { class: "empty", text: "No markets listed." }));
+          return;
+        }
 
-  const thead = el("thead", {}, [el("tr", {}, [
-    "Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price",
-  ].map((h) => el("th", { text: h })))]);
+        const thead = el("thead", {}, [
+          el(
+            "tr",
+            {},
+            ["Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price"].map((h) =>
+              el("th", { text: h }),
+            ),
+          ),
+        ]);
 
-  // Amounts are canonical decimal strings (exact past 2^53, mirrors the
-  // schemas' amount definition); max "0" disables the side. Anything
-  // non-canonical renders "?" — BigInt alone would decode hex/whitespace/"".
-  const AMOUNT = /^(0|[1-9][0-9]{0,29})$/;
-  const fmtAmount = (v) =>
-    typeof v === "string" && AMOUNT.test(v) ? BigInt(v).toLocaleString("en-US") : "?";
-  const limitsText = (min, max) => (max === "0" ? "—" : `${fmtAmount(min)} – ${fmtAmount(max)}`);
-  const tbody = el("tbody");
-  const priceCells = [];
+        // Amounts are canonical decimal strings (exact past 2^53, mirrors the
+        // schemas' amount definition); max "0" disables the side. Anything
+        // non-canonical renders "?" — BigInt alone would decode hex/whitespace/"".
+        const AMOUNT = /^(0|[1-9][0-9]{0,29})$/;
+        const fmtAmount = (v) => (typeof v === "string" && AMOUNT.test(v) ? BigInt(v).toLocaleString("en-US") : "?");
+        const limitsText = (min, max) => (max === "0" ? "—" : `${fmtAmount(min)} – ${fmtAmount(max)}`);
+        const tbody = el("tbody");
+        const priceCells = [];
 
-  for (const m of index.markets) {
-    const priceCell = el("td", { class: "num price", text: "…" });
-    priceCells.push([m.price_feed, m.price_feed_schema, priceCell]);
-    tbody.appendChild(el("tr", {}, [
-      el("td", {}, [el("code", {}, [
-        assetCell(network, m.base_asset),
-        el("span", { text: "/" }),
-        assetCell(network, m.quote_asset),
-      ])]),
-      el("td", { text: m.solver }),
-      el("td", { class: "num", text: String(m.fee_bps) }),
-      el("td", { class: "num", text: limitsText(m.min_base_amount, m.max_base_amount) }),
-      el("td", { class: "num", text: limitsText(m.min_quote_amount, m.max_quote_amount) }),
-      priceCell,
-    ]));
-  }
+        for (const m of index.markets) {
+          const priceCell = el("td", { class: "num price", text: "…" });
+          priceCells.push([m.price_feed, m.price_feed_schema, priceCell]);
+          tbody.appendChild(
+            el("tr", {}, [
+              el("td", {}, [
+                el("code", {}, [
+                  assetCell(network, m.base_asset),
+                  el("span", { text: "/" }),
+                  assetCell(network, m.quote_asset),
+                ]),
+              ]),
+              el("td", { text: m.solver }),
+              el("td", { class: "num", text: String(m.fee_bps) }),
+              el("td", { class: "num", text: limitsText(m.min_base_amount, m.max_base_amount) }),
+              el("td", { class: "num", text: limitsText(m.min_quote_amount, m.max_quote_amount) }),
+              priceCell,
+            ]),
+          );
+        }
 
-  section.appendChild(el("div", { class: "tablewrap" }, [el("table", {}, [thead, tbody])]));
+        section.appendChild(el("div", { class: "tablewrap" }, [el("table", {}, [thead, tbody])]));
 
-  const refresh = () => {
-    for (const [url, schema, cell] of priceCells) {
-      fetchFeed(url, schema).then(
-        (p) => { cell.textContent = p.toLocaleString("en-US", { maximumFractionDigits: 8 }); },
-        () => { cell.textContent = "unavailable"; },
-      );
-    }
-  };
-  refresh();
-  setInterval(refresh, REFRESH_MS);
-}
+        const refresh = () => {
+          for (const [url, schema, cell] of priceCells) {
+            fetchFeed(url, schema).then(
+              (p) => {
+                cell.textContent = p.toLocaleString("en-US", { maximumFractionDigits: 8 });
+              },
+              () => {
+                cell.textContent = "unavailable";
+              },
+            );
+          }
+        };
+        refresh();
+        setInterval(refresh, REFRESH_MS);
+      }
 
-const container = document.getElementById("networks");
-for (const network of NETWORKS) renderNetwork(network, container);
-</script>
-</body>
+      const container = document.getElementById("networks");
+      for (const network of NETWORKS) renderNetwork(network, container);
+    </script>
+  </body>
 </html>

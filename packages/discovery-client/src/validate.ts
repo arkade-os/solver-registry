@@ -251,7 +251,7 @@ export function validateIndex(
   const errors: string[] = [];
   if (input.version !== 0) add(errors, "/version", "must be 0 (unknown index version)");
   if (!isNetwork(input.network)) {
-    add(errors, "/network", "must be one of bitcoin, signet, mutinynet");
+    add(errors, "/network", "must be one of bitcoin, signet, mutinynet, regtest");
   } else if (expectedNetwork !== undefined && input.network !== expectedNetwork) {
     add(errors, "/network", `is "${input.network}" but expected "${expectedNetwork}"`);
   }

@@ -32,7 +32,7 @@ registries you follow, not to this repo.
 1. Run `solver card` against your `solverd` (or hand-write one) to produce a
    card matching [`schema/card.schema.json`](schema/card.schema.json).
 2. Save it as `solvers/<network>/<name>.json`, where `<network>` is
-   `bitcoin`, `signet`, or `mutinynet`, and `<name>` matches the card's
+   `bitcoin`, `signet`, `mutinynet`, or `regtest`, and `<name>` matches the card's
    `name` field (`^[a-z0-9-]+$`).
 3. Open a PR. CI validates the card and tells you if it's malformed.
 
@@ -43,10 +43,10 @@ valid, the PR is the authentication. See the spec for why.
 
 Human-readable overview: <https://arkade-os.github.io/solver-registry/>
 
-| Network | Index |
-|---|---|
-| Bitcoin | <https://arkade-os.github.io/solver-registry/bitcoin.json> |
-| Signet | <https://arkade-os.github.io/solver-registry/signet.json> |
+| Network   | Index                                                        |
+| --------- | ------------------------------------------------------------ |
+| Bitcoin   | <https://arkade-os.github.io/solver-registry/bitcoin.json>   |
+| Signet    | <https://arkade-os.github.io/solver-registry/signet.json>    |
 | Mutinynet | <https://arkade-os.github.io/solver-registry/mutinynet.json> |
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
@@ -76,6 +76,7 @@ See the package README for install, API, and release instructions.
 solvers/bitcoin/    one card per solver, PR-managed
 solvers/signet/
 solvers/mutinynet/
+solvers/regtest/
 schema/card.schema.json    what a solver PRs
 schema/index.schema.json   what CI publishes
 index.html                 landing page served at the Pages base URL
@@ -117,7 +118,7 @@ which card failed and why without digging through logs.
 - `publish.yml` runs on pushes to `master` that change anything shaping the
   published artifacts (cards, schemas, reducer, client sources, landing page):
   re-validates (never publishes on failure), then builds and deploys
-  `bitcoin.json` / `signet.json` / `mutinynet.json` to GitHub Pages.
+  `bitcoin.json` / `signet.json` / `mutinynet.json` / `regtest.json` to GitHub Pages.
 
 ## Run your own registry
 

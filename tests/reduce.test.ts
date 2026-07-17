@@ -57,6 +57,7 @@ test("mixed: a broken network fails independently without blocking sibling netwo
   assert.equal(byNetwork.bitcoin.ok, true);
   assert.equal(byNetwork.signet.ok, false);
   assert.equal(byNetwork.mutinynet.ok, true);
+  assert.equal(byNetwork.regtest.ok, true);
 });
 
 const REJECTION_CASES: Array<{ case: string; expect: string }> = [
@@ -96,8 +97,8 @@ test("a card placed outside a known network directory is flagged", () => {
   assert.deepEqual(unknown, ["testnet"]);
 });
 
-test("NETWORKS constant covers bitcoin, signet, mutinynet", () => {
-  assert.deepEqual([...NETWORKS], ["bitcoin", "signet", "mutinynet"]);
+test("NETWORKS constant covers bitcoin, signet, mutinynet, regtest", () => {
+  assert.deepEqual([...NETWORKS], ["bitcoin", "signet", "mutinynet", "regtest"]);
 });
 
 // The amount encoding is declared once per artifact (client AMOUNT_PATTERN,

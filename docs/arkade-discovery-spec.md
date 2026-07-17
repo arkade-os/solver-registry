@@ -14,7 +14,7 @@ Trust anchors to each registry repo and its PR review, not to keys. A live-quote
 
 ## Solver card
 
-One file per solver per network, `solvers/<network>/<name>.json` (networks: `bitcoin`, `signet`, `mutinynet` — same partitioning as arkade-os/asset-registry), submitted and updated by PR. The network lives in the path, not the card: asset IDs are network-scoped, so a pair is only meaningful within its directory, and a solver active on several networks files one card per network.
+One file per solver per network, `solvers/<network>/<name>.json` (networks: `bitcoin`, `signet`, `mutinynet`, `regtest` — same partitioning as arkade-os/asset-registry), submitted and updated by PR. The network lives in the path, not the card: asset IDs are network-scoped, so a pair is only meaningful within its directory, and a solver active on several networks files one card per network.
 
 ```json
 {
@@ -64,7 +64,7 @@ On every merge to the default branch, CI, independently per network directory:
 1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed pairs, per-side `min > max`, a zero `min` on an enabled side, both sides disabled, unknown `version`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
 2. Flattens the network's cards into one market list, each entry carrying its solver's `name` (and `discovery_pubkey` when present; `sig` stays in the card, it is not propagated).
 3. Groups by id pair (`base_asset.id`, `quote_asset.id`) — never by the ticker label; within a group, sorts ascending by `fee_bps` (best expected execution first).
-4. Emits one index per network — `bitcoin.json`, `signet.json`, `mutinynet.json` — each stamped with its `network`, `generated_at` (unix seconds, set by CI, never by hand), and the source commit hash.
+4. Emits one index per network — `bitcoin.json`, `signet.json`, `mutinynet.json`, `regtest.json` — each stamped with its `network`, `generated_at` (unix seconds, set by CI, never by hand), and the source commit hash.
 5. Publishes via GitHub Pages / raw URL. A broken card in one network must not block publishing the others.
 
 ```json
