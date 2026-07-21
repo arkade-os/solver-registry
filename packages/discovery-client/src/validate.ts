@@ -216,12 +216,14 @@ const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const
  * corridor are reported here (mirroring the schema enum) and read as arkade
  * for the remaining rules.
  */
-export function marketCorridorErrors(market: {
-  [key in (typeof CORRIDOR_KEYS)[Side] | (typeof FEED_KEYS)[number]]?: unknown;
-} & {
-  base_asset?: unknown;
-  quote_asset?: unknown;
-}): string[] {
+export function marketCorridorErrors(
+  market: {
+    [key in (typeof CORRIDOR_KEYS)[Side] | (typeof FEED_KEYS)[number]]?: unknown;
+  } & {
+    base_asset?: unknown;
+    quote_asset?: unknown;
+  },
+): string[] {
   const errors: string[] = [];
   for (const side of ["base", "quote"] as const) {
     const raw = market[CORRIDOR_KEYS[side]];
@@ -295,8 +297,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // below), since it depends on whether the sides carry the same asset.
   // https only, matching the schemas — a laxer check here would admit local
   // cards the reducer rejects.
-  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https:\/\//))) {
-    add(errors, `${path}/price_feed`, "must be an https:// URL");
+  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//))) {
+    add(errors, `${path}/price_feed`, "must be an http[s]:// URL");
   }
   if (v.price_feed_schema !== undefined) {
     checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
@@ -351,16 +353,14 @@ export function cardHasRfqMarket(card: { markets?: unknown }): boolean {
  * listing, while a user-pinned local card is the user's own trust decision
  * and this dependency-free client carries no verification code.
  */
-export function cardRfqErrors(card: {
-  discovery_pubkey?: unknown;
-  transports?: unknown;
-  markets?: unknown;
-}): string[] {
+export function cardRfqErrors(card: { discovery_pubkey?: unknown; transports?: unknown; markets?: unknown }): string[] {
   if (!cardHasRfqMarket(card)) return [];
   const errors: string[] = [];
   for (const key of ["discovery_pubkey", "transports"] as const) {
     if (card[key] === undefined) {
-      errors.push(`${key} is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)`);
+      errors.push(
+        `${key} is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)`,
+      );
     }
   }
   return errors;
