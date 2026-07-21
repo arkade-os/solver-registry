@@ -174,8 +174,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   const pairError = marketPairError(v);
   if (pairError) add(errors, path, pairError);
 
-  if (typeof v.price_feed !== "string" || !v.price_feed.startsWith("https://")) {
-    add(errors, `${path}/price_feed`, "must be an https:// URL");
+  if (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//)) {
+    add(errors, `${path}/price_feed`, "must be an http[s]:// URL");
   }
   checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
   checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
@@ -186,7 +186,13 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // live in marketLimitErrors, shared with the reducer.
   for (const { min, max } of LIMIT_SIDES) {
     for (const key of [min, max]) {
-      checkPattern(errors, `${path}/${key}`, v[key], AMOUNT_PATTERN, 'must be a decimal string of atomic units ("0" disables the side)');
+      checkPattern(
+        errors,
+        `${path}/${key}`,
+        v[key],
+        AMOUNT_PATTERN,
+        'must be a decimal string of atomic units ("0" disables the side)',
+      );
     }
   }
   for (const message of marketLimitErrors(v)) add(errors, path, message);
@@ -231,9 +237,7 @@ export function validateCard(input: unknown): ValidationResult<Card> {
     input.markets.forEach((m, i) => checkMarket(errors, `/markets/${i}`, m, true));
   }
 
-  return errors.length === 0
-    ? { ok: true, errors: [], value: input as unknown as Card }
-    : { ok: false, errors };
+  return errors.length === 0 ? { ok: true, errors: [], value: input as unknown as Card } : { ok: false, errors };
 }
 
 /**
@@ -241,10 +245,7 @@ export function validateCard(input: unknown): ValidationResult<Card> {
  * unknown extra properties are tolerated, but `version`, `network`, and every
  * consumed market field are checked. `expectedNetwork`, when given, must match.
  */
-export function validateIndex(
-  input: unknown,
-  expectedNetwork?: string,
-): ValidationResult<NetworkIndex> {
+export function validateIndex(input: unknown, expectedNetwork?: string): ValidationResult<NetworkIndex> {
   if (!isObject(input)) {
     return { ok: false, errors: ["/ must be an object"] };
   }

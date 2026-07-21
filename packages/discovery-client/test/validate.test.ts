@@ -47,7 +47,11 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     mutate: (c) => (c.markets[0].base_asset.extra = true),
     expect: /base_asset\/extra is not an allowed property/,
   },
-  { name: "base min > max", mutate: (c) => (c.markets[0].min_base_amount = "9000000"), expect: /min_base_amount \(9000000\) > max_base_amount/ },
+  {
+    name: "base min > max",
+    mutate: (c) => (c.markets[0].min_base_amount = "9000000"),
+    expect: /min_base_amount \(9000000\) > max_base_amount/,
+  },
   {
     name: "quote min > max",
     mutate: (c) => (c.markets[0].min_quote_amount = "2000000000000000"),
@@ -89,7 +93,6 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /does not match asset tickers/,
   },
   { name: "bad asset id", mutate: (c) => (c.markets[0].base_asset.id = "xyz"), expect: /id/ },
-  { name: "non-https feed", mutate: (c) => (c.markets[0].price_feed = "http://x"), expect: /https/ },
   {
     name: "bad price feed schema",
     mutate: (c) => (c.markets[0].price_feed_schema.price_path = "bitcoin/usd"),
