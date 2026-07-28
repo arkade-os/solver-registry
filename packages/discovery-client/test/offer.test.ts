@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toAtomic, fromAtomic, displayPrice, displayPriceString } from "../src/assets.ts";
+import { toAtomic, fromAtomic, displayPriceString } from "../src/assets.ts";
 import { planOffer, quoteOffer } from "../src/offer.ts";
 import type { Market } from "../src/types.ts";
 import { makeMarket, mockFetch } from "./helpers.ts";
@@ -33,9 +33,11 @@ test("conversion round-trips", () => {
   }
 });
 
-test("displayPrice: identity at equal decimals, scales across differing decimals", () => {
-  const p = { num: 377000n, den: 1n };
-  assert.deepEqual(displayPrice(p, { baseDecimals: 8, quoteDecimals: 8 }), p);
+test("displayPriceString: identity at equal decimals, scales across differing decimals", () => {
+  assert.equal(
+    displayPriceString({ num: 377000n, den: 1n }, { baseDecimals: 8, quoteDecimals: 8 }),
+    "377000.00000000",
+  );
   // 1 BTC = 65000 USDT => atomic price 650 (quote 6dp / base 8dp) displays as 65000.
   assert.equal(
     displayPriceString({ num: 650n, den: 1n }, { baseDecimals: 8, quoteDecimals: 6 }),
@@ -73,7 +75,7 @@ test("planOffer: give base, receive quote (human amounts, 8 decimals)", () => {
     feedValue: "377000", // DePix per BTC
     safetyBps: 50,
   });
-  assert.equal(plan.direction, "baseToQuote");
+  assert.equal(plan.give, "base");
   assert.equal(plan.deposit.atomic, 1_000_000n);
   assert.equal(plan.deposit.display, "0.01");
   // floor(1_000_000 * 377000 * (10000-30-50) / 10000)
@@ -98,7 +100,7 @@ test("planOffer: give quote, receive base (reverse, priced with 1/P)", () => {
     feedValue: "377000",
     safetyBps: 50,
   });
-  assert.equal(plan.direction, "quoteToBase");
+  assert.equal(plan.give, "quote");
   assert.equal(plan.deposit.atomic, 377_000_000_000n);
   // floor(377_000_000_000 * 9920 / (377000 * 10000)) = 992_000 sats
   assert.equal(plan.receive.atomic, 992_000n);
@@ -108,6 +110,19 @@ test("planOffer: give quote, receive base (reverse, priced with 1/P)", () => {
   assert.equal(plan.limits.withinLimits, true);
   assert.equal(plan.limits.min!.display, "0.00001"); // 1000 sats
   assert.equal(plan.limits.max!.display, "0.05"); // 5_000_000 sats
+});
+
+test("planOffer: a receive amount outside the receive side's bounds fails withinLimits", () => {
+  // Raise min_quote_amount above the computed receive amount: the trade is too small.
+  const plan = planOffer({
+    market: arkadeMarket({ min_quote_amount: "10000000000" }),
+    give: "base",
+    giveAmount: 500n, // receive ~ 500 * 377000 * 0.992 << min_quote
+    feedValue: "377000",
+    safetyBps: 50,
+  });
+  assert.equal(plan.limits.min!.atomic, 10_000_000_000n);
+  assert.equal(plan.limits.withinLimits, false);
 });
 
 test("planOffer: a disabled receive side yields null bounds and never passes limits", () => {

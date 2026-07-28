@@ -36,7 +36,6 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "release": "node ../../scripts/release-discovery-client.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "prepublishOnly": "npm run build"
   },

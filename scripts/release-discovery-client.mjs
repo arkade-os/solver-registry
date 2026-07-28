@@ -70,7 +70,6 @@ assertCleanGitTree();
 assertOnMaster();
 
 run("npm", ["test"], packageDir);
-run("npm", ["run", "typecheck"], packageDir);
 run("npm", ["run", "build"], packageDir);
 run("npm", ["version", bump, "--no-git-tag-version"], packageDir);
 

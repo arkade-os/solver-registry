@@ -6,8 +6,8 @@
 
 import { DEFAULT_NETWORK, stableStringify, type AssetInfo, type IndexMarket, type Network, type NetworkIndex, type Side } from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
-import { quoteMarket, sideLimits, type Direction, type Quote } from "./pricing.ts";
-import { fetchText, fetchFeedValue, type FetchLike, type FetchFeedOptions } from "./feed.ts";
+import { sideLimits } from "./pricing.ts";
+import { fetchText, type FetchLike } from "./feed.ts";
 
 export type SourceType = "registry" | "local";
 
@@ -155,7 +155,6 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   // the stable sort below preserves that order within equal (pair, fee) keys,
   // which realizes the spec's "source order as tiebreak" without bookkeeping.
   const tagged: Array<{ market: IndexMarket; source: string; sourceType: SourceType }> = [];
-  let contributing = 0;
 
   const indexResults = await Promise.all(
     (opts.registries ?? []).map((url) => fetchIndex(url, { ...opts, network })),
@@ -167,7 +166,6 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
       continue;
     }
     const markets = r.index!.markets;
-    if (markets.length > 0) contributing++;
     for (const m of markets) tagged.push({ market: m, source: r.url, sourceType: "registry" });
     recordSource(sources, warnings, { source: r.url, sourceType: "registry", ok: true, marketCount: markets.length, warnings: r.warnings });
   }
@@ -188,7 +186,6 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
       recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
       continue;
     }
-    if (card.markets.length > 0) contributing++;
     for (const m of card.markets) {
       const entry: IndexMarket = { ...m, solver: card.name };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
@@ -198,28 +195,22 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   }
 
   // Drop byte-identical duplicates (same solver listed in two registries),
-  // keeping the earliest source. Per the spec, entries within one source are
-  // distinct by definition, so with a single contributing source there is
-  // nothing to dedupe and the canonical-key pass is skipped entirely.
-  let deduped = tagged;
-  if (contributing > 1) {
-    const seen = new Set<string>();
-    deduped = tagged.filter((t) => {
-      const key = stableStringify(t.market);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }
-
-  // Precompute each entry's sort key once rather than rebuilding it on every comparison.
-  const withKey = deduped.map((t) => ({ t, key: idPair(t.market) }));
-  withKey.sort((a, b) => {
-    if (a.key !== b.key) return a.key < b.key ? -1 : 1;
-    return a.t.market.fee_bps - b.t.market.fee_bps;
+  // keeping the earliest source.
+  const seen = new Set<string>();
+  const deduped = tagged.filter((t) => {
+    const key = stableStringify(t.market);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 
-  const markets: DiscoveredMarket[] = withKey.map(({ t }) => ({ ...t.market, source: t.source, sourceType: t.sourceType }));
+  deduped.sort((a, b) => {
+    const [ka, kb] = [idPair(a.market), idPair(b.market)];
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return a.market.fee_bps - b.market.fee_bps;
+  });
+
+  const markets: DiscoveredMarket[] = deduped.map((t) => ({ ...t.market, source: t.source, sourceType: t.sourceType }));
   return { markets, sources, warnings };
 }
 
@@ -324,27 +315,3 @@ export function bestMarket<T extends IndexMarket>(markets: T[], opts: BestMarket
   return null;
 }
 
-export interface PriceMarketOptions extends FetchFeedOptions {
-  deposit: bigint | number | string;
-  direction: Direction;
-  safetyBps?: number;
-}
-
-/**
- * Fetch a market's advertised `price_feed`, extract the price, and produce a
- * fully-computed {@link Quote} (want amount + limit check) in atomic units. The
- * maker MUST price from this exact URL. See `quoteOffer()` for a human-amount API.
- */
-export async function priceMarket(
-  market: IndexMarket,
-  opts: PriceMarketOptions,
-): Promise<Quote> {
-  const feedValue = await fetchFeedValue(market.price_feed, market.price_feed_schema, opts);
-  return quoteMarket({
-    market,
-    feedValue,
-    deposit: opts.deposit,
-    direction: opts.direction,
-    safetyBps: opts.safetyBps,
-  });
-}

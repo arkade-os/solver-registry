@@ -6,8 +6,8 @@ import {
   listMarkets,
   selectMarkets,
   bestMarket,
-  priceMarket,
 } from "../src/discovery.ts";
+import { quoteOffer } from "../src/offer.ts";
 import { makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
@@ -40,7 +40,7 @@ const routes = {
 
 test("fetchIndex: fetches and validates a good index with bitcoin as the default network", async () => {
   const r = await fetchIndex(REG_A, { fetchImpl: mockFetch(routes), now: NOW });
-  assert.equal(r.ok, true, r.error);
+  assert.equal(r.ok, true, r.error ?? "");
   assert.equal(r.index!.markets.length, 2);
   assert.deepEqual(r.warnings, []);
 });
@@ -175,7 +175,7 @@ test("one-sided markets: selection and listing avoid a side no solver can pay ou
   assert.deepEqual(listMarkets(onlyErin)[0].solvable, { base: 0, quote: 1 });
 });
 
-test("priceMarket: end-to-end from discovered market to exact want amount", async () => {
+test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {
   const res = await discover({
     registries: [REG_A, REG_B],
     localCards: [{ card: daveCard(), network: "bitcoin" }],
@@ -185,15 +185,15 @@ test("priceMarket: end-to-end from discovered market to exact want amount", asyn
   });
   const best = bestMarket(res.markets, { baseId: "btc", quoteId: USDT })!;
 
-  const q = await priceMarket(best, {
-    deposit: 100_000n,
-    direction: "baseToQuote",
+  const plan = await quoteOffer(best, {
+    give: "base",
+    giveAmount: 100_000n,
     safetyBps: 50,
     fetchImpl: mockFetch(routes),
   });
   // floor(100_000 * 65000 * (10000-10-50) / 10000)
   const expected = (100_000n * 65000n * 9940n) / 10000n;
-  assert.equal(q.wantAmount, expected);
-  assert.equal(q.wantAmount, 6_461_000_000n);
-  assert.equal(q.withinLimits, true);
+  assert.equal(plan.receive.atomic, expected);
+  assert.equal(plan.receive.atomic, 6_461_000_000n);
+  assert.equal(plan.limits.withinLimits, true);
 });
