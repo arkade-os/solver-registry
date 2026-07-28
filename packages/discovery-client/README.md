@@ -107,7 +107,7 @@ await discover({ registries, fetchImpl: myFetch });
 
 The optional React entrypoint keeps a two-input quote form synchronized. It
 fetches the market feed and recalculates the other field whenever the user edits
-base or quote:
+the given or wanted amount:
 
 ```tsx
 import { useOfferQuote } from "@arkade-os/solver-discovery/react";
@@ -118,8 +118,8 @@ function QuoteForm({ market }) {
   if (quote.solvable === false) return <p>This market cannot pay out the side you want.</p>;
   return (
     <>
-      <input value={quote.baseAmount} onChange={(e) => quote.setBaseAmount(e.target.value)} />
-      <input value={quote.quoteAmount} onChange={(e) => quote.setQuoteAmount(e.target.value)} />
+      <input value={quote.giveAmount} onChange={(e) => quote.setGiveAmount(e.target.value)} />
+      <input value={quote.wantAmount} onChange={(e) => quote.setWantAmount(e.target.value)} />
       <button disabled={!quote.plan?.limits.withinLimits}>Create offer</button>
     </>
   );
@@ -127,10 +127,12 @@ function QuoteForm({ market }) {
 ```
 
 `useOfferQuote(market, opts)` returns the active input, both display amounts,
-the latest `OfferPlan`, loading/error state, and setters for base/quote or
-give/want fields. `quote.solvable` says whether the market declares limits for
-— can pay out — the side received under `give` (null while no market is
-selected), and `quote.plan?.receive.atomic` is the `wantAmount` to request.
+the latest `OfferPlan`, loading/error state, and the give/want setters. With
+`give: "base"` the give field is the base amount and the want field the quote
+amount; swap them for `give: "quote"`. `quote.solvable` says whether the market
+declares limits for — can pay out — the side received under `give` (null while
+no market is selected), and `quote.plan?.receive.atomic` is the `wantAmount` to
+request.
 
 The package does not install React for you: importing
 `@arkade-os/solver-discovery/react` requires React in the app, while the root
@@ -147,18 +149,18 @@ package entrypoint does not import React.
 | `sideLimits(market, side)` | The side's `{ min, max }` bounds as exact bigints, or `null` when the solver cannot pay that side out — disabled (`max = "0"`) or carrying malformed/validation-rejected bounds. The single per-side solvability + size-bound primitive. |
 | `quoteOffer(market, {give, giveAmount \| wantAmount, safetyBps?})` | Fetch the feed and build a full `OfferPlan` (human in/out). |
 | `planOffer({market, give, giveAmount \| wantAmount, feedValue, safetyBps?})` | Same, from an already-fetched feed value (pure/sync). |
-| `priceMarket(market, {deposit, direction, safetyBps?})` | Lower-level: fetch feed → atomic `Quote` (`wantAmount`). |
 | `fetchFeedValue(url, schema, opts?)` | Fetch a raw feed and extract the numeric price using the market's `price_feed_schema`. |
-| `quoteMarket` / `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
-| `toAtomic` / `fromAtomic` / `displayPrice` | Decimals-aware conversion. |
+| `deriveAtomicPrice` / `computeWantAmount` | Pure pricing primitives (exact rationals / BigInt). |
+| `toAtomic` / `fromAtomic` / `displayPriceString` | Decimals-aware conversion. |
 | `validateCard` / `validateIndex` | Dependency-free, `eval`-free schema validation. |
 
 `give: "base"` deposits the base asset and receives the quote; `give: "quote"`
 is the reverse (priced with `1/P`). Pass exactly one of `giveAmount` or
 `wantAmount`: `giveAmount` fixes the deposit and computes the requested
 receive amount, while `wantAmount` fixes the requested receive amount and
-computes the minimum deposit. `safetyBps` defaults to `50` — the cushion that
-absorbs feed movement between funding and fill.
+computes the minimum deposit. Either takes a display string/number, or a
+`bigint` to stay in atomic units. `safetyBps` defaults to `50` — the cushion
+that absorbs feed movement between funding and fill.
 
 Markets carry size limits for both sides (`min|max_base_amount`,
 `min|max_quote_amount`) as decimal strings of atomic units — exact past 2^53,

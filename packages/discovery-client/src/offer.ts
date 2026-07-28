@@ -12,7 +12,6 @@ import {
   deriveAtomicPrice,
   otherSide,
   sideLimits,
-  type Direction,
   type Rational,
 } from "./pricing.ts";
 import { toAtomic, fromAtomic, displayPriceString } from "./assets.ts";
@@ -39,8 +38,7 @@ export interface OfferPlanLimits {
 
 export interface OfferPlan {
   market: Market;
-  direction: Direction;
-  /** The side the maker gives. */
+  /** The side the maker gives; the maker receives the other side. */
   give: Side;
   /** What the maker sends. */
   deposit: OfferAmount;
@@ -110,7 +108,7 @@ function ceilDiv(num: bigint, den: bigint): bigint {
 
 function depositForWant(input: {
   wantAmount: bigint;
-  direction: Direction;
+  give: Side;
   price: Rational;
   feeBps: number;
   safetyBps: number;
@@ -121,7 +119,7 @@ function depositForWant(input: {
     throw new Error("cannot satisfy wantAmount when fee_bps + safetyBps is >= 100%");
   }
   const net = BigInt(netBps);
-  if (input.direction === "baseToQuote") {
+  if (input.give === "base") {
     return ceilDiv(input.wantAmount * input.price.den * 10000n, input.price.num * net);
   }
   return ceilDiv(input.wantAmount * input.price.num * 10000n, input.price.den * net);
@@ -149,7 +147,6 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   }
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
-  const direction: Direction = give === "base" ? "baseToQuote" : "quoteToBase";
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const price = deriveAtomicPrice(input.feedValue, market);
   const offerAmount = resolveOfferAmount(input);
@@ -161,7 +158,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     depositAtomic = inputAmount(offerAmount.value, depositAsset.decimals);
     receiveAtomic = computeWantAmount({
       deposit: depositAtomic,
-      direction,
+      give,
       price,
       feeBps: market.fee_bps,
       safetyBps,
@@ -170,7 +167,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
     depositAtomic = depositForWant({
       wantAmount: receiveAtomic,
-      direction,
+      give,
       price,
       feeBps: market.fee_bps,
       safetyBps,
@@ -185,7 +182,6 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const bounds = sideLimits(market, otherSide(give));
   return {
     market,
-    direction,
     give,
     deposit: amount(depositAsset, depositAtomic),
     receive: amount(receiveAsset, receiveAtomic),

@@ -6,7 +6,6 @@ import {
   computeWantAmount,
   pow10,
   sideLimits,
-  quoteMarket,
 } from "../src/pricing.ts";
 import { makeMarket as market, makeOneSidedMarket } from "./helpers.ts";
 
@@ -85,11 +84,11 @@ test("sideLimits: max > 0 returns bounds, max = 0 (disabled) returns null", () =
   assert.equal(sideLimits(market({ min_base_amount: "5000001", max_base_amount: "5000000" }), "base"), null);
 });
 
-test("computeWantAmount: baseToQuote concedes fee + safety and floors", () => {
+test("computeWantAmount: giving base concedes fee + safety and floors", () => {
   const price = { num: 65000n, den: 1n }; // quote-atomic per base-atomic
   const want = computeWantAmount({
     deposit: 100_000_000n, // 1 BTC in sats
-    direction: "baseToQuote",
+    give: "base",
     price,
     feeBps: 20,
     safetyBps: 50,
@@ -98,11 +97,11 @@ test("computeWantAmount: baseToQuote concedes fee + safety and floors", () => {
   assert.equal(want, expected);
 });
 
-test("computeWantAmount: quoteToBase is symmetric with 1/P", () => {
+test("computeWantAmount: giving quote is symmetric with 1/P", () => {
   const price = { num: 65000n, den: 1n };
   const want = computeWantAmount({
     deposit: 65_000_000_000n, // quote atomic units
-    direction: "quoteToBase",
+    give: "quote",
     price,
     feeBps: 0,
     safetyBps: 0,
@@ -114,7 +113,7 @@ test("computeWantAmount: quoteToBase is symmetric with 1/P", () => {
 test("computeWantAmount: exact for values beyond Number.MAX_SAFE_INTEGER", () => {
   const want = computeWantAmount({
     deposit: 10n ** 18n,
-    direction: "baseToQuote",
+    give: "base",
     price: { num: 1n, den: 1n },
     feeBps: 0,
     safetyBps: 0,
@@ -126,62 +125,10 @@ test("computeWantAmount: exact for values beyond Number.MAX_SAFE_INTEGER", () =>
 test("computeWantAmount: spread >= 100% yields zero", () => {
   const want = computeWantAmount({
     deposit: 1000n,
-    direction: "baseToQuote",
+    give: "base",
     price: { num: 1n, den: 1n },
     feeBps: 9000,
     safetyBps: 1000,
   });
   assert.equal(want, 0n);
-});
-
-test("quoteMarket: end-to-end from a feed value, with limit check (in range)", () => {
-  const q = quoteMarket({
-    market: market({ fee_bps: 30, price_decimals: 0 }),
-    feedValue: "65000",
-    deposit: 100_000,
-    direction: "baseToQuote",
-    safetyBps: 50,
-  });
-  assert.equal(q.solvable, true);
-  assert.equal(q.withinLimits, true);
-  const expected = (100_000n * 65000n * (10000n - 30n - 50n)) / 10000n;
-  assert.equal(q.wantAmount, expected);
-});
-
-test("quoteMarket: baseToQuote checks the received quote amount against quote limits", () => {
-  // Raise min_quote_amount above the computed wantAmount so the trade is too small.
-  const q = quoteMarket({
-    market: market({ min_quote_amount: "10000000000" }),
-    feedValue: "65000",
-    deposit: 500, // want ~ 500 * 65000 * 0.992 = 32_240_000 < min_quote
-    direction: "baseToQuote",
-  });
-  assert.equal(q.solvable, true);
-  assert.equal(q.withinLimits, false);
-});
-
-test("quoteMarket: quoteToBase checks limits against the received base amount", () => {
-  // Deposit a tiny amount of quote so the resulting base wantAmount is below min.
-  const q = quoteMarket({
-    market: market(),
-    feedValue: "65000",
-    deposit: 100, // quote atomic; wantBase ~ 100/65000 < 1 => below min
-    direction: "quoteToBase",
-  });
-  assert.equal(q.direction, "quoteToBase");
-  assert.equal(q.solvable, true);
-  assert.equal(q.withinLimits, false);
-});
-
-test("quoteMarket: a direction whose want side is disabled (max = 0) is not solvable", () => {
-  // The solver zeroed the quote bounds: it can only pay out base, so a maker
-  // wanting quote (baseToQuote) cannot be served.
-  const q = quoteMarket({
-    market: makeOneSidedMarket("base"),
-    feedValue: "65000",
-    deposit: 100_000,
-    direction: "baseToQuote",
-  });
-  assert.equal(q.solvable, false);
-  assert.equal(q.withinLimits, false);
 });

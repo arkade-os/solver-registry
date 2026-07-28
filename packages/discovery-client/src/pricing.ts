@@ -14,8 +14,6 @@ export interface Rational {
   den: bigint;
 }
 
-export type Direction = "baseToQuote" | "quoteToBase";
-
 /** Default safety cushion (bps) added to `fee_bps`, per the spec's suggested default. */
 export const DEFAULT_SAFETY_BPS = 50;
 
@@ -118,8 +116,8 @@ function toBigIntAmount(value: bigint | number | string, label: string): bigint 
 export interface WantAmountInput {
   /** Deposit in atomic units of the deposited side. */
   deposit: bigint | number | string;
-  /** `baseToQuote`: deposit base, want quote. `quoteToBase`: deposit quote, want base. */
-  direction: Direction;
+  /** Which side is deposited: `base` wants quote back, `quote` wants base. */
+  give: Side;
   /** Price in quote-atomic per base-atomic (from `deriveAtomicPrice`). */
   price: Rational;
   feeBps: number;
@@ -134,15 +132,15 @@ export interface WantAmountInput {
  * if the conceded spread is >= 100%.
  */
 export function computeWantAmount(input: WantAmountInput): bigint {
-  const { direction, price, feeBps } = input;
+  const { give, price, feeBps } = input;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const deposit = toBigIntAmount(input.deposit, "deposit");
   const netBps = 10000 - feeBps - safetyBps;
   if (netBps <= 0) return 0n;
   const net = BigInt(netBps);
-  // baseToQuote: deposit(base) * price(quote/base) * net/10000
-  // quoteToBase: deposit(quote) / price(quote/base) * net/10000  == deposit * (den/num) * net/10000
-  if (direction === "baseToQuote") {
+  // give base: deposit(base) * price(quote/base) * net/10000
+  // give quote: deposit(quote) / price(quote/base) * net/10000  == deposit * (den/num) * net/10000
+  if (give === "base") {
     return (deposit * price.num * net) / (price.den * 10000n);
   }
   return (deposit * price.den * net) / (price.num * 10000n);
@@ -185,57 +183,4 @@ export function rationalToDecimalString(r: Rational, fractionDigits = 8): string
   const whole = s.slice(0, s.length - fractionDigits);
   const frac = fractionDigits > 0 ? "." + s.slice(s.length - fractionDigits) : "";
   return (neg ? "-" : "") + whole + frac;
-}
-
-export interface Quote {
-  market: Market;
-  direction: Direction;
-  /** Deposit in atomic units of the deposited side. */
-  deposit: bigint;
-  /** Want amount in atomic units of the received side. */
-  wantAmount: bigint;
-  /** Price used, quote-atomic per base-atomic. */
-  price: Rational;
-  /** Human-readable price at 8 decimals (display only). */
-  priceDecimalString: string;
-  safetyBps: number;
-  /** Whether the solver can pay out the maker's receive side: enabled (max > 0) with well-formed bounds. */
-  solvable: boolean;
-  /** Whether `wantAmount` sits within the want side's [min, max]. Always false when not solvable. */
-  withinLimits: boolean;
-}
-
-export interface QuoteInput {
-  market: Market;
-  /** Raw value read from the market's `price_feed`. */
-  feedValue: string | number;
-  deposit: bigint | number | string;
-  direction: Direction;
-  safetyBps?: number;
-}
-
-/**
- * Price one market from an already-fetched feed value: derive the price, compute
- * the want amount, and check the want side's size limits (the side the solver
- * pays out). Pure and synchronous — `priceMarket` in `discovery.ts` wraps this
- * with the network fetch.
- */
-export function quoteMarket(input: QuoteInput): Quote {
-  const { market, direction } = input;
-  const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
-  const deposit = toBigIntAmount(input.deposit, "deposit");
-  const price = deriveAtomicPrice(input.feedValue, market);
-  const wantAmount = computeWantAmount({ deposit, direction, price, feeBps: market.fee_bps, safetyBps });
-  const limits = sideLimits(market, direction === "baseToQuote" ? "quote" : "base");
-  return {
-    market,
-    direction,
-    deposit,
-    wantAmount,
-    price,
-    priceDecimalString: rationalToDecimalString(price, 8),
-    safetyBps,
-    solvable: limits !== null,
-    withinLimits: limits !== null && wantAmount >= limits.min && wantAmount <= limits.max,
-  };
 }

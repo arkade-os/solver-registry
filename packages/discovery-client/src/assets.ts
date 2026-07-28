@@ -50,22 +50,20 @@ export interface PairDecimals {
 }
 
 /**
- * Convert an atomic price (quote-atomic per base-atomic) to a human display
- * price (quote-display per base-display): `P × 10^(baseDecimals − quoteDecimals)`.
- * For assets with equal decimals (e.g. BTC/DePix, both 8) it equals the atomic price.
+ * Render an atomic price (quote-atomic per base-atomic) as a human display price
+ * (quote-display per base-display): `P × 10^(baseDecimals − quoteDecimals)`, to
+ * `fractionDigits` decimals. For assets with equal decimals (e.g. BTC/DePix,
+ * both 8) the scaling is the identity. Display only, never pricing.
  */
-export function displayPrice(price: Rational, assetDecimals: PairDecimals): Rational {
-  const diff = assetDecimals.baseDecimals - assetDecimals.quoteDecimals;
-  const num = diff >= 0 ? price.num * pow10(diff) : price.num;
-  const den = diff >= 0 ? price.den : price.den * pow10(-diff);
-  return { num, den };
-}
-
-/** `displayPrice` rendered to a fixed-decimal string of `fractionDigits` (display only). */
 export function displayPriceString(
   price: Rational,
   assetDecimals: PairDecimals,
   fractionDigits = 8,
 ): string {
-  return rationalToDecimalString(displayPrice(price, assetDecimals), fractionDigits);
+  const diff = assetDecimals.baseDecimals - assetDecimals.quoteDecimals;
+  const scaled: Rational =
+    diff >= 0
+      ? { num: price.num * pow10(diff), den: price.den }
+      : { num: price.num, den: price.den * pow10(-diff) };
+  return rationalToDecimalString(scaled, fractionDigits);
 }

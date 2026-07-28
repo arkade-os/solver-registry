@@ -36,11 +36,6 @@ export interface UseOfferQuoteResult {
   wantAmount: string;
   setGiveAmount(amount: string): void;
   setWantAmount(amount: string): void;
-  /** Pair-oriented aliases for UIs with base/quote inputs. */
-  baseAmount: string;
-  quoteAmount: string;
-  setBaseAmount(amount: string): void;
-  setQuoteAmount(amount: string): void;
   feedValue: string | number | null;
   plan: OfferPlan | null;
   status: OfferQuoteStatus;
@@ -124,22 +119,6 @@ export function useOfferQuote(
     setActiveInput("want");
     setWantAmountValue(amount);
   }, []);
-
-  const setBaseAmount = useCallback(
-    (amount: string) => {
-      if (give === "base") setGiveAmount(amount);
-      else setWantAmount(amount);
-    },
-    [give, setGiveAmount, setWantAmount],
-  );
-
-  const setQuoteAmount = useCallback(
-    (amount: string) => {
-      if (give === "base") setWantAmount(amount);
-      else setGiveAmount(amount);
-    },
-    [give, setGiveAmount, setWantAmount],
-  );
 
   const refresh = useCallback(() => {
     setRefreshNonce((nonce) => nonce + 1);
@@ -283,8 +262,6 @@ export function useOfferQuote(
   }, [activeAmount, activeInput, give, marketKey, refreshNonce, safetyBps, signal, solvable, timeoutMs]);
 
   return useMemo(() => {
-    const baseAmount = give === "base" ? giveAmount : wantAmount;
-    const quoteAmount = give === "base" ? wantAmount : giveAmount;
     // Expose quote state only while its identity matches the current props —
     // stale cross-market values are structurally unreachable.
     const current = matching(quoteState, marketKey, give);
@@ -298,10 +275,6 @@ export function useOfferQuote(
       wantAmount,
       setGiveAmount,
       setWantAmount,
-      baseAmount,
-      quoteAmount,
-      setBaseAmount,
-      setQuoteAmount,
       feedValue: current?.feedValue ?? null,
       plan: current?.plan ?? null,
       status: current?.status ?? "idle",
@@ -316,9 +289,7 @@ export function useOfferQuote(
     marketKey,
     quoteState,
     refresh,
-    setBaseAmount,
     setGiveAmount,
-    setQuoteAmount,
     setWantAmount,
     solvable,
     wantAmount,
