@@ -22,11 +22,11 @@
         "price_path": "/price"
       },
       "price_decimals": 0,
-      "fee_bps": 110,
+      "fee_bps": 10,
       "min_base_amount": "1000",
-      "max_base_amount": "5000000",
-      "min_quote_amount": "100000000",
-      "max_quote_amount": "2000000000000"
+      "max_base_amount": "100000000000000",
+      "min_quote_amount": "1001",
+      "max_quote_amount": "10000000000000"
     }
   ]
 }
