@@ -318,12 +318,20 @@
         const tbody = el("tbody");
         const priceCells = [];
 
-        // Copies the market entry exactly as it appears in <network>.json, so a
-        // paste into a wallet matches what the wallet would fetch itself.
-        function copyButton(market) {
-          const btn = el("button", { class: "copy", type: "button", title: "Copy market JSON for wallets", text: "Copy JSON" });
+        // Wallets validate pasted JSON against the card schema, so re-wrap the
+        // flattened index row as a one-market card: hoist solver/discovery_pubkey
+        // back to the card level and restore version/name.
+        function copyButton(indexMarket) {
+          const { solver, discovery_pubkey, ...market } = indexMarket;
+          const card = {
+            version: 0,
+            name: solver,
+            ...(discovery_pubkey ? { discovery_pubkey } : {}),
+            markets: [market],
+          };
+          const btn = el("button", { class: "copy", type: "button", title: "Copy solver card JSON for wallets", text: "Copy JSON" });
           btn.addEventListener("click", async () => {
-            const json = JSON.stringify(market, null, 2);
+            const json = JSON.stringify(card, null, 2);
             try {
               await navigator.clipboard.writeText(json);
             } catch {
