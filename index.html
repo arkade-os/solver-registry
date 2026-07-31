@@ -144,6 +144,22 @@
       .price {
         color: var(--accent);
       }
+      .copy {
+        font: inherit;
+        font-size: 0.75rem;
+        color: var(--accent);
+        background: var(--badge-bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0.15rem 0.5rem;
+        cursor: pointer;
+      }
+      .copy:hover {
+        border-color: var(--accent);
+      }
+      .copy.done {
+        color: var(--muted);
+      }
       footer {
         color: var(--muted);
         font-size: 0.8rem;
@@ -287,7 +303,7 @@
           el(
             "tr",
             {},
-            ["Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price"].map((h) =>
+            ["Pair", "Solver", "Fee (bps)", "Limits (base)", "Limits (quote)", "Feed price", ""].map((h) =>
               el("th", { text: h }),
             ),
           ),
@@ -301,6 +317,32 @@
         const limitsText = (min, max) => (max === "0" ? "—" : `${fmtAmount(min)} – ${fmtAmount(max)}`);
         const tbody = el("tbody");
         const priceCells = [];
+
+        // Copies the market entry exactly as it appears in <network>.json, so a
+        // paste into a wallet matches what the wallet would fetch itself.
+        function copyButton(market) {
+          const btn = el("button", { class: "copy", type: "button", title: "Copy market JSON for wallets", text: "Copy JSON" });
+          btn.addEventListener("click", async () => {
+            const json = JSON.stringify(market, null, 2);
+            try {
+              await navigator.clipboard.writeText(json);
+            } catch {
+              // Clipboard API can be unavailable (http, permissions); fall back.
+              const ta = el("textarea", { text: json });
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              ta.remove();
+            }
+            btn.textContent = "Copied ✓";
+            btn.classList.add("done");
+            setTimeout(() => {
+              btn.textContent = "Copy JSON";
+              btn.classList.remove("done");
+            }, 1500);
+          });
+          return btn;
+        }
 
         for (const m of index.markets) {
           const priceCell = el("td", { class: "num price", text: "…" });
@@ -319,6 +361,7 @@
               el("td", { class: "num", text: limitsText(m.min_base_amount, m.max_base_amount) }),
               el("td", { class: "num", text: limitsText(m.min_quote_amount, m.max_quote_amount) }),
               priceCell,
+              el("td", {}, [copyButton(m)]),
             ]),
           );
         }
