@@ -181,6 +181,13 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     mutate: (c) => (c.markets[0].price_feed_schema.price_path = "bitcoin/usd"),
     expect: /JSON Pointer/,
   },
+  {
+    // https only, like the schemas — a laxer client check would admit local
+    // cards the reducer rejects.
+    name: "plain-http price feed",
+    mutate: (c) => (c.markets[0].price_feed = "http://feed.example.com/btcusdt"),
+    expect: /must be an https:\/\/ URL/,
+  },
   { name: "fee out of range", mutate: (c) => (c.markets[0].fee_bps = 20_000), expect: /fee_bps/ },
   { name: "sig without pubkey", mutate: (c) => (c.sig = "0".repeat(128)), expect: /discovery_pubkey/ },
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },

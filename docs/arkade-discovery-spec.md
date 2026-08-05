@@ -1,6 +1,6 @@
 # Arkade Market Discovery Protocol — v0
 
-Status: draft. Scope: how makers discover solver markets, prices, fees, and limits for Arkade Intents (banco standing orders) — spot markets and corridor markets alike. Out of scope: the covenant, the TLV offer format, the fill path, and the RFQ message family corridor trades are negotiated with (specified separately). Those are unchanged; this protocol is purely advisory and adds zero interactivity between maker and solver.
+Status: draft. Scope: how makers discover solver markets, prices, fees, and limits for Arkade Intents (banco standing orders) — spot markets and corridor markets alike. Out of scope: the covenant, the TLV offer format, the fill path, and the RFQ message family corridor trades are negotiated with (specified separately). Those are unchanged; discovery itself is purely advisory and adds zero interactivity — spot trades stay fully non-interactive end to end, while a corridor trade's one RFQ exchange happens after discovery and outside this protocol.
 
 ## Design summary
 
@@ -12,7 +12,7 @@ Every market side names its **corridor**: the rail it settles on — `arkade` (t
 
 Anyone can run a registry: it's a repo layout and a workflow, not an instance. Clients follow a *set* of registries (shipping with well-known defaults) and can additionally pin solver cards directly, so no repo owner is a gatekeeper or single point of failure — a solver rejected or dropped by every registry is still reachable by any client that adds its card by hand (the token-list pattern).
 
-Trust anchors to each registry repo and its PR review, not to keys. A live-quote layer with signed events is specced as **v1, dormant** — see the appendix; keys enter the protocol there, not before.
+Trust anchors to each registry repo and its PR review, not to keys. A live-quote layer with signed events is specced as **v1, dormant** — see the appendix. For spot cards, keys stay optional until that layer activates; corridor cards already carry `discovery_pubkey`, `relays`, and `sig` today, because their rendezvous is live data a maker will actually contact (see Corridor markets).
 
 ## Solver card
 

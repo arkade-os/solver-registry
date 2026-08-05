@@ -18,10 +18,13 @@ export function isNetwork(value: unknown): value is Network {
 /**
  * The corridor a market side settles on. `arkade` is the unmarked default —
  * every v0 spot market has it on both sides. A non-arkade side makes the
- * market a corridor (RFQ) market: terms are negotiated per-trade over the
- * card's relays instead of read from a price feed, and the two sides of the
- * pair live on different rails (e.g. an Arkade balance vs a Lightning
- * payment or an L1 output).
+ * market a corridor (RFQ) market: the two sides of the pair live on
+ * different rails (e.g. an Arkade balance vs a Lightning payment or an L1
+ * output), and the binding per-trade terms arrive in the solver's quote,
+ * negotiated over the card's relays. Feed metadata is unaffected by the
+ * corridor itself: only a same-asset market omits the feed fields (its
+ * price is identically 1); a cross-asset corridor market still advertises
+ * a feed for pre-quote planning.
  */
 export const CORRIDORS = ["arkade", "lightning", "onchain"] as const;
 export type Corridor = (typeof CORRIDORS)[number];

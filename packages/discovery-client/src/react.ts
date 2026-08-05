@@ -199,10 +199,11 @@ export function useOfferQuote(
     async function quote() {
       try {
         // A same-asset corridor market has no feed and prices at exactly 1;
-        // planOffer ignores the feed value there, so "1" only fills state.
-        let nextFeedValue: string | number;
+        // planOffer needs no feed value there, and the state keeps feedValue
+        // null so consumers can't mistake the fixed 1:1 for fetched data.
+        let nextFeedValue: string | number | undefined;
         if (isSameAssetMarket(selectedMarket)) {
-          nextFeedValue = "1";
+          // nothing to fetch
         } else if (selectedMarket.price_feed === undefined || selectedMarket.price_feed_schema === undefined) {
           throw new Error("cross-asset market advertises no price feed");
         } else {
@@ -237,7 +238,7 @@ export function useOfferQuote(
         setQuoteState({
           key,
           give,
-          feedValue: nextFeedValue,
+          feedValue: nextFeedValue ?? null,
           plan: nextPlan,
           status: "success",
           error: null,
