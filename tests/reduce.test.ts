@@ -85,8 +85,11 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "bad-corridor", expect: "must be equal to one of the allowed values" },
   { case: "corridor-pair-label", expect: "does not match the sides' labels" },
   { case: "bad-relay", expect: "must match pattern" },
-  { case: "rfq-unsigned", expect: "discovery_pubkey is required when any market has a non-arkade corridor" },
+  { case: "rfq-no-auth", expect: "discovery_pubkey is required when any market has a non-arkade corridor" },
   { case: "rfq-missing-relays", expect: "relays is required when any market has a non-arkade corridor" },
+  // pubkey + relays present, sig absent: cardRfqErrors is satisfied, so this
+  // isolates the reducer's registry-only sig requirement.
+  { case: "rfq-sig-missing", expect: "sig is required when any market has a non-arkade corridor" },
   { case: "bad-price-feed", expect: "must match pattern" },
   { case: "bad-price-decimals", expect: "must be <=" },
   { case: "bad-fee-bps", expect: "must be <=" },

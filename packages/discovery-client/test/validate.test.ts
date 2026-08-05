@@ -50,6 +50,28 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: accepts a market with both sides off-rail (no canonical leg order)", () => {
+  // lightning:BTC / onchain:BTC — a submarine-swap market with no Arkade
+  // side. The arkade-must-be-base rule fires only when exactly one side is
+  // arkade; the rendezvous requirements still apply.
+  const c = validCard();
+  c.markets[0] = {
+    ...c.markets[0],
+    pair: "lightning:BTC/onchain:BTC",
+    quote_asset: { ...c.markets[0].base_asset },
+    base_corridor: "lightning",
+    quote_corridor: "onchain",
+  };
+  delete c.markets[0].price_feed;
+  delete c.markets[0].price_feed_schema;
+  delete c.markets[0].price_decimals;
+  c.discovery_pubkey = "d".repeat(64);
+  c.sig = "0".repeat(128);
+  c.relays = ["wss://relay.example.com"];
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a one-sided market (the other side disabled with 0/0)", () => {
   for (const solves of ["base", "quote"] as const) {
     const r = validateCard({ version: 0, name: "alice", markets: [makeOneSidedMarket(solves)] });
