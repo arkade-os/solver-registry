@@ -39,12 +39,17 @@ const NAME = /^[a-z0-9-]+$/;
 const PAIR_SIDE = `(?:(?:${CORRIDORS.filter((c) => c !== "arkade").join("|")}):)?[A-Za-z0-9._-]{1,16}`;
 const PAIR = new RegExp(`^${PAIR_SIDE}/${PAIR_SIDE}$`);
 const PUBKEY = /^[0-9a-f]{64}$/;
-// Looser than the schema's `format: uri` on purpose: full URI validation
-// needs a spec-grade parser (Ajv brings one; this dependency-free client
-// does not), and the operative guarantees — wss scheme, no whitespace — are
-// what the checks downstream rely on. The reducer still applies the strict
-// schema to everything that merges.
+// ponytail: RELAY is looser than the schema's `format: uri` — full URI
+// validation needs a spec-grade parser (Ajv brings one; this dependency-free
+// client does not), and the operative guarantees — wss scheme, no whitespace
+// — are what the checks downstream rely on. The reducer still applies the
+// strict schema to everything that merges; tighten here only if a malformed
+// relay ever survives to a maker.
 const RELAY = /^wss:\/\/[^\s]+$/;
+// ponytail: format-only — this client never verifies a signature (the
+// dependency-free constraint again; the reducer verifies at CI, local pins
+// are the user's own trust decision). Add verification only if the client
+// ever grows a crypto dependency for other reasons.
 const SIG = /^[0-9a-f]{128}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
@@ -231,10 +236,11 @@ export function marketCorridorErrors(market: {
   if (baseId === quoteId && baseCorridor === quoteCorridor) {
     errors.push("market legs must differ: same corridor and asset on both sides is a null trade");
   }
-  // Deliberately fires only when EXACTLY one side is arkade: a market with
-  // both sides off-rail (e.g. lightning:BTC / onchain:BTC — a classic
-  // submarine-swap market) is permitted with no canonical leg order; the
-  // rendezvous rules still apply to it like any RFQ market.
+  // ponytail: fires only when EXACTLY one side is arkade — a market with
+  // both sides off-rail (e.g. lightning:BTC / onchain:BTC, a classic
+  // submarine-swap market) is permitted with no canonical leg order, so its
+  // two orientations form two index groups; impose an order here (and in the
+  // spec) only if rail-to-rail listings become real and need to aggregate.
   if (quoteCorridor === "arkade" && baseCorridor !== "arkade") {
     errors.push("the arkade-corridor side must be the base side when only one side is arkade");
   }
