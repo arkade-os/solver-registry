@@ -119,8 +119,12 @@
       "description": "BIP340 Schnorr signature by discovery_pubkey over sha256(canonical_json)."
     },
     "relays": {
-      "$ref": "#/definitions/relays",
-      "description": "Nostr relay URLs the solver listens on. Required — with discovery_pubkey and sig — when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
+      "allOf": [
+        {
+          "$ref": "#/definitions/relays"
+        }
+      ],
+      "description": "Nostr relay URLs the solver listens on. Required \u2014 with discovery_pubkey and sig \u2014 when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
     },
     "markets": {
       "type": "array",
@@ -161,25 +165,37 @@
             "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise (e.g. \"BTC/USDT\", \"BTC/lightning:BTC\"). Must equal the labels derived from the sides' corridors and tickers (the reducer enforces this). Canonical identity is the corridor-qualified leg pair."
           },
           "base_asset": {
-            "$ref": "#/definitions/asset",
+            "allOf": [
+              {
+                "$ref": "#/definitions/asset"
+              }
+            ],
             "description": "Display metadata for the pair's base side."
           },
           "quote_asset": {
-            "$ref": "#/definitions/asset",
+            "allOf": [
+              {
+                "$ref": "#/definitions/asset"
+              }
+            ],
             "description": "Display metadata for the pair's quote side."
           },
           "base_corridor": {
             "$ref": "#/definitions/corridor"
           },
           "quote_corridor": {
-            "$ref": "#/definitions/corridor",
+            "allOf": [
+              {
+                "$ref": "#/definitions/corridor"
+              }
+            ],
             "description": "The quote side's corridor; absent means \"arkade\". When exactly one side is on the arkade corridor it must be the base side (the reducer enforces this), so equivalent corridor markets group under one canonical key."
           },
           "price_feed": {
             "type": "string",
             "format": "uri",
             "pattern": "^https://",
-            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 — fee_bps is the whole spread and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
+            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps is the whole spread and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"
@@ -196,19 +212,35 @@
             "maximum": 10000
           },
           "min_base_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Lower trade-size bound for the base side, in base atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_base_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Upper trade-size bound for the base side, in base atomic units. \"0\" disables the side: the solver does not pay out base and makers cannot receive it."
           },
           "min_quote_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Lower trade-size bound for the quote side, in quote atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_quote_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Upper trade-size bound for the quote side, in quote atomic units. \"0\" disables the side: the solver does not pay out quote and makers cannot receive it."
           }
         }

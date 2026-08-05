@@ -33,9 +33,11 @@ export interface ValidationResult<T> {
 const ASSET_ID = /^(btc|[0-9a-f]{68})$/;
 const NAME = /^[a-z0-9-]+$/;
 // A pair side is a ticker, optionally prefixed by a non-default corridor
-// ("lightning:BTC"); the arkade corridor is unmarked. Kept in sync with the
-// schemas' pair pattern and CORRIDORS (pinned by tests).
-const PAIR = /^(?:(?:lightning|onchain):)?[A-Za-z0-9._-]{1,16}\/(?:(?:lightning|onchain):)?[A-Za-z0-9._-]{1,16}$/;
+// ("lightning:BTC"); the arkade corridor is unmarked. Derived from CORRIDORS
+// so a new corridor can't leave this behind; the schemas' copy of the
+// pattern is pinned to CORRIDORS by tests.
+const PAIR_SIDE = `(?:(?:${CORRIDORS.filter((c) => c !== "arkade").join("|")}):)?[A-Za-z0-9._-]{1,16}`;
+const PAIR = new RegExp(`^${PAIR_SIDE}/${PAIR_SIDE}$`);
 const PUBKEY = /^[0-9a-f]{64}$/;
 // Looser than the schema's `format: uri` on purpose: full URI validation
 // needs a spec-grade parser (Ajv brings one; this dependency-free client

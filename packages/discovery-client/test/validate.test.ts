@@ -50,6 +50,21 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: accepts a cross-asset corridor market carrying a feed", () => {
+  // arkade:BTC base, lightning:USDT quote — different assets, so the feed
+  // fields stay required exactly as on a spot market.
+  const c = validCard();
+  c.markets[0] = {
+    ...c.markets[0],
+    pair: "BTC/lightning:USDT",
+    quote_corridor: "lightning",
+  };
+  c.discovery_pubkey = "d".repeat(64);
+  c.relays = ["wss://relay.example.com"];
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a market with both sides off-rail (no canonical leg order)", () => {
   // lightning:BTC / onchain:BTC — a submarine-swap market with no Arkade
   // side. The arkade-must-be-base rule fires only when exactly one side is

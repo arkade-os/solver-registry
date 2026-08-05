@@ -153,9 +153,17 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
 // corridor (or a client-only one) would let cards merge that clients can't
 // group, or reject cards CI accepted.
 test("the schemas' corridor definitions match the client's CORRIDORS and relay bound", () => {
+  // The pair pattern embeds the non-arkade corridors as an alternation; a
+  // corridor added to CORRIDORS without touching the schemas would slip
+  // past the enum check below but not this one.
+  const alternation = `(${CORRIDORS.filter((c) => c !== "arkade").join("|")}):`;
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
     assert.deepEqual(schema.definitions.corridor.enum, [...CORRIDORS], name);
+    assert.ok(
+      JSON.stringify(schema).includes(alternation),
+      `${name}: pair pattern must embed ${alternation}`,
+    );
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
   assert.equal(card.definitions.relays.maxItems, MAX_RELAYS);

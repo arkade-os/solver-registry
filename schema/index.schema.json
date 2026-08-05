@@ -173,7 +173,7 @@
               "format": "uri",
               "pattern": "^wss://"
             },
-            "description": "The solver card's Nostr relay URLs, propagated by the reducer when present. On a corridor (RFQ) market these — with discovery_pubkey — are the rendezvous makers address request-for-quote messages to."
+            "description": "The solver card's Nostr relay URLs, propagated by the reducer when present. On a corridor (RFQ) market these \u2014 with discovery_pubkey \u2014 are the rendezvous makers address request-for-quote messages to."
           },
           "price_feed": {
             "type": "string",
@@ -196,19 +196,35 @@
             "maximum": 10000
           },
           "min_base_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Lower trade-size bound for the base side, in base atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_base_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Upper trade-size bound for the base side, in base atomic units. \"0\" disables the side: the solver does not pay out base and makers cannot receive it."
           },
           "min_quote_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Lower trade-size bound for the quote side, in quote atomic units. An enabled side has 1 <= min <= max; when the side is disabled (max = \"0\") min MUST be \"0\"."
           },
           "max_quote_amount": {
-            "$ref": "#/definitions/amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
             "description": "Upper trade-size bound for the quote side, in quote atomic units. \"0\" disables the side: the solver does not pay out quote and makers cannot receive it."
           }
         }
