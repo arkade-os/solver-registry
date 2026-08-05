@@ -2,9 +2,13 @@
   "version": 0,
   "name": "signed-solver",
   "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "relays": [
+    "wss://relay.example.com",
+    "wss://relay2.example.com"
+  ],
   "markets": [
     {
-      "pair": "BTC/BTC",
+      "pair": "BTC/lightning:BTC",
       "base_asset": {
         "id": "btc",
         "name": "Bitcoin",
@@ -17,18 +21,56 @@
         "ticker": "BTC",
         "decimals": 8
       },
-      "price_feed": "https://feed.example.com/price?pair=btcusd",
-      "price_feed_schema": {
-        "type": "json",
-        "price_path": "/price"
-      },
-      "price_decimals": 8,
+      "quote_corridor": "lightning",
       "fee_bps": 25,
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
       "min_quote_amount": "1000",
       "max_quote_amount": "5000000"
+    },
+    {
+      "pair": "BTC/onchain:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "onchain",
+      "fee_bps": 40,
+      "min_base_amount": "0",
+      "max_base_amount": "0",
+      "min_quote_amount": "20000",
+      "max_quote_amount": "1000000"
+    },
+    {
+      "pair": "lightning:BTC/onchain:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "base_corridor": "lightning",
+      "quote_corridor": "onchain",
+      "fee_bps": 40,
+      "min_base_amount": "0",
+      "max_base_amount": "0",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "2000000"
     }
   ],
-  "sig": "0e95d61e803777958ccf22df568b2b4090909c7b12016240afa220fc8dbc72ae02089ddc4058066ed69c829c88aa3d1959f6c59ee1a79454f92d6efb4eb1a9cd"
+  "sig": "62b12efb05335697d41bb2357eb715e4a30386df3b8d904cd15b90e04c6b24180ddeea0096e83b7577a41d78758cf9f54a6f81ace401246eff046d97635a2282"
 }

@@ -5,7 +5,7 @@
 // receive this much". `quoteOffer` only adds the price-feed fetch so the output
 // is ready for createOffer/funding code.
 
-import type { AssetInfo, Market, Side } from "./types.ts";
+import { isSameAssetMarket, type AssetInfo, type Market, type Side } from "./types.ts";
 import {
   DEFAULT_SAFETY_BPS,
   computeWantAmount,
@@ -75,8 +75,12 @@ export type PlanOfferInput = {
   market: Market;
   /** Which side the maker deposits. */
   give: Side;
-  /** Raw value already read from the market's `price_feed`. */
-  feedValue: string | number;
+  /**
+   * Raw value already read from the market's `price_feed`. Required for a
+   * cross-asset market; ignored (and omissible) on a same-asset corridor
+   * market, whose price is identically 1.
+   */
+  feedValue?: string | number;
   safetyBps?: number;
 } & OfferAmountInput;
 
@@ -131,6 +135,11 @@ function depositForWant(input: {
  * `give: "quote"` is the reverse (priced with 1/P). The size-limit check runs
  * on the received side — the side the solver must pay out — so a market whose
  * receive side is disabled (max = "0") reports `limits.min/max: null`.
+ *
+ * A same-asset corridor market prices at exactly 1 atomic/atomic with no feed
+ * involved; the plan concedes `fee_bps + safetyBps` as usual. For such RFQ
+ * markets the plan is a pre-quote estimate — the binding amounts arrive in the
+ * solver's quote, negotiated over the card's relays.
  */
 export function planOffer(input: PlanOfferInput): OfferPlan {
   const { market, give } = input;
@@ -148,7 +157,15 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
-  const price = deriveAtomicPrice(input.feedValue, market);
+  let price: Rational;
+  if (isSameAssetMarket(market)) {
+    price = { num: 1n, den: 1n };
+  } else {
+    if (input.feedValue === undefined || typeof market.price_decimals !== "number") {
+      throw new Error("a cross-asset market needs feedValue and price_decimals to price");
+    }
+    price = deriveAtomicPrice(input.feedValue, { price_decimals: market.price_decimals });
+  }
   const offerAmount = resolveOfferAmount(input);
 
   let depositAtomic: bigint;
@@ -203,11 +220,18 @@ export type QuoteOfferOptions = FetchFeedOptions & {
 
 /**
  * Fetch the market's advertised `price_feed`, then build an offer plan. This
- * quotes an offer; it does not submit or fund anything.
+ * quotes an offer; it does not submit or fund anything. A same-asset corridor
+ * market advertises no feed and prices at exactly 1, so nothing is fetched.
  */
 export async function quoteOffer(market: Market, opts: QuoteOfferOptions): Promise<OfferPlan> {
   const offerAmount = resolveOfferAmount(opts);
-  const feedValue = await fetchFeedValue(market.price_feed, market.price_feed_schema, opts);
+  let feedValue: string | number | undefined;
+  if (!isSameAssetMarket(market)) {
+    if (market.price_feed === undefined || market.price_feed_schema === undefined) {
+      throw new Error("cross-asset market advertises no price feed");
+    }
+    feedValue = await fetchFeedValue(market.price_feed, market.price_feed_schema, opts);
+  }
   if (offerAmount.kind === "give") {
     return planOffer({
       market,

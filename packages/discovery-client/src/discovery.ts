@@ -4,7 +4,18 @@
 //
 // Isomorphic by design — see `feed.ts` for the injectable transport.
 
-import { DEFAULT_NETWORK, stableStringify, type AssetInfo, type IndexMarket, type Network, type NetworkIndex, type Side } from "./types.ts";
+import {
+  DEFAULT_NETWORK,
+  marketCorridor,
+  marketPairKey,
+  stableStringify,
+  type AssetInfo,
+  type Corridor,
+  type IndexMarket,
+  type Network,
+  type NetworkIndex,
+  type Side,
+} from "./types.ts";
 import { validateCard, validateIndex } from "./validate.ts";
 import { sideLimits } from "./pricing.ts";
 import { fetchText, type FetchLike } from "./feed.ts";
@@ -129,10 +140,6 @@ export interface DiscoverResult {
   warnings: string[];
 }
 
-function idPair(m: IndexMarket): string {
-  return `${m.base_asset.id}/${m.quote_asset.id}`;
-}
-
 /** Record one source's outcome and mirror its error/warnings into the flat `warnings` list. */
 function recordSource(sources: SourceReport[], warnings: string[], report: SourceReport): void {
   sources.push(report);
@@ -144,7 +151,7 @@ function recordSource(sources: SourceReport[], warnings: string[], report: Sourc
  * Discover markets across the followed registries plus any pinned local cards.
  * Registry failures are isolated; local cards are schema-validated and those
  * that fail (or target another network) are skipped with a warning. The result
- * is deduped (byte-identical entries collapsed) and ranked per id pair by
+ * is deduped (byte-identical entries collapsed) and ranked per corridor-qualified leg pair by
  * `fee_bps`, with source order as the tiebreak.
  */
 export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
@@ -189,6 +196,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     for (const m of card.markets) {
       const entry: IndexMarket = { ...m, solver: card.name };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
+      if (card.relays) entry.relays = card.relays;
       tagged.push({ market: entry, source, sourceType: "local" });
     }
     recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
@@ -205,7 +213,9 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   });
 
   deduped.sort((a, b) => {
-    const [ka, kb] = [idPair(a.market), idPair(b.market)];
+    // Identity is the corridor-qualified leg pair — bare asset ids would
+    // collapse e.g. a lightning-corridor BTC market and an onchain one.
+    const [ka, kb] = [marketPairKey(a.market), marketPairKey(b.market)];
     if (ka !== kb) return ka < kb ? -1 : 1;
     return a.market.fee_bps - b.market.fee_bps;
   });
@@ -219,6 +229,10 @@ export interface SelectOptions {
   baseId: string;
   /** Canonical quote asset id. */
   quoteId: string;
+  /** The base side's corridor. Defaults to "arkade", matching every spot market. */
+  baseCorridor?: Corridor;
+  /** The quote side's corridor. Defaults to "arkade". */
+  quoteCorridor?: Corridor;
   /**
    * The side the maker wants to receive. When given, only markets with that
    * side enabled (max > 0) — able to pay it out — match, so a direction no
@@ -230,10 +244,13 @@ export interface SelectOptions {
 }
 
 export interface MarketPair {
-  /** Display label from the first ranked market for this id pair. */
+  /** Display label from the first ranked market for this leg pair. */
   pair: string;
   base_asset: AssetInfo;
   quote_asset: AssetInfo;
+  /** The legs' corridors, defaults resolved (absent reads as "arkade"). */
+  base_corridor: Corridor;
+  quote_corridor: Corridor;
   marketCount: number;
   /**
    * How many of the pair's markets can pay out each side. A maker can only
@@ -251,6 +268,8 @@ function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
   const amount = opts.wantAmount === undefined ? undefined : BigInt(opts.wantAmount);
   return (m) => {
     if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
+    if (marketCorridor(m, "base") !== (opts.baseCorridor ?? "arkade")) return false;
+    if (marketCorridor(m, "quote") !== (opts.quoteCorridor ?? "arkade")) return false;
     if (wantSide === undefined) return true;
     const limits = sideLimits(m, wantSide);
     if (limits === null) return false;
@@ -259,7 +278,7 @@ function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
 }
 
 /**
- * Filter already-discovered markets to one id pair (and optionally a receive
+ * Filter already-discovered markets to one leg pair (and optionally a receive
  * side and trade size), preserving discovery ranking so the first result is the
  * best expected execution. Pricing still comes from the feed; this ranking is a
  * static proxy.
@@ -269,7 +288,7 @@ export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectO
 }
 
 /**
- * List available id pairs from a ranked market set. The first market for each
+ * List available leg pairs from a ranked market set. The first market for each
  * pair supplies the display labels, `marketCount` tells UIs how many solver
  * candidates are available for that pair, and `solvable` how many can pay out
  * each side (a side at 0 cannot be traded on this pair).
@@ -277,13 +296,15 @@ export function selectMarkets<T extends IndexMarket>(markets: T[], opts: SelectO
 export function listMarkets<T extends IndexMarket>(markets: T[]): MarketPair[] {
   const byPair = new Map<string, MarketPair>();
   for (const market of markets) {
-    const key = idPair(market);
+    const key = marketPairKey(market);
     let entry = byPair.get(key);
     if (!entry) {
       entry = {
         pair: market.pair,
         base_asset: market.base_asset,
         quote_asset: market.quote_asset,
+        base_corridor: marketCorridor(market, "base"),
+        quote_corridor: marketCorridor(market, "quote"),
         marketCount: 0,
         solvable: { base: 0, quote: 0 },
       };

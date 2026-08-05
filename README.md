@@ -9,6 +9,15 @@ from a single URL. See
 [`docs/arkade-discovery-spec.md`](docs/arkade-discovery-spec.md) for the
 full protocol.
 
+Markets span two shapes under one schema. **Spot markets** trade Arkade
+balances against each other, priced from a pinned feed and filled
+non-interactively from the arkd stream. **Corridor markets** trade an Arkade
+balance against another rail — a Lightning payment (`lightning`) or an L1
+output (`onchain`): same card, same index, same `fee_bps` ranking, but the
+price of a same-asset corridor is identically 1 (no feed) and trades are
+negotiated per-trade over RFQ via the card's `discovery_pubkey` and
+`relays`, which corridor cards must therefore carry and sign.
+
 ## A registry, not the registry
 
 Inclusion here is curation, not authorization. Nothing in the protocol
@@ -36,8 +45,11 @@ registries you follow, not to this repo.
    `name` field (`^[a-z0-9-]+$`).
 3. Open a PR. CI validates the card and tells you if it's malformed.
 
-Signing (`discovery_pubkey` + `sig`) is optional in v0 — a bare card is fully
-valid, the PR is the authentication. See the spec for why.
+Signing (`discovery_pubkey` + `sig`) is optional for spot-only cards — a bare
+card is fully valid, the PR is the authentication. A card with any corridor
+market must carry `discovery_pubkey`, `relays`, and a valid `sig`: the
+pubkey and relays are the RFQ rendezvous makers will actually contact, so
+they must be self-authenticating. See the spec for why.
 
 ## Consume the index
 

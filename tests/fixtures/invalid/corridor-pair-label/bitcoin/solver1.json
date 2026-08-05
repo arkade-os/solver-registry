@@ -1,0 +1,27 @@
+{
+  "version": 0,
+  "name": "solver1",
+  "markets": [
+    {
+      "pair": "BTC/BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "lightning",
+      "fee_bps": 25,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "5000000"
+    }
+  ]
+}

@@ -50,6 +50,36 @@ console.log(`${plan.deposit.display} ${plan.deposit.asset.ticker}`
 if (!plan.limits.withinLimits) console.warn("amount is outside the market's size limits");
 ```
 
+## Corridor markets
+
+A market side may settle on another rail: `base_corridor` / `quote_corridor`
+name it (`arkade` — the default — `lightning`, or `onchain`), and market
+identity is the corridor-qualified leg pair, so a Lightning BTC market and an
+onchain BTC market never collapse into one group. Selection takes corridors
+the same way it takes ids:
+
+> **Upgrading from 0.1.x:** corridor entries have no feed fields, and 0.1.x
+> `quoteOffer` throws on them (`price_feed` was assumed present; its type is
+> now `string | undefined`). Upgrade before following any registry that lists
+> corridor markets — a registry should not merge its first corridor card until
+> its clients have.
+
+```ts
+const lnMarket = bestMarket(markets, {
+  baseId: "btc",
+  quoteId: "btc",
+  quoteCorridor: "lightning", // omit corridors and you get spot markets only
+  wantSide: "quote",
+});
+```
+
+A same-asset corridor market carries no feed — its price is identically 1 and
+`fee_bps` is the whole spread. `quoteOffer` / `planOffer` handle that
+transparently (nothing is fetched), but the plan is a pre-quote estimate: the
+binding amounts come from the solver's RFQ quote, requested via the market's
+`discovery_pubkey` over its `relays` (both present on every corridor entry).
+The RFQ exchange itself is out of this package's scope.
+
 ## Amount conversion (Arkade Assets)
 
 Each asset carries a `decimals` field (8 for BTC and most Arkade assets).

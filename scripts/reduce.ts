@@ -9,7 +9,14 @@ import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import cardSchema from "../schema/card.schema.json" with { type: "json" };
 import { verifyCardSig } from "./canonical.ts";
-import { marketLimitErrors, marketPairError } from "../packages/discovery-client/src/validate.ts";
+import {
+  cardHasRfqMarket,
+  cardRfqErrors,
+  marketCorridorErrors,
+  marketLimitErrors,
+  marketPairError,
+} from "../packages/discovery-client/src/validate.ts";
+import { marketPairKey } from "../packages/discovery-client/src/types.ts";
 // The wire types live with the portable client; the reducer imports them so a
 // schema change is a one-place edit. (The client never imports from scripts/ —
 // this direction keeps it dependency-free.)
@@ -85,9 +92,16 @@ export function reduceNetwork(
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
         const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), marketPairError(m)]) {
+        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), marketPairError(m)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
+      }
+      for (const message of cardRfqErrors(card)) messages.push(message);
+      // The registry's listing gate is stricter than a local pin: the
+      // rendezvous must carry the solver's own signature, not just the PR
+      // author's word (see cardRfqErrors for the split's rationale).
+      if (cardHasRfqMarket(card) && card.sig === undefined) {
+        messages.push("sig is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)");
       }
     }
 
@@ -137,16 +151,17 @@ export function reduceNetwork(
         solver: card.name,
       };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
+      if (card.relays) entry.relays = card.relays;
       markets.push(entry);
     }
   }
 
-  // Group by canonical asset ids (tickers are display-only and not unique),
-  // then best expected execution first, solver name for determinism.
+  // Group by the corridor-qualified leg pair (tickers are display-only and
+  // not unique; bare asset ids collapse different corridors), then best
+  // expected execution first, solver name for determinism.
   markets.sort((a, b) => {
-    const idPairA = `${a.base_asset.id}/${a.quote_asset.id}`;
-    const idPairB = `${b.base_asset.id}/${b.quote_asset.id}`;
-    if (idPairA !== idPairB) return idPairA < idPairB ? -1 : 1;
+    const [keyA, keyB] = [marketPairKey(a), marketPairKey(b)];
+    if (keyA !== keyB) return keyA < keyB ? -1 : 1;
     if (a.fee_bps !== b.fee_bps) return a.fee_bps - b.fee_bps;
     return a.solver < b.solver ? -1 : a.solver > b.solver ? 1 : 0;
   });

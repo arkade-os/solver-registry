@@ -1,0 +1,50 @@
+{
+  "version": 0,
+  "name": "solver1",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "markets": [
+    {
+      "pair": "BTC/lightning:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "lightning",
+      "fee_bps": 25,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "5000000"
+    },
+    {
+      "pair": "BTC/onchain:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "onchain",
+      "fee_bps": 40,
+      "min_base_amount": "0",
+      "max_base_amount": "0",
+      "min_quote_amount": "20000",
+      "max_quote_amount": "1000000"
+    }
+  ],
+  "sig": "e2bb6ff59e544fba2965f802bb018c496df92c3e51aac74953910666e8e928d5e30b384fb953bf125bbeb8c41c4a257613497d5e6b13b1d7b65fe41144d08147"
+}
