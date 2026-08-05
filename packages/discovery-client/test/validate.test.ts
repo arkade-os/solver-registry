@@ -50,6 +50,16 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: explicit base_corridor 'arkade' is equivalent to omitting it", () => {
+  // marketCorridor defaults an absent side to arkade; writing it out must
+  // change nothing — same spot semantics, same pair label, no rendezvous
+  // requirements.
+  const c = validCard();
+  c.markets[0] = { ...c.markets[0], base_corridor: "arkade", quote_corridor: "arkade" };
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a cross-asset corridor market carrying a feed", () => {
   // arkade:BTC base, lightning:USDT quote — different assets, so the feed
   // fields stay required exactly as on a spot market.

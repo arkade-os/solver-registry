@@ -266,7 +266,13 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   }
   if (strict) checkAllowedKeys(errors, path, v, MARKET_KEYS);
 
-  checkPattern(errors, `${path}/pair`, v.pair, PAIR, 'must match "<base>/<quote>"');
+  checkPattern(
+    errors,
+    `${path}/pair`,
+    v.pair,
+    PAIR,
+    'must be "<base>/<quote>" where a non-arkade side is corridor-prefixed, e.g. "BTC/lightning:BTC"',
+  );
   checkAsset(errors, `${path}/base_asset`, v.base_asset, strict);
   checkAsset(errors, `${path}/quote_asset`, v.quote_asset, strict);
 
@@ -366,6 +372,13 @@ const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "relays
 /**
  * Validate a solver card (e.g. a user-pinned local card). Strict: mirrors
  * `schema/card.schema.json` including rejection of unknown properties.
+ *
+ * Registry listing requires strictly more than this: the reducer additionally
+ * demands a valid `sig` on any card with a corridor market. This validator
+ * deliberately omits that check — pinning a local card is the user's own
+ * trust decision, and this dependency-free client carries no verification
+ * code — so a corridor card can be `ok: true` here and still be rejected by
+ * registry CI until it is signed.
  */
 export function validateCard(input: unknown): ValidationResult<Card> {
   if (!isObject(input)) {

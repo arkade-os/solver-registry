@@ -140,10 +140,6 @@ export interface DiscoverResult {
   warnings: string[];
 }
 
-// Market identity/grouping key: the corridor-qualified leg pair (see
-// marketPairKey) — bare asset ids would collapse e.g. a lightning-corridor
-// BTC market and an onchain-corridor one into a single group.
-
 /** Record one source's outcome and mirror its error/warnings into the flat `warnings` list. */
 function recordSource(sources: SourceReport[], warnings: string[], report: SourceReport): void {
   sources.push(report);
@@ -217,6 +213,8 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   });
 
   deduped.sort((a, b) => {
+    // Identity is the corridor-qualified leg pair — bare asset ids would
+    // collapse e.g. a lightning-corridor BTC market and an onchain one.
     const [ka, kb] = [marketPairKey(a.market), marketPairKey(b.market)];
     if (ka !== kb) return ka < kb ? -1 : 1;
     return a.market.fee_bps - b.market.fee_bps;

@@ -98,6 +98,8 @@ Canonical form, CI-enforced: the two legs must differ; when exactly one side is 
 }
 ```
 
+**Rollout sequencing.** Clients built before this section (`@arkade-os/solver-discovery` 0.1.x) fetch a market's feed unconditionally and throw on a corridor entry's absent `price_feed`. A registry MUST NOT merge its first corridor card until the clients it serves have upgraded to a corridor-aware release (0.2.0+); until then a corridor card is not backward-compatible data, it is a client crash. Spot cards are unaffected either way.
+
 One consequence worth naming: corridor markets close v0's liveness gap for their own trades. A spot maker funds blind — nothing can be probed before funding. A corridor maker gets a quote (or a structured refusal, or silence) before committing anything, so a dead solver costs a timeout instead of a cancel transaction.
 
 ## The reducer (GitHub Action)

@@ -58,6 +58,12 @@ identity is the corridor-qualified leg pair, so a Lightning BTC market and an
 onchain BTC market never collapse into one group. Selection takes corridors
 the same way it takes ids:
 
+> **Upgrading from 0.1.x:** corridor entries have no feed fields, and 0.1.x
+> `quoteOffer` throws on them (`price_feed` was assumed present; its type is
+> now `string | undefined`). Upgrade before following any registry that lists
+> corridor markets — a registry should not merge its first corridor card until
+> its clients have.
+
 ```ts
 const lnMarket = bestMarket(markets, {
   baseId: "btc",
