@@ -55,9 +55,11 @@ test("signed card: valid signature verifies; discovery_pubkey and relays propaga
 test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
   assert.equal(result.ok, true);
+  // The third entry is the rail-to-rail market (no arkade side): accepted,
+  // and sorted under its own leg-pair key like any other.
   assert.deepEqual(
     result.index!.markets.map((m) => m.pair),
-    ["BTC/lightning:BTC", "BTC/onchain:BTC"],
+    ["BTC/lightning:BTC", "BTC/onchain:BTC", "lightning:BTC/onchain:BTC"],
   );
 });
 

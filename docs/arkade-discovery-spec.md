@@ -229,7 +229,7 @@ content: {
 }
 ```
 
-The `d` tag and `content.pair` are the **canonical corridor-qualified leg-pair key**, exactly as the reducer computes it: an omitted corridor resolves to `arkade` before serialization, ids are the canonical asset ids (not tickers), and both producers and subscribers MUST use this resolved form — never the card's display `pair` label — or subscriptions silently miss quotes published under the other representation.
+The `d` tag and `content.pair` are the **canonical corridor-qualified leg-pair key** (unlike the card schema's display field of the same name, which carries tickers and is NOT an identity), exactly as the reducer computes it: an omitted corridor resolves to `arkade` before serialization, ids are the canonical asset ids (not tickers), and both producers and subscribers MUST use this resolved form — never the card's display `pair` label — or subscriptions silently miss quotes published under the other representation.
 
 `price` is a decimal string in quote-units-per-base-unit, already normalized and net of nothing — the maker still concedes `fee_bps` from it. The commitment: an offer funded before `expiration`, within limits, priced at or inside `price` less `fee_bps`, will be filled. How the solver's internal fill-time check accommodates its own quote is its problem, not the protocol's. Kind 38173 is deliberately distinct from NIP-69's 38383 (orders): these are quotes. Activation makes the card's `discovery_pubkey`, `sig`, and `relays` required for every card (corridor cards already require all three today).
 

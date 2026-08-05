@@ -48,7 +48,29 @@
       "max_base_amount": "0",
       "min_quote_amount": "20000",
       "max_quote_amount": "1000000"
+    },
+    {
+      "pair": "lightning:BTC/onchain:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "base_corridor": "lightning",
+      "quote_corridor": "onchain",
+      "fee_bps": 40,
+      "min_base_amount": "0",
+      "max_base_amount": "0",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "2000000"
     }
   ],
-  "sig": "663a3c7c7befaefd3a63022f84642665186b580362a66ded86a9322ed6d0a91f297f510714d56c9415ba893131090bf37bc1e80fa1847e0bc6f7dcfc22e1971a"
+  "sig": "62b12efb05335697d41bb2357eb715e4a30386df3b8d904cd15b90e04c6b24180ddeea0096e83b7577a41d78758cf9f54a6f81ace401246eff046d97635a2282"
 }
