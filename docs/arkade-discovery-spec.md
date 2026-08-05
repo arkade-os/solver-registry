@@ -63,7 +63,7 @@ Keys and signatures are future-proofing for spot cards, not a requirement: requi
 
 ## Corridor markets
 
-A corridor market has at least one non-arkade side: an Arkade balance trading against a Lightning payment (`lightning`) or an L1 output (`onchain`). Discovery works identically — the card advertises the pair, `fee_bps`, and per-side limits, and the reducer ranks it in the same index — but three things differ structurally from a spot market:
+A corridor market has at least one non-arkade side — typically an Arkade balance trading against a Lightning payment (`lightning`) or an L1 output (`onchain`), though both sides may be off-rail (e.g. a `lightning:BTC / onchain:BTC` submarine-swap market). Everything in this section — the rendezvous requirements, the feed rules, leg-pair grouping — keys off "has a non-arkade side" and applies to rail-to-rail markets identically. Discovery works identically — the card advertises the pair, `fee_bps`, and per-side limits, and the reducer ranks it in the same index — but three things differ structurally from a spot market:
 
 **Pricing.** The interesting corridor pairs are same-asset (BTC against BTC over another rail), where the price is identically 1 and `fee_bps` is the entire cost of trading. Such markets carry no feed fields at all; the executable amounts arrive in the solver's quote. A cross-asset corridor market (say `lightning:BTC` against an Arkade stablecoin) still carries a feed like any spot pair.
 
@@ -228,6 +228,8 @@ content: {
   "feed": "https://feed.example.com/price?pair=..."
 }
 ```
+
+The `d` tag and `content.pair` are the **canonical corridor-qualified leg-pair key**, exactly as the reducer computes it: an omitted corridor resolves to `arkade` before serialization, ids are the canonical asset ids (not tickers), and both producers and subscribers MUST use this resolved form — never the card's display `pair` label — or subscriptions silently miss quotes published under the other representation.
 
 `price` is a decimal string in quote-units-per-base-unit, already normalized and net of nothing — the maker still concedes `fee_bps` from it. The commitment: an offer funded before `expiration`, within limits, priced at or inside `price` less `fee_bps`, will be filled. How the solver's internal fill-time check accommodates its own quote is its problem, not the protocol's. Kind 38173 is deliberately distinct from NIP-69's 38383 (orders): these are quotes. Activation makes the card's `discovery_pubkey`, `sig`, and `relays` required for every card (corridor cards already require all three today).
 
