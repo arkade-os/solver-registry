@@ -13,6 +13,15 @@
     "markets"
   ],
   "definitions": {
+    "corridor": {
+      "type": "string",
+      "enum": [
+        "arkade",
+        "lightning",
+        "onchain"
+      ],
+      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market)."
+    },
     "asset": {
       "type": "object",
       "additionalProperties": false,
@@ -107,9 +116,6 @@
           "solver",
           "base_asset",
           "quote_asset",
-          "price_feed",
-          "price_feed_schema",
-          "price_decimals",
           "fee_bps",
           "min_base_amount",
           "max_base_amount",
@@ -135,8 +141,8 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9._-]{1,16}/[A-Za-z0-9._-]{1,16}$",
-            "description": "Display pair \"<base-ticker>/<quote-ticker>\"; must equal base_asset.ticker + \"/\" + quote_asset.ticker. Canonical identity lives in base_asset.id / quote_asset.id."
+            "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$",
+            "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Canonical identity is the corridor-qualified leg pair."
           },
           "solver": {
             "type": "string",
@@ -148,14 +154,32 @@
           "quote_asset": {
             "$ref": "#/definitions/asset"
           },
+          "base_corridor": {
+            "$ref": "#/definitions/corridor"
+          },
+          "quote_corridor": {
+            "$ref": "#/definitions/corridor"
+          },
           "discovery_pubkey": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
+          "relays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^wss://"
+            },
+            "description": "The solver card's Nostr relay URLs, propagated by the reducer when present. On a corridor (RFQ) market these — with discovery_pubkey — are the rendezvous makers address request-for-quote messages to."
+          },
           "price_feed": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https://"
+            "pattern": "^https://",
+            "description": "Present on cross-asset markets only; absent on same-asset corridor markets, whose price is identically 1."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"

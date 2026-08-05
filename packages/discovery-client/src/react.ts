@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFeedValue, type FetchFeedOptions } from "./feed.ts";
 import { planOffer, type OfferPlan } from "./offer.ts";
 import { otherSide, sideLimits } from "./pricing.ts";
-import { stableStringify, type Market, type Side } from "./types.ts";
+import { isSameAssetMarket, stableStringify, type Market, type Side } from "./types.ts";
 
 type InitialAmount = string | number | bigint;
 
@@ -198,15 +198,24 @@ export function useOfferQuote(
 
     async function quote() {
       try {
-        const nextFeedValue = await fetchFeedValue(
-          selectedMarket.price_feed,
-          selectedMarket.price_feed_schema,
-          {
-            fetchImpl: fetchImplRef.current,
-            signal: controller.signal,
-            timeoutMs,
-          },
-        );
+        // A same-asset corridor market has no feed and prices at exactly 1;
+        // planOffer ignores the feed value there, so "1" only fills state.
+        let nextFeedValue: string | number;
+        if (isSameAssetMarket(selectedMarket)) {
+          nextFeedValue = "1";
+        } else if (selectedMarket.price_feed === undefined || selectedMarket.price_feed_schema === undefined) {
+          throw new Error("cross-asset market advertises no price feed");
+        } else {
+          nextFeedValue = await fetchFeedValue(
+            selectedMarket.price_feed,
+            selectedMarket.price_feed_schema,
+            {
+              fetchImpl: fetchImplRef.current,
+              signal: controller.signal,
+              timeoutMs,
+            },
+          );
+        }
         const nextPlan =
           activeInput === "give"
             ? planOffer({

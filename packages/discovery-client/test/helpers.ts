@@ -35,6 +35,29 @@ export function makeOneSidedMarket(solves: Side, overrides: Partial<Market> = {}
   return makeMarket({ ...disabled, ...overrides });
 }
 
+/**
+ * A same-asset corridor (RFQ) market: BTC on both sides, the quote side on
+ * `corridor`, no feed fields — the price is identically 1 and fee_bps is the
+ * whole spread.
+ */
+export function makeCorridorMarket(
+  corridor: "lightning" | "onchain",
+  overrides: Partial<Market> = {},
+): Market {
+  return {
+    pair: `BTC/${corridor}:BTC`,
+    base_asset: { ...BTC },
+    quote_asset: { ...BTC },
+    quote_corridor: corridor,
+    fee_bps: 25,
+    min_base_amount: "1000",
+    max_base_amount: "5000000",
+    min_quote_amount: "1000",
+    max_quote_amount: "5000000",
+    ...overrides,
+  };
+}
+
 /** Route-table fetch stub: unknown URLs 404, listed URLs return their body/status. */
 export function mockFetch(routes: Record<string, { status?: number; body: string }>): FetchLike {
   return async (url) => {

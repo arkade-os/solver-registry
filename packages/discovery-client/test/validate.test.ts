@@ -31,6 +31,25 @@ test("validateCard: accepts an optionally signed card", () => {
   assert.equal(validateCard(c).ok, true);
 });
 
+test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => {
+  const c = validCard();
+  c.markets[0] = {
+    ...c.markets[0],
+    pair: "BTC/lightning:BTC",
+    quote_asset: { ...c.markets[0].base_asset },
+    quote_corridor: "lightning",
+  };
+  delete c.markets[0].price_feed;
+  delete c.markets[0].price_feed_schema;
+  delete c.markets[0].price_decimals;
+  // Card-level format checks only — signature verification is the reducer's job.
+  c.discovery_pubkey = "d".repeat(64);
+  c.sig = "0".repeat(128);
+  c.relays = ["wss://relay.example.com"];
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a one-sided market (the other side disabled with 0/0)", () => {
   for (const solves of ["base", "quote"] as const) {
     const r = validateCard({ version: 0, name: "alice", markets: [makeOneSidedMarket(solves)] });
@@ -90,7 +109,71 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   {
     name: "pair/ticker mismatch",
     mutate: (c) => (c.markets[0].pair = "BTC/USD"),
-    expect: /does not match asset tickers/,
+    expect: /does not match the sides' labels/,
+  },
+  {
+    name: "identical legs",
+    mutate: (c) => {
+      c.markets[0].pair = "BTC/BTC";
+      c.markets[0].quote_asset = { ...c.markets[0].base_asset };
+      delete c.markets[0].price_feed;
+      delete c.markets[0].price_feed_schema;
+      delete c.markets[0].price_decimals;
+    },
+    expect: /market legs must differ/,
+  },
+  {
+    name: "feed on a same-asset corridor market",
+    mutate: (c) => {
+      c.markets[0].pair = "BTC/lightning:BTC";
+      c.markets[0].quote_asset = { ...c.markets[0].base_asset };
+      c.markets[0].quote_corridor = "lightning";
+    },
+    expect: /must be absent on a same-asset market/,
+  },
+  {
+    name: "cross-asset market without a feed",
+    mutate: (c) => {
+      delete c.markets[0].price_feed;
+      delete c.markets[0].price_feed_schema;
+      delete c.markets[0].price_decimals;
+    },
+    expect: /is required when the sides carry different assets/,
+  },
+  {
+    name: "arkade side not base",
+    mutate: (c) => {
+      c.markets[0].pair = "lightning:BTC/USDT";
+      c.markets[0].base_corridor = "lightning";
+    },
+    expect: /must be the base side/,
+  },
+  {
+    name: "unknown corridor",
+    mutate: (c) => (c.markets[0].quote_corridor = "liquid"),
+    expect: /quote_corridor must be one of arkade, lightning, onchain/,
+  },
+  {
+    name: "corridor market without the RFQ rendezvous",
+    mutate: (c) => {
+      c.markets[0].pair = "BTC/lightning:BTC";
+      c.markets[0].quote_asset = { ...c.markets[0].base_asset };
+      c.markets[0].quote_corridor = "lightning";
+      delete c.markets[0].price_feed;
+      delete c.markets[0].price_feed_schema;
+      delete c.markets[0].price_decimals;
+    },
+    expect: /relays is required when any market has a non-arkade corridor/,
+  },
+  {
+    name: "non-wss relay",
+    mutate: (c) => (c.relays = ["https://relay.example.com"]),
+    expect: /must be a wss:\/\/ URL/,
+  },
+  {
+    name: "empty relays",
+    mutate: (c) => (c.relays = []),
+    expect: /relays/,
   },
   { name: "bad asset id", mutate: (c) => (c.markets[0].base_asset.id = "xyz"), expect: /id/ },
   {

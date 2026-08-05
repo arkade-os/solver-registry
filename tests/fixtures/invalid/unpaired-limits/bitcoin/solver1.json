@@ -3,7 +3,7 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "BTC/BTC",
+      "pair": "BTC/USDT",
       "base_asset": {
         "id": "btc",
         "name": "Bitcoin",
@@ -11,10 +11,10 @@
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "Tether USD",
+        "ticker": "USDT",
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/x",
       "price_feed_schema": {

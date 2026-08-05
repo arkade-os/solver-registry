@@ -6,8 +6,22 @@
 // mirror `schema/card.schema.json` / `schema/index.schema.json` and the extra
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
-import type { AssetInfo, Card, NetworkIndex } from "./types.ts";
-import { AMOUNT_PATTERN, ASSET_KEYS, LIMIT_KEYS, MAX_ASSET_DECIMALS, isAmount, isNetwork } from "./types.ts";
+import type { AssetInfo, Card, NetworkIndex, Side } from "./types.ts";
+import {
+  AMOUNT_PATTERN,
+  ASSET_KEYS,
+  CORRIDOR_KEYS,
+  CORRIDORS,
+  LIMIT_KEYS,
+  MAX_ASSET_DECIMALS,
+  MAX_RELAYS,
+  isAmount,
+  isCorridor,
+  isNetwork,
+  isRfqMarket,
+  marketCorridor,
+  pairSideLabel,
+} from "./types.ts";
 
 export interface ValidationResult<T> {
   ok: boolean;
@@ -18,8 +32,12 @@ export interface ValidationResult<T> {
 
 const ASSET_ID = /^(btc|[0-9a-f]{68})$/;
 const NAME = /^[a-z0-9-]+$/;
-const PAIR = /^[A-Za-z0-9._-]{1,16}\/[A-Za-z0-9._-]{1,16}$/;
+// A pair side is a ticker, optionally prefixed by a non-default corridor
+// ("lightning:BTC"); the arkade corridor is unmarked. Kept in sync with the
+// schemas' pair pattern and CORRIDORS (pinned by tests).
+const PAIR = /^(?:(?:lightning|onchain):)?[A-Za-z0-9._-]{1,16}\/(?:(?:lightning|onchain):)?[A-Za-z0-9._-]{1,16}$/;
 const PUBKEY = /^[0-9a-f]{64}$/;
+const RELAY = /^wss:\/\/[^\s]+$/;
 const SIG = /^[0-9a-f]{128}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
@@ -88,6 +106,8 @@ const MARKET_KEYS = new Set([
   "pair",
   "base_asset",
   "quote_asset",
+  "base_corridor",
+  "quote_corridor",
   "price_feed",
   "price_feed_schema",
   "price_decimals",
@@ -136,22 +156,91 @@ export function marketLimitErrors(market: { [key in LimitKey]?: unknown }): stri
 
 /**
  * The pair-label rule, shared with the reducer: `pair` must equal
- * "<base-ticker>/<quote-ticker>". Returns the error message, or null when it
- * matches — or when the fields are too malformed to compare, which the schema
- * layer reports instead.
+ * "<base-label>/<quote-label>", where a side's label is its ticker on the
+ * arkade corridor and "<corridor>:<ticker>" otherwise. Returns the error
+ * message, or null when it matches — or when the fields are too malformed to
+ * compare, which the schema layer reports instead.
  */
 export function marketPairError(market: {
   pair?: unknown;
   base_asset?: unknown;
   quote_asset?: unknown;
+  base_corridor?: unknown;
+  quote_corridor?: unknown;
 }): string | null {
   const base = (market.base_asset as AssetInfo | undefined)?.ticker;
   const quote = (market.quote_asset as AssetInfo | undefined)?.ticker;
   if (typeof market.pair !== "string" || typeof base !== "string" || typeof quote !== "string") {
     return null;
   }
-  const expected = `${base}/${quote}`;
-  return market.pair === expected ? null : `pair "${market.pair}" does not match asset tickers "${expected}"`;
+  const expected = `${pairSideLabel(marketCorridor(market, "base"), base)}/${pairSideLabel(
+    marketCorridor(market, "quote"),
+    quote,
+  )}`;
+  return market.pair === expected ? null : `pair "${market.pair}" does not match the sides' labels "${expected}"`;
+}
+
+const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const;
+
+/**
+ * Corridor cross-field rules, shared with the reducer so CI and clients
+ * reject the same cards with the same words. Data-dependent, so they live
+ * here rather than in the JSON schemas (draft-07 cannot compare two fields):
+ *
+ * - the two legs (corridor + asset id) must differ — a market trading a leg
+ *   against itself is a null trade, and the pre-corridor "BTC/BTC" shape it
+ *   used to smuggle is exactly the ambiguity corridors remove;
+ * - when exactly one side is on the arkade corridor it must be the base
+ *   side, so equivalent corridor markets group under one canonical key;
+ * - a same-asset market prices identically at 1: the feed fields must be
+ *   absent (`fee_bps` is the whole spread; executable terms arrive by RFQ);
+ * - a cross-asset market needs all three feed fields — the schema no longer
+ *   requires them unconditionally, so their presence is enforced here.
+ *
+ * Shape-defensive: sides whose corridor field is present but not a known
+ * corridor are reported here (mirroring the schema enum) and read as arkade
+ * for the remaining rules.
+ */
+export function marketCorridorErrors(market: {
+  [key in (typeof CORRIDOR_KEYS)[Side] | (typeof FEED_KEYS)[number]]?: unknown;
+} & {
+  base_asset?: unknown;
+  quote_asset?: unknown;
+}): string[] {
+  const errors: string[] = [];
+  for (const side of ["base", "quote"] as const) {
+    const raw = market[CORRIDOR_KEYS[side]];
+    if (raw !== undefined && !isCorridor(raw)) {
+      errors.push(`${CORRIDOR_KEYS[side]} must be one of ${CORRIDORS.join(", ")}`);
+    }
+  }
+
+  const baseId = (market.base_asset as AssetInfo | undefined)?.id;
+  const quoteId = (market.quote_asset as AssetInfo | undefined)?.id;
+  if (typeof baseId !== "string" || typeof quoteId !== "string") return errors;
+
+  const baseCorridor = marketCorridor(market, "base");
+  const quoteCorridor = marketCorridor(market, "quote");
+  if (baseId === quoteId && baseCorridor === quoteCorridor) {
+    errors.push("market legs must differ: same corridor and asset on both sides is a null trade");
+  }
+  if (quoteCorridor === "arkade" && baseCorridor !== "arkade") {
+    errors.push("the arkade-corridor side must be the base side when only one side is arkade");
+  }
+
+  const presentFeedKeys = FEED_KEYS.filter((key) => market[key] !== undefined);
+  if (baseId === quoteId) {
+    for (const key of presentFeedKeys) {
+      errors.push(`${key} must be absent on a same-asset market (the price is identically 1; fee_bps is the spread)`);
+    }
+  } else {
+    for (const key of FEED_KEYS) {
+      if (market[key] === undefined) {
+        errors.push(`${key} is required when the sides carry different assets`);
+      }
+    }
+  }
+  return errors;
 }
 
 /**
@@ -170,16 +259,25 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   checkAsset(errors, `${path}/base_asset`, v.base_asset, strict);
   checkAsset(errors, `${path}/quote_asset`, v.quote_asset, strict);
 
-  // pair label must equal the two tickers (identity still lives in the ids).
+  // pair label must equal the sides' labels (identity still lives in the
+  // corridor-qualified leg ids).
   const pairError = marketPairError(v);
   if (pairError) add(errors, path, pairError);
 
-  if (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//)) {
+  // Feed fields are format-checked when present; whether they must be
+  // present or absent is the corridor rule set's call (marketCorridorErrors,
+  // below), since it depends on whether the sides carry the same asset.
+  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//))) {
     add(errors, `${path}/price_feed`, "must be an http[s]:// URL");
   }
-  checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
-  checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
+  if (v.price_feed_schema !== undefined) {
+    checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
+  }
+  if (v.price_decimals !== undefined) {
+    checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
+  }
   checkIntRange(errors, `${path}/fee_bps`, v.fee_bps, 0, 10000);
+  for (const message of marketCorridorErrors(v)) add(errors, path, message);
 
   // Per-side size bounds, always present as canonical decimal strings; the
   // cross-field rules (min <= max, min >= 1 when enabled, one side enabled)
@@ -198,7 +296,48 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   for (const message of marketLimitErrors(v)) add(errors, path, message);
 }
 
-/** An index entry is a market plus reducer-added provenance (`solver`, optional pubkey). */
+/** Whether any of a card's markets has a non-arkade corridor (shape-defensive). */
+export function cardHasRfqMarket(card: { markets?: unknown }): boolean {
+  return Array.isArray(card.markets) && card.markets.some((m) => isObject(m) && isRfqMarket(m));
+}
+
+/**
+ * The card-level RFQ rendezvous rule, shared with the reducer: a card whose
+ * markets include any non-arkade corridor advertises where makers negotiate,
+ * so `discovery_pubkey` and `relays` are required. (For pure spot cards they
+ * stay optional — the PR is the authentication and there is nothing to
+ * contact.) The registry additionally requires `sig` on such cards — that
+ * check lives in the reducer, not here: the signature authenticates the
+ * listing, while a user-pinned local card is the user's own trust decision
+ * and this dependency-free client carries no verification code.
+ */
+export function cardRfqErrors(card: {
+  discovery_pubkey?: unknown;
+  relays?: unknown;
+  markets?: unknown;
+}): string[] {
+  if (!cardHasRfqMarket(card)) return [];
+  const errors: string[] = [];
+  for (const key of ["discovery_pubkey", "relays"] as const) {
+    if (card[key] === undefined) {
+      errors.push(`${key} is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)`);
+    }
+  }
+  return errors;
+}
+
+function checkRelays(errors: string[], path: string, v: unknown): void {
+  if (v === undefined) return;
+  if (!Array.isArray(v) || v.length < 1 || v.length > MAX_RELAYS) {
+    add(errors, path, `must be an array of 1..${MAX_RELAYS} relay URLs`);
+    return;
+  }
+  v.forEach((relay, i) => {
+    checkPattern(errors, `${path}/${i}`, relay, RELAY, "must be a wss:// URL");
+  });
+}
+
+/** An index entry is a market plus reducer-added provenance (`solver`, optional pubkey/relays). */
 function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   checkMarket(errors, path, v, false);
   if (!isObject(v)) return;
@@ -206,9 +345,10 @@ function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   if (v.discovery_pubkey !== undefined) {
     checkPattern(errors, `${path}/discovery_pubkey`, v.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");
   }
+  checkRelays(errors, `${path}/relays`, v.relays);
 }
 
-const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "markets"]);
+const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "relays", "markets"]);
 
 /**
  * Validate a solver card (e.g. a user-pinned local card). Strict: mirrors
@@ -231,11 +371,13 @@ export function validateCard(input: unknown): ValidationResult<Card> {
       add(errors, "/", "sig requires discovery_pubkey");
     }
   }
+  checkRelays(errors, "/relays", input.relays);
   if (!Array.isArray(input.markets) || input.markets.length < 1) {
     add(errors, "/markets", "must be a non-empty array");
   } else {
     input.markets.forEach((m, i) => checkMarket(errors, `/markets/${i}`, m, true));
   }
+  for (const message of cardRfqErrors(input)) add(errors, "/", message);
 
   return errors.length === 0 ? { ok: true, errors: [], value: input as unknown as Card } : { ok: false, errors };
 }

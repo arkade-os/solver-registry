@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { toAtomic, fromAtomic, displayPriceString } from "../src/assets.ts";
 import { planOffer, quoteOffer } from "../src/offer.ts";
 import type { Market } from "../src/types.ts";
-import { makeMarket, mockFetch } from "./helpers.ts";
+import { makeCorridorMarket, makeMarket, mockFetch } from "./helpers.ts";
 
 // --- conversion (Arkade Assets are 8-decimal) ---
 
@@ -186,4 +186,36 @@ test("quoteOffer: one call fetches the feed then plans (mock fetch)", async () =
   const plan = await quoteOffer(arkadeMarket(), { give: "base", giveAmount: "0.01", safetyBps: 50, fetchImpl });
   assert.equal(plan.receive.display, "3739.84");
   assert.equal(plan.receive.atomic, 373_984_000_000n);
+});
+
+test("planOffer: a same-asset corridor market prices at exactly 1, conceding only the spread", () => {
+  const plan = planOffer({
+    market: makeCorridorMarket("lightning", { fee_bps: 25 }),
+    give: "base",
+    giveAmount: 100_000n,
+    safetyBps: 50,
+  });
+  // floor(100_000 * 1 * (10000 - 25 - 50) / 10000)
+  assert.equal(plan.receive.atomic, 99_250n);
+  assert.equal(plan.priceDisplay, "1.00000000");
+  assert.equal(plan.limits.withinLimits, true);
+});
+
+test("planOffer: still demands a feed value for a cross-asset market", () => {
+  assert.throws(
+    () => planOffer({ market: makeMarket(), give: "base", giveAmount: 100_000n }),
+    /needs feedValue/,
+  );
+});
+
+test("quoteOffer: fetches nothing for a same-asset corridor market", async () => {
+  // An empty route table 404s any fetch, so success proves nothing was fetched.
+  const plan = await quoteOffer(makeCorridorMarket("onchain", { fee_bps: 40 }), {
+    give: "base",
+    giveAmount: 100_000n,
+    safetyBps: 0,
+    fetchImpl: mockFetch({}),
+  });
+  // floor(100_000 * (10000 - 40) / 10000)
+  assert.equal(plan.receive.atomic, 99_600n);
 });

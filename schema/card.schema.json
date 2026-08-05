@@ -16,6 +16,26 @@
     ]
   },
   "definitions": {
+    "corridor": {
+      "type": "string",
+      "enum": [
+        "arkade",
+        "lightning",
+        "onchain"
+      ],
+      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market). A market with any non-arkade side is a corridor (RFQ) market: terms are negotiated per-trade via the card's discovery_pubkey + relays, not read from a price feed."
+    },
+    "relays": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^wss://",
+        "description": "A Nostr relay URL the solver listens on."
+      }
+    },
     "asset": {
       "type": "object",
       "additionalProperties": false,
@@ -98,6 +118,10 @@
       "pattern": "^[0-9a-f]{128}$",
       "description": "BIP340 Schnorr signature by discovery_pubkey over sha256(canonical_json)."
     },
+    "relays": {
+      "$ref": "#/definitions/relays",
+      "description": "Nostr relay URLs the solver listens on. Required — with discovery_pubkey and sig — when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
+    },
     "markets": {
       "type": "array",
       "minItems": 1,
@@ -108,9 +132,6 @@
           "pair",
           "base_asset",
           "quote_asset",
-          "price_feed",
-          "price_feed_schema",
-          "price_decimals",
           "fee_bps",
           "min_base_amount",
           "max_base_amount",
@@ -136,8 +157,8 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9._-]{1,16}/[A-Za-z0-9._-]{1,16}$",
-            "description": "Display pair \"<base-ticker>/<quote-ticker>\"; must equal base_asset.ticker + \"/\" + quote_asset.ticker. Canonical identity lives in base_asset.id / quote_asset.id."
+            "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$",
+            "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise (e.g. \"BTC/USDT\", \"BTC/lightning:BTC\"). Must equal the labels derived from the sides' corridors and tickers (the reducer enforces this). Canonical identity is the corridor-qualified leg pair."
           },
           "base_asset": {
             "$ref": "#/definitions/asset",
@@ -147,10 +168,18 @@
             "$ref": "#/definitions/asset",
             "description": "Display metadata for the pair's quote side."
           },
+          "base_corridor": {
+            "$ref": "#/definitions/corridor"
+          },
+          "quote_corridor": {
+            "$ref": "#/definitions/corridor",
+            "description": "The quote side's corridor; absent means \"arkade\". When exactly one side is on the arkade corridor it must be the base side (the reducer enforces this), so equivalent corridor markets group under one canonical key."
+          },
           "price_feed": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https://"
+            "pattern": "^https://",
+            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 — fee_bps is the whole spread and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"

@@ -8,7 +8,7 @@ import {
   bestMarket,
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
-import { makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
+import { makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
 const GENERATED_AT = 1_700_000_000;
@@ -173,6 +173,43 @@ test("one-sided markets: selection and listing avoid a side no solver can pay ou
   const onlyErin = res.markets.filter((m) => m.solver === "erin");
   assert.equal(bestMarket(onlyErin, { baseId: "btc", quoteId: USDT, wantSide: "base" }), null);
   assert.deepEqual(listMarkets(onlyErin)[0].solvable, { base: 0, quote: 1 });
+});
+
+test("corridor markets: leg-pair grouping, corridor-aware selection, relays carried through", async () => {
+  // One solver quoting the same BTC/BTC asset pair over two different
+  // corridors, plus a spot market — three distinct leg pairs, not one.
+  const grace = {
+    version: 0,
+    name: "grace",
+    discovery_pubkey: "d".repeat(64),
+    sig: "0".repeat(128), // format-checked only; verification is the reducer's job
+    relays: ["wss://relay.example.com"],
+    markets: [
+      makeCorridorMarket("lightning", { fee_bps: 25 }),
+      makeCorridorMarket("onchain", { fee_bps: 40 }),
+      makeMarket({ fee_bps: 30 }),
+    ],
+  };
+  const res = await discover({ localCards: [{ card: grace }], fetchImpl: mockFetch(routes), now: NOW });
+  assert.equal(res.markets.length, 3);
+
+  const pairs = listMarkets(res.markets);
+  assert.deepEqual(
+    pairs.map((p) => ({ pair: p.pair, base: p.base_corridor, quote: p.quote_corridor })),
+    [
+      { pair: "BTC/USDT", base: "arkade", quote: "arkade" },
+      { pair: "BTC/lightning:BTC", base: "arkade", quote: "lightning" },
+      { pair: "BTC/onchain:BTC", base: "arkade", quote: "onchain" },
+    ],
+  );
+
+  // Selection defaults to arkade legs: a bare btc/btc query matches no spot
+  // market and must not silently pick a corridor one.
+  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc" }), null);
+  const lightning = bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "lightning" })!;
+  assert.equal(lightning.fee_bps, 25);
+  assert.deepEqual(lightning.relays, ["wss://relay.example.com"]);
+  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "onchain" })!.fee_bps, 40);
 });
 
 test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {

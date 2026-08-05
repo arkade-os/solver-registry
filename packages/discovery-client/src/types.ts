@@ -15,6 +15,31 @@ export function isNetwork(value: unknown): value is Network {
   return (NETWORKS as readonly string[]).includes(value as string);
 }
 
+/**
+ * The corridor a market side settles on. `arkade` is the unmarked default —
+ * every v0 spot market has it on both sides. A non-arkade side makes the
+ * market a corridor (RFQ) market: terms are negotiated per-trade over the
+ * card's relays instead of read from a price feed, and the two sides of the
+ * pair live on different rails (e.g. an Arkade balance vs a Lightning
+ * payment or an L1 output).
+ */
+export const CORRIDORS = ["arkade", "lightning", "onchain"] as const;
+export type Corridor = (typeof CORRIDORS)[number];
+export const DEFAULT_CORRIDOR = "arkade" as const satisfies Corridor;
+
+export function isCorridor(value: unknown): value is Corridor {
+  return (CORRIDORS as readonly string[]).includes(value as string);
+}
+
+/** The per-side corridor field names — the single side -> field mapping. */
+export const CORRIDOR_KEYS = {
+  base: "base_corridor",
+  quote: "quote_corridor",
+} as const;
+
+/** Inclusive upper bound on a card's `relays` list. */
+export const MAX_RELAYS = 8;
+
 /** The asset descriptor's exact wire key set. Tests pin both schemas' asset definition to this. */
 export const ASSET_KEYS = ["id", "name", "ticker", "decimals"] as const;
 
@@ -84,16 +109,31 @@ export const LIMIT_KEYS = {
 
 /** A single market as advertised by a solver. */
 export interface Market {
-  /** Display label "<base-ticker>/<quote-ticker>"; identity is (base_asset.id, quote_asset.id). */
+  /**
+   * Display label "<base-label>/<quote-label>", where a side's label is its
+   * ticker when the side's corridor is arkade and "<corridor>:<ticker>"
+   * otherwise (e.g. "BTC/USDT", "BTC/lightning:BTC"). Identity is the
+   * corridor-qualified leg pair — see {@link marketPairKey}.
+   */
   pair: string;
   base_asset: AssetInfo;
   quote_asset: AssetInfo;
-  /** Exact URL the maker MUST price from. CORS-permissive so browsers can fetch it. */
-  price_feed: string;
+  /** The base side's corridor. Absent means "arkade" (every spot market). */
+  base_corridor?: Corridor;
+  /** The quote side's corridor. Absent means "arkade" (every spot market). */
+  quote_corridor?: Corridor;
+  /**
+   * Exact URL the maker MUST price from. CORS-permissive so browsers can
+   * fetch it. Required when the two sides carry different assets; MUST be
+   * absent (with the other feed fields) on a same-asset corridor market,
+   * whose price is identically 1 — `fee_bps` is the whole spread and the
+   * executable terms arrive in the solver's RFQ quote.
+   */
+  price_feed?: string;
   /** Response contract for `price_feed`; clients MUST use this to extract the feed value. */
-  price_feed_schema: PriceFeedSchema;
+  price_feed_schema?: PriceFeedSchema;
   /** Feed value / 10^price_decimals = price in quote-atomic-units per base-atomic-unit. */
-  price_decimals: number;
+  price_decimals?: number;
   /** The solver's spread, in basis points. Sort key: lower is better expected execution. */
   fee_bps: number;
   /**
@@ -115,6 +155,13 @@ export interface Card {
   name: string;
   discovery_pubkey?: string;
   sig?: string;
+  /**
+   * Nostr relay URLs (wss://) the solver listens on. Required — along with
+   * `discovery_pubkey` and `sig` — when any market is a corridor (RFQ)
+   * market: the pubkey and relays are the rendezvous makers address
+   * request-for-quote messages to, so they must be self-authenticating.
+   */
+  relays?: string[];
   markets: Market[];
 }
 
@@ -122,6 +169,8 @@ export interface Card {
 export interface IndexMarket extends Market {
   solver: string;
   discovery_pubkey?: string;
+  /** The solver card's `relays`, propagated by the reducer when present. */
+  relays?: string[];
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */
@@ -132,4 +181,65 @@ export interface NetworkIndex {
   generated_at: number;
   commit: string;
   markets: IndexMarket[];
+}
+
+// Corridor helpers. All shape-defensive (they run inside validators on
+// unvalidated input, so every field reads as unknown): a missing or
+// malformed corridor field reads as the arkade default, and missing asset
+// ids surface as "undefined" in keys rather than throwing.
+
+type MarketLike = {
+  base_asset?: unknown;
+  quote_asset?: unknown;
+  base_corridor?: unknown;
+  quote_corridor?: unknown;
+};
+
+/** A side's corridor, defaulting the absent (and any malformed) field to arkade. */
+export function marketCorridor(market: MarketLike, side: Side): Corridor {
+  const raw = market[CORRIDOR_KEYS[side]];
+  return isCorridor(raw) ? raw : DEFAULT_CORRIDOR;
+}
+
+/**
+ * Whether any side settles off the arkade corridor. Such a market is
+ * negotiated per-trade over RFQ (via the card's `discovery_pubkey` +
+ * `relays`) rather than filled from the arkd stream, so the card-level
+ * rendezvous fields become required.
+ */
+export function isRfqMarket(market: MarketLike): boolean {
+  return marketCorridor(market, "base") !== DEFAULT_CORRIDOR || marketCorridor(market, "quote") !== DEFAULT_CORRIDOR;
+}
+
+function assetIdOf(value: unknown): string | undefined {
+  const id = (value as AssetInfo | undefined)?.id;
+  return typeof id === "string" ? id : undefined;
+}
+
+/** Whether both sides carry the same asset id — the price is identically 1 and no feed applies. */
+export function isSameAssetMarket(market: MarketLike): boolean {
+  const baseId = assetIdOf(market.base_asset);
+  return baseId !== undefined && baseId === assetIdOf(market.quote_asset);
+}
+
+/** One side's canonical leg identity, "<corridor>:<asset-id>". */
+export function marketLegKey(market: MarketLike, side: Side): string {
+  const asset = side === "base" ? market.base_asset : market.quote_asset;
+  return `${marketCorridor(market, side)}:${assetIdOf(asset)}`;
+}
+
+/**
+ * The market's canonical identity and grouping key: the corridor-qualified
+ * leg pair "<base-corridor>:<base-id>/<quote-corridor>:<quote-id>". This —
+ * never the `pair` label, and no longer the bare id pair — is what the
+ * reducer sorts by and clients group by: two BTC/BTC markets on different
+ * corridors are different markets.
+ */
+export function marketPairKey(market: MarketLike): string {
+  return `${marketLegKey(market, "base")}/${marketLegKey(market, "quote")}`;
+}
+
+/** A side's display label for the `pair` field: the bare ticker on the arkade corridor, "<corridor>:<ticker>" otherwise. */
+export function pairSideLabel(corridor: Corridor, ticker: string): string {
+  return corridor === DEFAULT_CORRIDOR ? ticker : `${corridor}:${ticker}`;
 }

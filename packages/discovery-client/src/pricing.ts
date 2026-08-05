@@ -93,7 +93,7 @@ export function parseDecimal(value: string | number): Rational {
  */
 export function deriveAtomicPrice(
   feedValue: string | number,
-  opts: Pick<Market, "price_decimals">,
+  opts: { price_decimals: number },
 ): Rational {
   const f = parseDecimal(feedValue);
   // value / 10^price_decimals

@@ -241,10 +241,12 @@
         regtest: "http://localhost:7080",
       };
 
-      // A pair side: BTC as plain text, an asset as an explorer link. Label is the
-      // ticker; the canonical asset id lives in base_asset.id / quote_asset.id.
-      function assetCell(network, asset) {
-        const label = asset.ticker;
+      // A pair side: BTC as plain text, an asset as an explorer link. Label is
+      // the ticker, prefixed with the side's corridor when it is not the
+      // arkade default (e.g. "lightning:BTC"); the canonical identity is the
+      // corridor-qualified leg.
+      function assetCell(network, asset, corridor) {
+        const label = corridor && corridor !== "arkade" ? `${corridor}:${asset.ticker}` : asset.ticker;
         const title = `${asset.name} · decimals ${asset.decimals ?? "?"} · ${asset.id}`;
         const explorer = EXPLORERS[network];
         if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
@@ -319,14 +321,17 @@
         const priceCells = [];
 
         // Wallets validate pasted JSON against the card schema, so re-wrap the
-        // flattened index row as a one-market card: hoist solver/discovery_pubkey
-        // back to the card level and restore version/name.
+        // flattened index row as a one-market card: hoist solver, pubkey, and
+        // relays back to the card level and restore version/name. (No sig — it
+        // signed the full original card, not this re-wrap; a local pin is the
+        // user's own trust decision.)
         function copyButton(indexMarket) {
-          const { solver, discovery_pubkey, ...market } = indexMarket;
+          const { solver, discovery_pubkey, relays, ...market } = indexMarket;
           const card = {
             version: 0,
             name: solver,
             ...(discovery_pubkey ? { discovery_pubkey } : {}),
+            ...(relays ? { relays } : {}),
             markets: [market],
           };
           const btn = el("button", { class: "copy", type: "button", title: "Copy solver card JSON for wallets", text: "Copy JSON" });
@@ -354,14 +359,20 @@
 
         for (const m of index.markets) {
           const priceCell = el("td", { class: "num price", text: "…" });
-          priceCells.push([m.price_feed, m.price_feed_schema, priceCell]);
+          if (m.price_feed) {
+            priceCells.push([m.price_feed, m.price_feed_schema, priceCell]);
+          } else {
+            // A same-asset corridor market has no feed: the price is
+            // identically 1 and the executable terms arrive by RFQ.
+            priceCell.textContent = "1:1 (RFQ)";
+          }
           tbody.appendChild(
             el("tr", {}, [
               el("td", {}, [
                 el("code", {}, [
-                  assetCell(network, m.base_asset),
+                  assetCell(network, m.base_asset, m.base_corridor),
                   el("span", { text: "/" }),
-                  assetCell(network, m.quote_asset),
+                  assetCell(network, m.quote_asset, m.quote_corridor),
                 ]),
               ]),
               el("td", { text: m.solver }),

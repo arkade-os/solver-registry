@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
-import { AMOUNT_PATTERN, ASSET_KEYS, MAX_ASSET_DECIMALS } from "../packages/discovery-client/src/types.ts";
+import { AMOUNT_PATTERN, ASSET_KEYS, CORRIDORS, MAX_ASSET_DECIMALS, MAX_RELAYS } from "../packages/discovery-client/src/types.ts";
 import { validateIndex } from "../packages/discovery-client/src/validate.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,12 +43,22 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
 // The signed-solver fixture is signed with the BIP340 test-vector #1 secret key
 // (b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef); re-sign
 // with scripts/canonical.ts signCard() whenever the fixture's content changes.
-test("signed card: valid signature verifies and discovery_pubkey propagates to the index", () => {
+test("signed card: valid signature verifies; discovery_pubkey and relays propagate to the index", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
   const entry = result.index!.markets.find((m) => m.solver === "signed-solver");
   assert.ok(entry);
   assert.equal(entry!.discovery_pubkey, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659");
+  assert.deepEqual(entry!.relays, ["wss://relay.example.com", "wss://relay2.example.com"]);
+});
+
+test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
+  const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.index!.markets.map((m) => m.pair),
+    ["BTC/lightning:BTC", "BTC/onchain:BTC"],
+  );
 });
 
 test("mixed: a broken network fails independently without blocking sibling networks", () => {
@@ -67,7 +77,16 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "duplicate-name", expect: "duplicate name" },
   { case: "bad-pair", expect: "must match pattern" },
   { case: "bad-asset-id", expect: "must match pattern" },
-  { case: "pair-ticker-mismatch", expect: "does not match asset tickers" },
+  { case: "pair-ticker-mismatch", expect: "does not match the sides' labels" },
+  { case: "identical-legs", expect: "market legs must differ" },
+  { case: "feed-on-same-asset", expect: "must be absent on a same-asset market" },
+  { case: "missing-feed", expect: "is required when the sides carry different assets" },
+  { case: "corridor-not-base", expect: "must be the base side" },
+  { case: "bad-corridor", expect: "must be equal to one of the allowed values" },
+  { case: "corridor-pair-label", expect: "does not match the sides' labels" },
+  { case: "bad-relay", expect: "must match pattern" },
+  { case: "rfq-unsigned", expect: "discovery_pubkey is required when any market has a non-arkade corridor" },
+  { case: "rfq-missing-relays", expect: "relays is required when any market has a non-arkade corridor" },
   { case: "bad-price-feed", expect: "must match pattern" },
   { case: "bad-price-decimals", expect: "must be <=" },
   { case: "bad-fee-bps", expect: "must be <=" },
@@ -125,6 +144,20 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
     assert.equal(asset.properties.decimals.minimum, 0, name);
     assert.equal(asset.properties.decimals.maximum, MAX_ASSET_DECIMALS, name);
   }
+});
+
+// The corridor vocabulary is likewise declared once per artifact; a schema-only
+// corridor (or a client-only one) would let cards merge that clients can't
+// group, or reject cards CI accepted.
+test("the schemas' corridor definitions match the client's CORRIDORS and relay bound", () => {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
+    const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
+    assert.deepEqual(schema.definitions.corridor.enum, [...CORRIDORS], name);
+  }
+  const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
+  assert.equal(card.definitions.relays.maxItems, MAX_RELAYS);
+  const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
+  assert.equal(index.properties.markets.items.properties.relays.maxItems, MAX_RELAYS);
 });
 
 // Nothing else runs an index through the client's hand-rolled validator, so a

@@ -5,7 +5,7 @@
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
-      "pair": "BTC/BTC",
+      "pair": "BTC/USDT",
       "base_asset": {
         "id": "btc",
         "name": "Bitcoin",
@@ -13,10 +13,10 @@
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "Tether USD",
+        "ticker": "USDT",
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/alice",
       "price_feed_schema": {
@@ -32,7 +32,7 @@
       "solver": "alice"
     },
     {
-      "pair": "BTC/BTC",
+      "pair": "BTC/USDT",
       "base_asset": {
         "id": "btc",
         "name": "Bitcoin",
@@ -40,10 +40,10 @@
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "Tether USD",
+        "ticker": "USDT",
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/carol",
       "price_feed_schema": {
@@ -59,7 +59,7 @@
       "solver": "carol"
     },
     {
-      "pair": "BTC/BTC",
+      "pair": "BTC/USDT",
       "base_asset": {
         "id": "btc",
         "name": "Bitcoin",
@@ -67,10 +67,10 @@
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "Tether USD",
+        "ticker": "USDT",
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/bob",
       "price_feed_schema": {
