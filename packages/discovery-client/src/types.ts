@@ -159,12 +159,12 @@ export interface Card {
   discovery_pubkey?: string;
   sig?: string;
   /**
-   * Nostr relay URLs (wss://) the solver listens on. Required — along with
-   * `discovery_pubkey` and `sig` — when any market is a corridor (RFQ)
-   * market: the pubkey and relays are the rendezvous makers address
-   * request-for-quote messages to, so they must be self-authenticating.
+   * A dictionary of relay arrays (wss://), keyed by protocol (e.g. "nostr").
+   * Required — along with `discovery_pubkey` and `sig` — when any market is
+   * a corridor (RFQ) market: the pubkey and relays are the rendezvous makers
+   * address request-for-quote messages to, so they must be self-authenticating.
    */
-  relays?: string[];
+  relays?: Record<string, string[]>;
   markets: Market[];
 }
 
@@ -172,8 +172,8 @@ export interface Card {
 export interface IndexMarket extends Market {
   solver: string;
   discovery_pubkey?: string;
-  /** The solver card's `relays`, propagated by the reducer when present. */
-  relays?: string[];
+  /** The solver card's `relays` dictionary, propagated by the reducer when present. */
+  relays?: Record<string, string[]>;
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */

@@ -45,7 +45,7 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   // Card-level format checks only — signature verification is the reducer's job.
   c.discovery_pubkey = "d".repeat(64);
   c.sig = "0".repeat(128);
-  c.relays = ["wss://relay.example.com"];
+  c.relays = { nostr: ["wss://relay.example.com"] };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -70,7 +70,7 @@ test("validateCard: accepts a cross-asset corridor market carrying a feed", () =
     quote_corridor: "lightning",
   };
   c.discovery_pubkey = "d".repeat(64);
-  c.relays = ["wss://relay.example.com"];
+  c.relays = { nostr: ["wss://relay.example.com"] };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -92,7 +92,7 @@ test("validateCard: accepts a market with both sides off-rail (no canonical leg 
   delete c.markets[0].price_decimals;
   c.discovery_pubkey = "d".repeat(64);
   c.sig = "0".repeat(128);
-  c.relays = ["wss://relay.example.com"];
+  c.relays = { nostr: ["wss://relay.example.com"] };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -214,13 +214,18 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   },
   {
     name: "non-wss relay",
-    mutate: (c) => (c.relays = ["https://relay.example.com"]),
+    mutate: (c) => (c.relays = { nostr: ["https://relay.example.com"] }),
     expect: /must be a wss:\/\/ URL/,
   },
   {
-    name: "empty relays",
-    mutate: (c) => (c.relays = []),
-    expect: /relays/,
+    name: "empty relays list",
+    mutate: (c) => (c.relays = { nostr: [] }),
+    expect: /relays\/nostr/,
+  },
+  {
+    name: "bad relay protocol",
+    mutate: (c) => (c.relays = { "Nostr!": ["wss://relay.example.com"] }),
+    expect: /relays\/Nostr!/,
   },
   { name: "bad asset id", mutate: (c) => (c.markets[0].base_asset.id = "xyz"), expect: /id/ },
   {

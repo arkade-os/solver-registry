@@ -168,9 +168,9 @@ test("the schemas' corridor definitions match the client's CORRIDORS and relay b
     );
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
-  assert.equal(card.definitions.relays.maxItems, MAX_RELAYS);
+  assert.equal(card.definitions.relays.additionalProperties.maxItems, MAX_RELAYS);
   const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
-  assert.equal(index.properties.markets.items.properties.relays.maxItems, MAX_RELAYS);
+  assert.equal(index.properties.markets.items.properties.relays.additionalProperties.maxItems, MAX_RELAYS);
 });
 
 // Nothing else runs an index through the client's hand-rolled validator, so a

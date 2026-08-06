@@ -2,10 +2,12 @@
   "version": 0,
   "name": "signed-solver",
   "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-  "relays": [
-    "wss://relay.example.com",
-    "wss://relay2.example.com"
-  ],
+  "relays": {
+    "nostr": [
+      "wss://relay.example.com",
+      "wss://relay2.example.com"
+    ]
+  },
   "markets": [
     {
       "pair": "BTC/lightning:BTC",
@@ -72,5 +74,5 @@
       "max_quote_amount": "2000000"
     }
   ],
-  "sig": "62b12efb05335697d41bb2357eb715e4a30386df3b8d904cd15b90e04c6b24180ddeea0096e83b7577a41d78758cf9f54a6f81ace401246eff046d97635a2282"
+  "sig": "173ef8411b95f2d575c3d2f2d98c365313a013c7066f1e310024f2b93478b87e6ccb975e5264b360f04df908b9f1d097955562093f4129b8c381c00a6e344f62"
 }

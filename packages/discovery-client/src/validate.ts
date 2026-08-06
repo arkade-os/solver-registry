@@ -45,6 +45,7 @@ const PUBKEY = /^[0-9a-f]{64}$/;
 // — are what the checks downstream rely on. The reducer still applies the
 // strict schema to everything that merges; tighten here only if a malformed
 // relay ever survives to a maker.
+const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
 const RELAY = /^wss:\/\/[^\s]+$/;
 // ponytail: format-only — this client never verifies a signature (the
 // dependency-free constraint again; the reducer verifies at CI, local pins
@@ -353,13 +354,23 @@ export function cardRfqErrors(card: {
 
 function checkRelays(errors: string[], path: string, v: unknown): void {
   if (v === undefined) return;
-  if (!Array.isArray(v) || v.length < 1 || v.length > MAX_RELAYS) {
-    add(errors, path, `must be an array of 1..${MAX_RELAYS} relay URLs`);
+  if (!isObject(v)) {
+    add(errors, path, "must be an object");
     return;
   }
-  v.forEach((relay, i) => {
-    checkPattern(errors, `${path}/${i}`, relay, RELAY, "must be a wss:// URL");
-  });
+  for (const protocol of Object.keys(v)) {
+    if (!RELAY_PROTOCOL.test(protocol)) {
+      add(errors, `${path}/${protocol}`, 'key must match "^[a-z0-9-]+$"');
+    }
+    const list = v[protocol];
+    if (!Array.isArray(list) || list.length < 1 || list.length > MAX_RELAYS) {
+      add(errors, `${path}/${protocol}`, `must be an array of 1..${MAX_RELAYS} relay URLs`);
+      continue;
+    }
+    list.forEach((relay, i) => {
+      checkPattern(errors, `${path}/${protocol}/${i}`, relay, RELAY, "must be a wss:// URL");
+    });
+  }
 }
 
 /** An index entry is a market plus reducer-added provenance (`solver`, optional pubkey/relays). */

@@ -26,15 +26,22 @@
       "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market). A market with any non-arkade side is a corridor (RFQ) market: terms are negotiated per-trade via the card's discovery_pubkey + relays, not read from a price feed."
     },
     "relays": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 8,
-      "items": {
-        "type": "string",
-        "format": "uri",
-        "pattern": "^wss://",
-        "description": "A Nostr relay URL the solver listens on."
-      }
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 8,
+        "items": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^wss://",
+          "description": "A Nostr relay URL the solver listens on."
+        }
+      },
+      "propertyNames": {
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "description": "A dictionary of relay arrays, keyed by protocol (e.g. \"nostr\")."
     },
     "asset": {
       "type": "object",
