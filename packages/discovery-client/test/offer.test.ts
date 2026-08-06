@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toAtomic, fromAtomic, displayPriceString } from "../src/assets.ts";
+import {
+  toAtomic,
+  fromAtomic,
+  displayPrice,
+  displayPriceString,
+} from "../src/assets.ts";
 import { planOffer, quoteOffer } from "../src/offer.ts";
 import type { Market } from "../src/types.ts";
 import { makeCorridorMarket, makeMarket, mockFetch } from "./helpers.ts";
@@ -35,21 +40,75 @@ test("conversion round-trips", () => {
 
 test("displayPriceString: identity at equal decimals, scales across differing decimals", () => {
   assert.equal(
-    displayPriceString({ num: 377000n, den: 1n }, { baseDecimals: 8, quoteDecimals: 8 }),
+    displayPriceString(
+      { num: 377000n, den: 1n },
+      { baseDecimals: 8, quoteDecimals: 8 },
+    ),
     "377000.00000000",
   );
   // 1 BTC = 65000 USDT => atomic price 650 (quote 6dp / base 8dp) displays as 65000.
   assert.equal(
-    displayPriceString({ num: 650n, den: 1n }, { baseDecimals: 8, quoteDecimals: 6 }),
+    displayPriceString(
+      { num: 650n, den: 1n },
+      { baseDecimals: 8, quoteDecimals: 6 },
+    ),
     "65000.00000000",
   );
+});
+
+test("displayPrice: the same scaling, exact — the string form is its renderer", () => {
+  // Equal decimals: identity, so the rational passes through untouched.
+  assert.deepEqual(
+    displayPrice(
+      { num: 377000n, den: 1n },
+      { baseDecimals: 8, quoteDecimals: 8 },
+    ),
+    {
+      num: 377000n,
+      den: 1n,
+    },
+  );
+  // Fewer quote decimals scales the numerator; more scales the denominator.
+  assert.deepEqual(
+    displayPrice({ num: 650n, den: 1n }, { baseDecimals: 8, quoteDecimals: 6 }),
+    {
+      num: 65000n,
+      den: 1n,
+    },
+  );
+  assert.deepEqual(
+    displayPrice({ num: 1n, den: 1n }, { baseDecimals: 6, quoteDecimals: 8 }),
+    {
+      num: 1n,
+      den: 100n,
+    },
+  );
+});
+
+// Why the rational form is exported and not just the string: a consumer that
+// COMPUTES with the price (a rate row, an inversion) cannot round first.
+test("displayPrice: survives prices the string form truncates to zero", () => {
+  const decimals = { baseDecimals: 8, quoteDecimals: 8 };
+  const tiny = { num: 1n, den: 1_000_000_000n }; // 1e-9, below 8 fraction digits
+
+  assert.equal(displayPriceString(tiny, decimals), "0.00000000");
+  // The rational keeps it, so the give-side inversion is still finite and exact
+  // — off the string it would have been a division by zero.
+  const { num, den } = displayPrice(tiny, decimals);
+  assert.equal(Number(den) / Number(num), 1e9);
 });
 
 test("planOffer: names the field when a market's asset decimals are malformed", () => {
   const m = arkadeMarket() as any;
   delete m.quote_asset.decimals;
   assert.throws(
-    () => planOffer({ market: m, give: "base", giveAmount: "1", feedValue: "377000" }),
+    () =>
+      planOffer({
+        market: m,
+        give: "base",
+        giveAmount: "1",
+        feedValue: "377000",
+      }),
     /quote_asset\.decimals must be a non-negative integer/,
   );
 });
@@ -61,7 +120,12 @@ const DEPIX_ID = "4".repeat(68);
 function arkadeMarket(overrides: Partial<Market> = {}): Market {
   return makeMarket({
     pair: "BTC/DePix",
-    quote_asset: { id: DEPIX_ID, name: "Decentralized Pix", ticker: "DePix", decimals: 8 },
+    quote_asset: {
+      id: DEPIX_ID,
+      name: "Decentralized Pix",
+      ticker: "DePix",
+      decimals: 8,
+    },
     price_feed: "https://feed.example.com/depix",
     ...overrides,
   });
@@ -181,9 +245,16 @@ test("planOffer: rejects impossible wanted amounts", () => {
 
 test("quoteOffer: one call fetches the feed then plans (mock fetch)", async () => {
   const fetchImpl = mockFetch({
-    "https://feed.example.com/depix": { body: JSON.stringify({ symbol: "BTCBRL", price: "377000" }) },
+    "https://feed.example.com/depix": {
+      body: JSON.stringify({ symbol: "BTCBRL", price: "377000" }),
+    },
   });
-  const plan = await quoteOffer(arkadeMarket(), { give: "base", giveAmount: "0.01", safetyBps: 50, fetchImpl });
+  const plan = await quoteOffer(arkadeMarket(), {
+    give: "base",
+    giveAmount: "0.01",
+    safetyBps: 50,
+    fetchImpl,
+  });
   assert.equal(plan.receive.display, "3739.84");
   assert.equal(plan.receive.atomic, 373_984_000_000n);
 });
@@ -203,19 +274,23 @@ test("planOffer: a same-asset corridor market prices at exactly 1, conceding onl
 
 test("planOffer: still demands a feed value for a cross-asset market", () => {
   assert.throws(
-    () => planOffer({ market: makeMarket(), give: "base", giveAmount: 100_000n }),
+    () =>
+      planOffer({ market: makeMarket(), give: "base", giveAmount: 100_000n }),
     /needs feedValue/,
   );
 });
 
 test("quoteOffer: fetches nothing for a same-asset corridor market", async () => {
   // An empty route table 404s any fetch, so success proves nothing was fetched.
-  const plan = await quoteOffer(makeCorridorMarket("onchain", { fee_bps: 40 }), {
-    give: "base",
-    giveAmount: 100_000n,
-    safetyBps: 0,
-    fetchImpl: mockFetch({}),
-  });
+  const plan = await quoteOffer(
+    makeCorridorMarket("onchain", { fee_bps: 40 }),
+    {
+      give: "base",
+      giveAmount: 100_000n,
+      safetyBps: 0,
+      fetchImpl: mockFetch({}),
+    },
+  );
   // floor(100_000 * (10000 - 40) / 10000)
   assert.equal(plan.receive.atomic, 99_600n);
 });
