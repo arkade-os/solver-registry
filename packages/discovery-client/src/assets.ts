@@ -6,7 +6,12 @@
 // first-class and exact (BigInt / rational), so a UI can accept "1.5" and offer
 // quotes can report human amounts without float error.
 
-import { parseDecimal, rationalToDecimalString, pow10, type Rational } from "./pricing.ts";
+import {
+  parseDecimal,
+  rationalToDecimalString,
+  pow10,
+  type Rational,
+} from "./pricing.ts";
 
 /**
  * Convert a human display amount to atomic units for an asset with the given
@@ -20,7 +25,9 @@ export function toAtomic(display: string | number, decimals: number): bigint {
   const scale = pow10(decimals);
   const scaledNum = num * scale;
   if (scaledNum % den !== 0n) {
-    throw new Error(`amount ${display} has more precision than ${decimals} decimals allow`);
+    throw new Error(
+      `amount ${display} has more precision than ${decimals} decimals allow`,
+    );
   }
   return scaledNum / den;
 }
@@ -35,8 +42,15 @@ export interface FromAtomicOptions {
  * decimals. 150000000n at 8 decimals → "1.5" (or "1.50000000" with
  * `trim: false`). Negative inputs are supported for completeness.
  */
-export function fromAtomic(atomic: bigint, decimals: number, opts: FromAtomicOptions = {}): string {
-  let out = rationalToDecimalString({ num: atomic, den: pow10(decimals) }, decimals);
+export function fromAtomic(
+  atomic: bigint,
+  decimals: number,
+  opts: FromAtomicOptions = {},
+): string {
+  let out = rationalToDecimalString(
+    { num: atomic, den: pow10(decimals) },
+    decimals,
+  );
   if ((opts.trim ?? true) && out.includes(".")) {
     out = out.replace(/0+$/, "").replace(/\.$/, "");
   }
@@ -50,20 +64,39 @@ export interface PairDecimals {
 }
 
 /**
- * Render an atomic price (quote-atomic per base-atomic) as a human display price
- * (quote-display per base-display): `P × 10^(baseDecimals − quoteDecimals)`, to
- * `fractionDigits` decimals. For assets with equal decimals (e.g. BTC/DePix,
- * both 8) the scaling is the identity. Display only, never pricing.
+ * Scale an atomic price (quote-atomic per base-atomic) to a display price
+ * (quote-display per base-display): `P × 10^(baseDecimals − quoteDecimals)`.
+ * For assets with equal decimals (e.g. BTC/DePix, both 8) it is the identity.
+ *
+ * Exact — the scaling stays a rational, so nothing rounds. Prefer this over
+ * {@link displayPriceString} wherever the price is COMPUTED WITH rather than
+ * shown: the string form truncates at `fractionDigits`, so a price below
+ * 1e-8 renders as "0", and inverting such a rate (the give-side display of a
+ * pair) turns that truncation into an error of any size. A consumer that
+ * needs a number should divide this rational itself, at the precision it
+ * knows it needs.
+ */
+export function displayPrice(
+  price: Rational,
+  assetDecimals: PairDecimals,
+): Rational {
+  const diff = assetDecimals.baseDecimals - assetDecimals.quoteDecimals;
+  return diff >= 0
+    ? { num: price.num * pow10(diff), den: price.den }
+    : { num: price.num, den: price.den * pow10(-diff) };
+}
+
+/**
+ * {@link displayPrice} rendered to a fixed-decimal string of `fractionDigits`.
+ * Display only, never pricing — see displayPrice for why.
  */
 export function displayPriceString(
   price: Rational,
   assetDecimals: PairDecimals,
   fractionDigits = 8,
 ): string {
-  const diff = assetDecimals.baseDecimals - assetDecimals.quoteDecimals;
-  const scaled: Rational =
-    diff >= 0
-      ? { num: price.num * pow10(diff), den: price.den }
-      : { num: price.num, den: price.den * pow10(-diff) };
-  return rationalToDecimalString(scaled, fractionDigits);
+  return rationalToDecimalString(
+    displayPrice(price, assetDecimals),
+    fractionDigits,
+  );
 }
