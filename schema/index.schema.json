@@ -166,20 +166,24 @@
           },
           "relays": {
             "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 8,
-              "items": {
-                "type": "string",
-                "format": "uri",
-                "pattern": "^wss://"
+            "additionalProperties": false,
+            "required": [
+              "nostr"
+            ],
+            "minProperties": 1,
+            "properties": {
+              "nostr": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^wss://"
+                }
               }
             },
-            "propertyNames": {
-              "pattern": "^[a-z0-9-]+$"
-            },
-            "description": "The solver card's relays dictionary, propagated by the reducer when present. On a corridor (RFQ) market these — with discovery_pubkey — are the rendezvous makers address request-for-quote messages to."
+            "description": "The solver card's v0 relay transport map, propagated by the reducer when present. Nostr is the only supported protocol key."
           },
           "price_feed": {
             "type": "string",

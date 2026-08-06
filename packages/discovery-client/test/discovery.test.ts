@@ -183,7 +183,7 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, relays carr
     name: "grace",
     discovery_pubkey: "d".repeat(64),
     sig: "0".repeat(128), // format-checked only; verification is the reducer's job
-    relays: ["wss://relay.example.com"],
+    relays: { nostr: ["wss://relay.example.com"] },
     markets: [
       makeCorridorMarket("lightning", { fee_bps: 25 }),
       makeCorridorMarket("onchain", { fee_bps: 40 }),
@@ -208,7 +208,7 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, relays carr
   assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc" }), null);
   const lightning = bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "lightning" })!;
   assert.equal(lightning.fee_bps, 25);
-  assert.deepEqual(lightning.relays, ["wss://relay.example.com"]);
+  assert.deepEqual(lightning.relays, { nostr: ["wss://relay.example.com"] });
   assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "onchain" })!.fee_bps, 40);
 });
 

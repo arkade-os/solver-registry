@@ -27,21 +27,25 @@
     },
     "relays": {
       "type": "object",
-      "additionalProperties": {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 8,
-        "items": {
-          "type": "string",
-          "format": "uri",
-          "pattern": "^wss://",
-          "description": "A Nostr relay URL the solver listens on."
+      "additionalProperties": false,
+      "required": [
+        "nostr"
+      ],
+      "minProperties": 1,
+      "properties": {
+        "nostr": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^wss://",
+            "description": "A Nostr relay URL the solver listens on."
+          }
         }
       },
-      "propertyNames": {
-        "pattern": "^[a-z0-9-]+$"
-      },
-      "description": "A dictionary of relay arrays, keyed by protocol (e.g. \"nostr\")."
+      "description": "The v0 relay transport map. Nostr is the only supported protocol key."
     },
     "asset": {
       "type": "object",

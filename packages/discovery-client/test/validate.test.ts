@@ -223,6 +223,16 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /relays\/nostr/,
   },
   {
+    name: "empty relays map",
+    mutate: (c) => (c.relays = {}),
+    expect: /relays/,
+  },
+  {
+    name: "unsupported relay protocol",
+    mutate: (c) => (c.relays = { custom: ["wss://relay.example.com"] }),
+    expect: /relays/,
+  },
+  {
     name: "bad relay protocol",
     mutate: (c) => (c.relays = { "Nostr!": ["wss://relay.example.com"] }),
     expect: /relays\/Nostr!/,

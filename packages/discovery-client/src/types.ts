@@ -40,7 +40,7 @@ export const CORRIDOR_KEYS = {
   quote: "quote_corridor",
 } as const;
 
-/** Inclusive upper bound on a card's `relays` list. */
+/** Inclusive upper bound on each protocol's relay list in a card's `relays` map. */
 export const MAX_RELAYS = 8;
 
 /** The asset descriptor's exact wire key set. Tests pin both schemas' asset definition to this. */
@@ -152,6 +152,11 @@ export interface Market {
   max_quote_amount: string;
 }
 
+/** The v0 relay transport map. Nostr is the only supported protocol today. */
+export interface RelayMap {
+  nostr: string[];
+}
+
 /** A card is one solver's market listing for one network (what a solver PRs / a user pins). */
 export interface Card {
   version: 0;
@@ -164,7 +169,7 @@ export interface Card {
    * a corridor (RFQ) market: the pubkey and relays are the rendezvous makers
    * address request-for-quote messages to, so they must be self-authenticating.
    */
-  relays?: Record<string, string[]>;
+  relays?: RelayMap;
   markets: Market[];
 }
 
@@ -173,7 +178,7 @@ export interface IndexMarket extends Market {
   solver: string;
   discovery_pubkey?: string;
   /** The solver card's `relays` dictionary, propagated by the reducer when present. */
-  relays?: Record<string, string[]>;
+  relays?: RelayMap;
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */

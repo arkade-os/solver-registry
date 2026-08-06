@@ -49,7 +49,7 @@ test("signed card: valid signature verifies; discovery_pubkey and relays propaga
   const entry = result.index!.markets.find((m) => m.solver === "signed-solver");
   assert.ok(entry);
   assert.equal(entry!.discovery_pubkey, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659");
-  assert.deepEqual(entry!.relays, ["wss://relay.example.com", "wss://relay2.example.com"]);
+  assert.deepEqual(entry!.relays, { nostr: ["wss://relay.example.com", "wss://relay2.example.com"] });
 });
 
 test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
@@ -168,9 +168,9 @@ test("the schemas' corridor definitions match the client's CORRIDORS and relay b
     );
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
-  assert.equal(card.definitions.relays.additionalProperties.maxItems, MAX_RELAYS);
+  assert.equal(card.definitions.relays.properties.nostr.maxItems, MAX_RELAYS);
   const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
-  assert.equal(index.properties.markets.items.properties.relays.additionalProperties.maxItems, MAX_RELAYS);
+  assert.equal(index.properties.markets.items.properties.relays.properties.nostr.maxItems, MAX_RELAYS);
 });
 
 // Nothing else runs an index through the client's hand-rolled validator, so a

@@ -325,7 +325,7 @@
         // relays back to the card level and restore version/name. (No sig — it
         // signed the full original card, not this re-wrap; a local pin is the
         // user's own trust decision.)
-        // v1: relays is now a dictionary of array of strings.
+        // relays is a dictionary of protocol-keyed string arrays.
         function copyButton(indexMarket) {
           const { solver, discovery_pubkey, relays, ...market } = indexMarket;
           const card = {
