@@ -322,16 +322,17 @@
 
         // Wallets validate pasted JSON against the card schema, so re-wrap the
         // flattened index row as a one-market card: hoist solver, pubkey, and
-        // relays back to the card level and restore version/name. (No sig — it
+        // transports back to the card level and restore version/name. (No sig — it
         // signed the full original card, not this re-wrap; a local pin is the
         // user's own trust decision.)
+        // transports is a dictionary of protocol-keyed relay arrays.
         function copyButton(indexMarket) {
-          const { solver, discovery_pubkey, relays, ...market } = indexMarket;
+          const { solver, discovery_pubkey, transports, ...market } = indexMarket;
           const card = {
             version: 0,
             name: solver,
             ...(discovery_pubkey ? { discovery_pubkey } : {}),
-            ...(relays ? { relays } : {}),
+            ...(transports ? { transports } : {}),
             markets: [market],
           };
           const btn = el("button", { class: "copy", type: "button", title: "Copy solver card JSON for wallets", text: "Copy JSON" });

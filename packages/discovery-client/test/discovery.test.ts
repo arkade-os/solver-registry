@@ -175,7 +175,7 @@ test("one-sided markets: selection and listing avoid a side no solver can pay ou
   assert.deepEqual(listMarkets(onlyErin)[0].solvable, { base: 0, quote: 1 });
 });
 
-test("corridor markets: leg-pair grouping, corridor-aware selection, relays carried through", async () => {
+test("corridor markets: leg-pair grouping, corridor-aware selection, transports carried through", async () => {
   // One solver quoting the same BTC/BTC asset pair over two different
   // corridors, plus a spot market — three distinct leg pairs, not one.
   const grace = {
@@ -183,7 +183,7 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, relays carr
     name: "grace",
     discovery_pubkey: "d".repeat(64),
     sig: "0".repeat(128), // format-checked only; verification is the reducer's job
-    relays: ["wss://relay.example.com"],
+    transports: { nostr: { relays: ["wss://relay.example.com"] } },
     markets: [
       makeCorridorMarket("lightning", { fee_bps: 25 }),
       makeCorridorMarket("onchain", { fee_bps: 40 }),
@@ -208,7 +208,7 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, relays carr
   assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc" }), null);
   const lightning = bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "lightning" })!;
   assert.equal(lightning.fee_bps, 25);
-  assert.deepEqual(lightning.relays, ["wss://relay.example.com"]);
+  assert.deepEqual(lightning.transports, { nostr: { relays: ["wss://relay.example.com"] } });
   assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "onchain" })!.fee_bps, 40);
 });
 

@@ -196,7 +196,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     for (const m of card.markets) {
       const entry: IndexMarket = { ...m, solver: card.name };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-      if (card.relays) entry.relays = card.relays;
+      if (card.transports) entry.transports = card.transports;
       tagged.push({ market: entry, source, sourceType: "local" });
     }
     recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });

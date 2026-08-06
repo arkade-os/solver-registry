@@ -45,6 +45,7 @@ const PUBKEY = /^[0-9a-f]{64}$/;
 // — are what the checks downstream rely on. The reducer still applies the
 // strict schema to everything that merges; tighten here only if a malformed
 // relay ever survives to a maker.
+const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
 const RELAY = /^wss:\/\/[^\s]+$/;
 // ponytail: format-only — this client never verifies a signature (the
 // dependency-free constraint again; the reducer verifies at CI, local pins
@@ -329,7 +330,7 @@ export function cardHasRfqMarket(card: { markets?: unknown }): boolean {
 /**
  * The card-level RFQ rendezvous rule, shared with the reducer: a card whose
  * markets include any non-arkade corridor advertises where makers negotiate,
- * so `discovery_pubkey` and `relays` are required. (For pure spot cards they
+ * so `discovery_pubkey` and `transports` are required. (For pure spot cards they
  * stay optional — the PR is the authentication and there is nothing to
  * contact.) The registry additionally requires `sig` on such cards — that
  * check lives in the reducer, not here: the signature authenticates the
@@ -338,12 +339,12 @@ export function cardHasRfqMarket(card: { markets?: unknown }): boolean {
  */
 export function cardRfqErrors(card: {
   discovery_pubkey?: unknown;
-  relays?: unknown;
+  transports?: unknown;
   markets?: unknown;
 }): string[] {
   if (!cardHasRfqMarket(card)) return [];
   const errors: string[] = [];
-  for (const key of ["discovery_pubkey", "relays"] as const) {
+  for (const key of ["discovery_pubkey", "transports"] as const) {
     if (card[key] === undefined) {
       errors.push(`${key} is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)`);
     }
@@ -351,18 +352,43 @@ export function cardRfqErrors(card: {
   return errors;
 }
 
-function checkRelays(errors: string[], path: string, v: unknown): void {
+function checkTransports(errors: string[], path: string, v: unknown): void {
   if (v === undefined) return;
-  if (!Array.isArray(v) || v.length < 1 || v.length > MAX_RELAYS) {
-    add(errors, path, `must be an array of 1..${MAX_RELAYS} relay URLs`);
+  if (!isObject(v)) {
+    add(errors, path, "must be an object");
     return;
   }
-  v.forEach((relay, i) => {
-    checkPattern(errors, `${path}/${i}`, relay, RELAY, "must be a wss:// URL");
-  });
+  const protocols = Object.keys(v);
+  if (protocols.length === 0) {
+    add(errors, path, "must have at least one protocol key");
+  }
+  if (protocols.length !== 1 || protocols[0] !== "nostr") {
+    add(errors, path, 'must contain exactly the "nostr" protocol key in v0');
+  }
+  for (const protocol of protocols) {
+    if (!RELAY_PROTOCOL.test(protocol)) {
+      add(errors, `${path}/${protocol}`, 'key must match "^[a-z0-9-]+$"');
+    }
+    const config = v[protocol];
+    if (!isObject(config)) {
+      add(errors, `${path}/${protocol}`, "must be an object");
+      continue;
+    }
+    // The config object stays open to future protocol-specific settings
+    // alongside `relays` (e.g. per-relay read/write markers) — no
+    // additional-keys check here, unlike the protocol-key set above.
+    const list = config.relays;
+    if (!Array.isArray(list) || list.length < 1 || list.length > MAX_RELAYS) {
+      add(errors, `${path}/${protocol}/relays`, `must be an array of 1..${MAX_RELAYS} relay URLs`);
+      continue;
+    }
+    list.forEach((relay, i) => {
+      checkPattern(errors, `${path}/${protocol}/relays/${i}`, relay, RELAY, "must be a wss:// URL");
+    });
+  }
 }
 
-/** An index entry is a market plus reducer-added provenance (`solver`, optional pubkey/relays). */
+/** An index entry is a market plus reducer-added provenance (`solver`, optional pubkey/transports). */
 function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   checkMarket(errors, path, v, false);
   if (!isObject(v)) return;
@@ -370,10 +396,10 @@ function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   if (v.discovery_pubkey !== undefined) {
     checkPattern(errors, `${path}/discovery_pubkey`, v.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");
   }
-  checkRelays(errors, `${path}/relays`, v.relays);
+  checkTransports(errors, `${path}/transports`, v.transports);
 }
 
-const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "relays", "markets"]);
+const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "transports", "markets"]);
 
 /**
  * Validate a solver card (e.g. a user-pinned local card). Strict: mirrors
@@ -403,7 +429,7 @@ export function validateCard(input: unknown): ValidationResult<Card> {
       add(errors, "/", "sig requires discovery_pubkey");
     }
   }
-  checkRelays(errors, "/relays", input.relays);
+  checkTransports(errors, "/transports", input.transports);
   if (!Array.isArray(input.markets) || input.markets.length < 1) {
     add(errors, "/markets", "must be a non-empty array");
   } else {

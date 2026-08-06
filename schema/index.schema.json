@@ -164,16 +164,34 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
-          "relays": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 8,
-            "items": {
-              "type": "string",
-              "format": "uri",
-              "pattern": "^wss://"
+          "transports": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "nostr"
+            ],
+            "minProperties": 1,
+            "properties": {
+              "nostr": {
+                "type": "object",
+                "required": [
+                  "relays"
+                ],
+                "properties": {
+                  "relays": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "format": "uri",
+                      "pattern": "^wss://"
+                    }
+                  }
+                }
+              }
             },
-            "description": "The solver card's Nostr relay URLs, propagated by the reducer when present. On a corridor (RFQ) market these \u2014 with discovery_pubkey \u2014 are the rendezvous makers address request-for-quote messages to."
+            "description": "The solver card's v0 transport map, propagated by the reducer when present. Nostr is the only supported protocol key."
           },
           "price_feed": {
             "type": "string",
