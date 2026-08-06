@@ -21,7 +21,7 @@ export function isNetwork(value: unknown): value is Network {
  * market a corridor (RFQ) market: the two sides of the pair live on
  * different rails (e.g. an Arkade balance vs a Lightning payment or an L1
  * output), and the binding per-trade terms arrive in the solver's quote,
- * negotiated over the card's relays. Feed metadata is unaffected by the
+ * negotiated over the card's transports. Feed metadata is unaffected by the
  * corridor itself: only a same-asset market omits the feed fields (its
  * price is identically 1); a cross-asset corridor market still advertises
  * a feed for pre-quote planning.
@@ -40,7 +40,7 @@ export const CORRIDOR_KEYS = {
   quote: "quote_corridor",
 } as const;
 
-/** Inclusive upper bound on each protocol's relay list in a card's `relays` map. */
+/** Inclusive upper bound on each protocol's `relays` list within a card's `transports` map. */
 export const MAX_RELAYS = 8;
 
 /** The asset descriptor's exact wire key set. Tests pin both schemas' asset definition to this. */
@@ -152,9 +152,18 @@ export interface Market {
   max_quote_amount: string;
 }
 
-/** The v0 relay transport map. Nostr is the only supported protocol today. */
-export interface RelayMap {
-  nostr: string[];
+/**
+ * Nostr transport config. `relays` (wss://, 1-8) is required; the object stays
+ * open to future nostr-specific settings (e.g. per-relay read/write markers)
+ * without a schema break — v0 only defines `relays`.
+ */
+export interface NostrTransport {
+  relays: string[];
+}
+
+/** The v0 transport map. Nostr is the only supported protocol today. */
+export interface TransportMap {
+  nostr: NostrTransport;
 }
 
 /** A card is one solver's market listing for one network (what a solver PRs / a user pins). */
@@ -164,12 +173,12 @@ export interface Card {
   discovery_pubkey?: string;
   sig?: string;
   /**
-   * A dictionary of relay arrays (wss://), keyed by protocol (e.g. "nostr").
+   * A dictionary of transport configs keyed by protocol (e.g. "nostr").
    * Required — along with `discovery_pubkey` and `sig` — when any market is
-   * a corridor (RFQ) market: the pubkey and relays are the rendezvous makers
+   * a corridor (RFQ) market: the pubkey and transports are the rendezvous makers
    * address request-for-quote messages to, so they must be self-authenticating.
    */
-  relays?: RelayMap;
+  transports?: TransportMap;
   markets: Market[];
 }
 
@@ -177,8 +186,8 @@ export interface Card {
 export interface IndexMarket extends Market {
   solver: string;
   discovery_pubkey?: string;
-  /** The solver card's `relays` dictionary, propagated by the reducer when present. */
-  relays?: RelayMap;
+  /** The solver card's `transports` dictionary, propagated by the reducer when present. */
+  transports?: TransportMap;
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */
@@ -212,7 +221,7 @@ export function marketCorridor(market: MarketLike, side: Side): Corridor {
 /**
  * Whether any side settles off the arkade corridor. Such a market is
  * negotiated per-trade over RFQ (via the card's `discovery_pubkey` +
- * `relays`) rather than filled from the arkd stream, so the card-level
+ * `transports`) rather than filled from the arkd stream, so the card-level
  * rendezvous fields become required.
  */
 export function isRfqMarket(market: MarketLike): boolean {

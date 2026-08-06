@@ -151,7 +151,7 @@ export function reduceNetwork(
         solver: card.name,
       };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-      if (card.relays) entry.relays = card.relays;
+      if (card.transports) entry.transports = card.transports;
       markets.push(entry);
     }
   }

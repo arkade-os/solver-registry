@@ -164,7 +164,7 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
-          "relays": {
+          "transports": {
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -173,17 +173,25 @@
             "minProperties": 1,
             "properties": {
               "nostr": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 8,
-                "items": {
-                  "type": "string",
-                  "format": "uri",
-                  "pattern": "^wss://"
+                "type": "object",
+                "required": [
+                  "relays"
+                ],
+                "properties": {
+                  "relays": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "format": "uri",
+                      "pattern": "^wss://"
+                    }
+                  }
                 }
               }
             },
-            "description": "The solver card's v0 relay transport map, propagated by the reducer when present. Nostr is the only supported protocol key."
+            "description": "The solver card's v0 transport map, propagated by the reducer when present. Nostr is the only supported protocol key."
           },
           "price_feed": {
             "type": "string",

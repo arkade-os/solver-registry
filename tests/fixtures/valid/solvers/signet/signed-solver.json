@@ -2,11 +2,13 @@
   "version": 0,
   "name": "signed-solver",
   "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-  "relays": {
-    "nostr": [
-      "wss://relay.example.com",
-      "wss://relay2.example.com"
-    ]
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com",
+        "wss://relay2.example.com"
+      ]
+    }
   },
   "markets": [
     {
@@ -74,5 +76,5 @@
       "max_quote_amount": "2000000"
     }
   ],
-  "sig": "2a54b6fcdbcd47415df9cce4af2ddd125a2e6609903765efe96037d9f886fdb2daf4017ff4fc9ba51ace95d264b3783712dd00d4b48441ec1e122d958bf5dbe0"
+  "sig": "9413a74885f4dd5761e44e58e52d5a4dc694381f224500aa84dc1bf746853777b11c905eca5403aa3ddc9db7e14015c99453352de642b60d7a05f6f5246ea041"
 }

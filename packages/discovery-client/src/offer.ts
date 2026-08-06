@@ -139,7 +139,7 @@ function depositForWant(input: {
  * A same-asset corridor market prices at exactly 1 atomic/atomic with no feed
  * involved; the plan concedes `fee_bps + safetyBps` as usual. For such RFQ
  * markets the plan is a pre-quote estimate — the binding amounts arrive in the
- * solver's quote, negotiated over the card's relays.
+ * solver's quote, negotiated over the card's transports.
  */
 export function planOffer(input: PlanOfferInput): OfferPlan {
   const { market, give } = input;

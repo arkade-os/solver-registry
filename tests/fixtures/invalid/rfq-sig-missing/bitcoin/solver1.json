@@ -25,9 +25,11 @@
     }
   ],
   "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-  "relays": {
-    "nostr": [
-      "wss://relay.example.com"
-    ]
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
   }
 }

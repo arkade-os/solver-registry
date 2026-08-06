@@ -45,7 +45,27 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   // Card-level format checks only — signature verification is the reducer's job.
   c.discovery_pubkey = "d".repeat(64);
   c.sig = "0".repeat(128);
-  c.relays = { nostr: ["wss://relay.example.com"] };
+  c.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
+test("validateCard: tolerates unknown nostr-transport keys alongside relays", () => {
+  // The nostr config object stays open to future settings (e.g. per-relay
+  // read/write markers) without a schema break.
+  const c = validCard();
+  c.markets[0] = {
+    ...c.markets[0],
+    pair: "BTC/lightning:BTC",
+    quote_asset: { ...c.markets[0].base_asset },
+    quote_corridor: "lightning",
+  };
+  delete c.markets[0].price_feed;
+  delete c.markets[0].price_feed_schema;
+  delete c.markets[0].price_decimals;
+  c.discovery_pubkey = "d".repeat(64);
+  c.sig = "0".repeat(128);
+  c.transports = { nostr: { relays: ["wss://relay.example.com"], read: true, write: false } };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -70,7 +90,7 @@ test("validateCard: accepts a cross-asset corridor market carrying a feed", () =
     quote_corridor: "lightning",
   };
   c.discovery_pubkey = "d".repeat(64);
-  c.relays = { nostr: ["wss://relay.example.com"] };
+  c.transports = { nostr: { relays: ["wss://relay.example.com"] } };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -92,7 +112,7 @@ test("validateCard: accepts a market with both sides off-rail (no canonical leg 
   delete c.markets[0].price_decimals;
   c.discovery_pubkey = "d".repeat(64);
   c.sig = "0".repeat(128);
-  c.relays = { nostr: ["wss://relay.example.com"] };
+  c.transports = { nostr: { relays: ["wss://relay.example.com"] } };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
@@ -210,32 +230,37 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
       delete c.markets[0].price_feed_schema;
       delete c.markets[0].price_decimals;
     },
-    expect: /relays is required when any market has a non-arkade corridor/,
+    expect: /transports is required when any market has a non-arkade corridor/,
   },
   {
     name: "non-wss relay",
-    mutate: (c) => (c.relays = { nostr: ["https://relay.example.com"] }),
+    mutate: (c) => (c.transports = { nostr: { relays: ["https://relay.example.com"] } }),
     expect: /must be a wss:\/\/ URL/,
   },
   {
     name: "empty relays list",
-    mutate: (c) => (c.relays = { nostr: [] }),
-    expect: /relays\/nostr/,
+    mutate: (c) => (c.transports = { nostr: { relays: [] } }),
+    expect: /transports\/nostr\/relays/,
   },
   {
-    name: "empty relays map",
-    mutate: (c) => (c.relays = {}),
-    expect: /relays/,
+    name: "missing relays key",
+    mutate: (c) => (c.transports = { nostr: { read: true } }),
+    expect: /transports\/nostr\/relays/,
+  },
+  {
+    name: "empty transports map",
+    mutate: (c) => (c.transports = {}),
+    expect: /transports/,
   },
   {
     name: "unsupported relay protocol",
-    mutate: (c) => (c.relays = { custom: ["wss://relay.example.com"] }),
-    expect: /relays/,
+    mutate: (c) => (c.transports = { custom: { relays: ["wss://relay.example.com"] } }),
+    expect: /transports/,
   },
   {
     name: "bad relay protocol",
-    mutate: (c) => (c.relays = { "Nostr!": ["wss://relay.example.com"] }),
-    expect: /relays\/Nostr!/,
+    mutate: (c) => (c.transports = { "Nostr!": { relays: ["wss://relay.example.com"] } }),
+    expect: /transports\/Nostr!/,
   },
   { name: "bad asset id", mutate: (c) => (c.markets[0].base_asset.id = "xyz"), expect: /id/ },
   {

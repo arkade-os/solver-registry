@@ -43,13 +43,13 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
 // The signed-solver fixture is signed with the BIP340 test-vector #1 secret key
 // (b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef); re-sign
 // with scripts/canonical.ts signCard() whenever the fixture's content changes.
-test("signed card: valid signature verifies; discovery_pubkey and relays propagate to the index", () => {
+test("signed card: valid signature verifies; discovery_pubkey and transports propagate to the index", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
   assert.equal(result.ok, true, JSON.stringify(result.errors));
   const entry = result.index!.markets.find((m) => m.solver === "signed-solver");
   assert.ok(entry);
   assert.equal(entry!.discovery_pubkey, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659");
-  assert.deepEqual(entry!.relays, { nostr: ["wss://relay.example.com", "wss://relay2.example.com"] });
+  assert.deepEqual(entry!.transports, { nostr: { relays: ["wss://relay.example.com", "wss://relay2.example.com"] } });
 });
 
 test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
@@ -88,8 +88,8 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "corridor-pair-label", expect: "does not match the sides' labels" },
   { case: "bad-relay", expect: "must match pattern" },
   { case: "rfq-no-auth", expect: "discovery_pubkey is required when any market has a non-arkade corridor" },
-  { case: "rfq-missing-relays", expect: "relays is required when any market has a non-arkade corridor" },
-  // pubkey + relays present, sig absent: cardRfqErrors is satisfied, so this
+  { case: "rfq-missing-relays", expect: "transports is required when any market has a non-arkade corridor" },
+  // pubkey + transports present, sig absent: cardRfqErrors is satisfied, so this
   // isolates the reducer's registry-only sig requirement.
   { case: "rfq-sig-missing", expect: "sig is required when any market has a non-arkade corridor" },
   { case: "bad-price-feed", expect: "must match pattern" },
@@ -168,9 +168,12 @@ test("the schemas' corridor definitions match the client's CORRIDORS and relay b
     );
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
-  assert.equal(card.definitions.relays.properties.nostr.maxItems, MAX_RELAYS);
+  assert.equal(card.definitions.transports.properties.nostr.properties.relays.maxItems, MAX_RELAYS);
   const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
-  assert.equal(index.properties.markets.items.properties.relays.properties.nostr.maxItems, MAX_RELAYS);
+  assert.equal(
+    index.properties.markets.items.properties.transports.properties.nostr.properties.relays.maxItems,
+    MAX_RELAYS,
+  );
 });
 
 // Nothing else runs an index through the client's hand-rolled validator, so a
