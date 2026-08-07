@@ -31,6 +31,13 @@ test("validateCard: accepts an optionally signed card", () => {
   assert.equal(validateCard(c).ok, true);
 });
 
+test("validateCard: accepts a card carrying emulator_pubkey", () => {
+  const c = validCard();
+  c.emulator_pubkey = "c".repeat(64);
+  const r = validateCard(c);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => {
   const c = validCard();
   c.markets[0] = {
@@ -276,6 +283,7 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /must be an https:\/\/ URL/,
   },
   { name: "fee out of range", mutate: (c) => (c.markets[0].fee_bps = 20_000), expect: /fee_bps/ },
+  { name: "bad emulator_pubkey", mutate: (c) => (c.emulator_pubkey = "deadbeef"), expect: /emulator_pubkey/ },
   { name: "sig without pubkey", mutate: (c) => (c.sig = "0".repeat(128)), expect: /discovery_pubkey/ },
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },
   { name: "missing required", mutate: (c) => delete c.markets[0].fee_bps, expect: /fee_bps/ },
@@ -323,4 +331,19 @@ test("validateIndex: rejects a bad commit and a market missing solver", () => {
   assert.equal(r.ok, false);
   assert.match(r.errors.join("\n"), /commit/);
   assert.match(r.errors.join("\n"), /solver/);
+});
+
+test("validateIndex: accepts a market entry carrying emulator_pubkey", () => {
+  const idx = validIndex();
+  idx.markets[0].emulator_pubkey = "c".repeat(64);
+  const r = validateIndex(idx, "bitcoin");
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
+test("validateIndex: rejects a malformed emulator_pubkey on a market entry", () => {
+  const idx = validIndex();
+  idx.markets[0].emulator_pubkey = "deadbeef";
+  const r = validateIndex(idx, "bitcoin");
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join("\n"), /emulator_pubkey/);
 });

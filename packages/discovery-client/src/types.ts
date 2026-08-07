@@ -171,6 +171,8 @@ export interface Card {
   version: 0;
   name: string;
   discovery_pubkey?: string;
+  /** X-only pubkey of the Arkade-covenant corridor solver's emulator (covenant co-signer). Deployment-wide, like discovery_pubkey. */
+  emulator_pubkey?: string;
   sig?: string;
   /**
    * A dictionary of transport configs keyed by protocol (e.g. "nostr").
@@ -186,6 +188,8 @@ export interface Card {
 export interface IndexMarket extends Market {
   solver: string;
   discovery_pubkey?: string;
+  /** The solver card's `emulator_pubkey`, propagated by the reducer when present. */
+  emulator_pubkey?: string;
   /** The solver card's `transports` dictionary, propagated by the reducer when present. */
   transports?: TransportMap;
 }

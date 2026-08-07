@@ -133,6 +133,11 @@
       "pattern": "^[0-9a-f]{64}$",
       "description": "BIP340 x-only public key, lowercase hex."
     },
+    "emulator_pubkey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "BIP340 x-only pubkey of the \"emulator\" — the covenant co-signer service an Arkade-covenant corridor solver uses to construct its non-interactive claim/refund script leaves. Deployment-wide, like discovery_pubkey: one value for every market the solver lists. Specific to that one swap-contract mechanism — a solver running a different corridor mechanism, or a plain arkade-arkade spot market, has no use for it — so this stays OPTIONAL and is independent of the discovery_pubkey/sig/transports rendezvous requirement below: it is never required, even on a corridor card."
+    },
     "sig": {
       "type": "string",
       "pattern": "^[0-9a-f]{128}$",
