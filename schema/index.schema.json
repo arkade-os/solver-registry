@@ -164,6 +164,10 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
+          "emulator_pubkey": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
           "transports": {
             "type": "object",
             "additionalProperties": false,

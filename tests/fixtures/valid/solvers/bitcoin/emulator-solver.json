@@ -1,0 +1,37 @@
+{
+  "version": 0,
+  "name": "emulator-solver",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "emulator_pubkey": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
+  "markets": [
+    {
+      "pair": "BTC/lightning:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "lightning",
+      "fee_bps": 20,
+      "min_base_amount": "1000",
+      "max_base_amount": "4000000",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "4000000"
+    }
+  ],
+  "sig": "7e09529041ce5d0cb126f801ab4b5a02c5b4bc2c20f8a57021ce3bba1c0aa0c434b738528cf9b0987312fa9144f9624057b8a63aeb3df2f678638973ee694e33"
+}

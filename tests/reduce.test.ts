@@ -37,7 +37,9 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
   const result = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
   assert.equal(result.ok, true);
   const solvers = result.index!.markets.map((m) => m.solver);
-  assert.deepEqual(solvers, ["alice", "carol", "bob"]);
+  // emulator-solver's BTC/lightning:BTC market sorts into its own leg-pair
+  // group, after the BTC/USDT group (alice/carol/bob) it doesn't share.
+  assert.deepEqual(solvers, ["alice", "carol", "bob", "emulator-solver"]);
 });
 
 // The signed-solver fixture is signed with the BIP340 test-vector #1 secret key
@@ -50,6 +52,20 @@ test("signed card: valid signature verifies; discovery_pubkey and transports pro
   assert.ok(entry);
   assert.equal(entry!.discovery_pubkey, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659");
   assert.deepEqual(entry!.transports, { nostr: { relays: ["wss://relay.example.com", "wss://relay2.example.com"] } });
+});
+
+// emulator-solver is signed with the same BIP340 test-vector #1 secret key as
+// signed-solver above; re-sign with scripts/canonical.ts signCard() whenever
+// the fixture's content changes.
+test("emulator_pubkey propagates to the index when present, and stays absent when not", () => {
+  const result = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  const withKey = result.index!.markets.find((m) => m.solver === "emulator-solver");
+  assert.ok(withKey);
+  assert.equal(withKey!.emulator_pubkey, "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0");
+  const withoutKey = result.index!.markets.find((m) => m.solver === "alice");
+  assert.ok(withoutKey);
+  assert.equal(withoutKey!.emulator_pubkey, undefined);
 });
 
 test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
@@ -87,6 +103,7 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "bad-corridor", expect: "must be equal to one of the allowed values" },
   { case: "corridor-pair-label", expect: "does not match the sides' labels" },
   { case: "bad-relay", expect: "must match pattern" },
+  { case: "bad-emulator-pubkey", expect: "must match pattern" },
   { case: "rfq-no-auth", expect: "discovery_pubkey is required when any market has a non-arkade corridor" },
   { case: "rfq-missing-relays", expect: "transports is required when any market has a non-arkade corridor" },
   // pubkey + transports present, sig absent: cardRfqErrors is satisfied, so this

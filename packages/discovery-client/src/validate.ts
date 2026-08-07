@@ -396,10 +396,13 @@ function checkIndexMarket(errors: string[], path: string, v: unknown): void {
   if (v.discovery_pubkey !== undefined) {
     checkPattern(errors, `${path}/discovery_pubkey`, v.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");
   }
+  if (v.emulator_pubkey !== undefined) {
+    checkPattern(errors, `${path}/emulator_pubkey`, v.emulator_pubkey, PUBKEY, "must be 64 lowercase hex chars");
+  }
   checkTransports(errors, `${path}/transports`, v.transports);
 }
 
-const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "transports", "markets"]);
+const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "emulator_pubkey", "sig", "transports", "markets"]);
 
 /**
  * Validate a solver card (e.g. a user-pinned local card). Strict: mirrors
@@ -422,6 +425,9 @@ export function validateCard(input: unknown): ValidationResult<Card> {
   checkPattern(errors, "/name", input.name, NAME, 'must match "^[a-z0-9-]+$"');
   if (input.discovery_pubkey !== undefined) {
     checkPattern(errors, "/discovery_pubkey", input.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");
+  }
+  if (input.emulator_pubkey !== undefined) {
+    checkPattern(errors, "/emulator_pubkey", input.emulator_pubkey, PUBKEY, "must be 64 lowercase hex chars");
   }
   if (input.sig !== undefined) {
     checkPattern(errors, "/sig", input.sig, SIG, "must be 128 lowercase hex chars");

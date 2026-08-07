@@ -84,6 +84,37 @@
       "min_quote_amount": "0",
       "max_quote_amount": "0",
       "solver": "bob"
+    },
+    {
+      "pair": "BTC/lightning:BTC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_corridor": "lightning",
+      "fee_bps": 20,
+      "min_base_amount": "1000",
+      "max_base_amount": "4000000",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "4000000",
+      "solver": "emulator-solver",
+      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+      "emulator_pubkey": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "transports": {
+        "nostr": {
+          "relays": [
+            "wss://relay.example.com"
+          ]
+        }
+      }
     }
   ]
 }
