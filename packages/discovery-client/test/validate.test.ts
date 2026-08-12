@@ -24,6 +24,17 @@ test("validateCard: accepts a well-formed card", () => {
   assert.ok(r.value);
 });
 
+test("validateCard: accepts a market carrying fee_flat, and one omitting it", () => {
+  // Optional: omitted means none, so both shapes are well-formed. The market
+  // key set is closed, so this also pins fee_flat as a known field rather than
+  // one rejected as unknown.
+  const withFlat = validCard();
+  withFlat.markets[0].fee_flat = "1000";
+  const r = validateCard(withFlat);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(validateCard(validCard()).ok, true);
+});
+
 test("validateCard: accepts an optionally signed card", () => {
   const c = validCard();
   c.discovery_pubkey = "d".repeat(64);
@@ -287,6 +298,8 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   { name: "sig without pubkey", mutate: (c) => (c.sig = "0".repeat(128)), expect: /discovery_pubkey/ },
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },
   { name: "missing required", mutate: (c) => delete c.markets[0].fee_bps, expect: /fee_bps/ },
+  { name: "non-canonical fee_flat", mutate: (c) => (c.markets[0].fee_flat = "01"), expect: /fee_flat/ },
+  { name: "negative fee_flat", mutate: (c) => (c.markets[0].fee_flat = "-1"), expect: /fee_flat/ },
 ];
 
 for (const { name, mutate, expect } of CARD_REJECTIONS) {

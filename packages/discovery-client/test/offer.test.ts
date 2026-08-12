@@ -229,6 +229,51 @@ test("planOffer: can plan from a desired receive amount", () => {
   assert.equal(plan.receive.display, "3739.84");
 });
 
+test("planOffer: a market's fee_flat comes off the receive amount", () => {
+  const args = {
+    give: "base" as const,
+    giveAmount: "0.01",
+    feedValue: "377000",
+    safetyBps: 50,
+  };
+  const without = planOffer({ market: arkadeMarket(), ...args });
+  const withFlat = planOffer({ market: arkadeMarket({ fee_flat: "1000000" }), ...args });
+  assert.equal(without.receive.atomic - withFlat.receive.atomic, 1_000_000n);
+});
+
+test("planOffer: give and want directions round-trip through a flat fee", () => {
+  // The inverse has to add the flat fee back before dividing, or planning
+  // from a receive amount quotes a deposit that under-funds it.
+  const market = arkadeMarket({ fee_flat: "1000000" });
+  const shared = { market, give: "base" as const, feedValue: "377000", safetyBps: 50 };
+  const forward = planOffer({ ...shared, giveAmount: "0.01" });
+  const back = planOffer({ ...shared, wantAmount: forward.receive.display });
+  assert.equal(back.deposit.atomic, forward.deposit.atomic);
+});
+
+test("planOffer: wanting nothing costs nothing, even with a flat fee", () => {
+  // The minimum deposit to receive 0 is 0 — computeWantAmount(0) is 0, so
+  // quoting the flat fee's worth here would not be the inverse of anything.
+  const plan = planOffer({
+    market: arkadeMarket({ fee_flat: "1000000" }),
+    give: "base",
+    wantAmount: "0",
+    feedValue: "377000",
+    safetyBps: 50,
+  });
+  assert.equal(plan.deposit.atomic, 0n);
+});
+
+test("planOffer: a receive amount the flat fee clamped to zero round-trips to zero", () => {
+  // The reachable version of the above: a forward plan whose flat fee eats the
+  // whole receive amount, fed back through the inverse.
+  const market = arkadeMarket({ fee_flat: "1000000000000" });
+  const shared = { market, give: "base" as const, feedValue: "377000", safetyBps: 50 };
+  const forward = planOffer({ ...shared, giveAmount: "0.00000001" });
+  assert.equal(forward.receive.atomic, 0n);
+  assert.equal(planOffer({ ...shared, wantAmount: forward.receive.display }).deposit.atomic, 0n);
+});
+
 test("planOffer: rejects impossible wanted amounts", () => {
   assert.throws(
     () =>

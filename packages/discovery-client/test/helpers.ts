@@ -37,8 +37,8 @@ export function makeOneSidedMarket(solves: Side, overrides: Partial<Market> = {}
 
 /**
  * A same-asset corridor (RFQ) market: BTC on both sides, the quote side on
- * `corridor`, no feed fields — the price is identically 1 and fee_bps is the
- * whole spread.
+ * `corridor`, no feed fields — the price is identically 1 and fee_bps plus
+ * fee_flat are the whole price.
  */
 export function makeCorridorMarket(
   corridor: "lightning" | "onchain",

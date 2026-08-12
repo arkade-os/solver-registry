@@ -158,8 +158,13 @@ export function reduceNetwork(
   }
 
   // Group by the corridor-qualified leg pair (tickers are display-only and
-  // not unique; bare asset ids collapse different corridors), then best
-  // expected execution first, solver name for determinism.
+  // not unique; bare asset ids collapse different corridors), then by spread
+  // and solver name.
+  //
+  // Spread-then-name is a stable presentation order, NOT a ranking: once a
+  // market can carry `fee_flat`, which one is cheapest depends on the size
+  // being traded, and the index has no size. A consumer choosing between
+  // these must compute the total fee at its own amount, not take the first.
   markets.sort((a, b) => {
     const [keyA, keyB] = [marketPairKey(a), marketPairKey(b)];
     if (keyA !== keyB) return keyA < keyB ? -1 : 1;

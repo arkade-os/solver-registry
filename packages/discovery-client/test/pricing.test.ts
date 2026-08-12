@@ -110,6 +110,59 @@ test("computeWantAmount: giving quote is symmetric with 1/P", () => {
   assert.equal(want, expected);
 });
 
+test("computeWantAmount: giving base subtracts fee_flat directly, same units", () => {
+  // The flat fee is quote-asset atomic units and the want amount is quote
+  // too, so no conversion is involved in this direction.
+  const price = { num: 65000n, den: 1n };
+  const want = computeWantAmount({
+    deposit: 100_000_000n,
+    give: "base",
+    price,
+    feeBps: 20,
+    safetyBps: 50,
+    feeFlat: 1_000_000n,
+  });
+  const expected = (100_000_000n * 65000n * 9930n) / (1n * 10000n) - 1_000_000n;
+  assert.equal(want, expected);
+});
+
+test("computeWantAmount: giving quote converts fee_flat through the price, rounding against the maker", () => {
+  // Want is base units here, so the quote-denominated flat fee converts by
+  // den/num. 65001 quote is 1.0000153… base — the maker must be charged 2,
+  // not 1, or the sub-unit silently favours them.
+  const price = { num: 65000n, den: 1n };
+  const want = computeWantAmount({
+    deposit: 65_000_000_000n,
+    give: "quote",
+    price,
+    feeBps: 0,
+    safetyBps: 0,
+    feeFlat: 65_001n,
+  });
+  assert.equal(want, 1_000_000n - 2n);
+});
+
+test("computeWantAmount: clamps to zero when fee_flat consumes the want amount", () => {
+  // Consistent with the existing >=100% spread behaviour: zero, not negative
+  // and not a throw.
+  const price = { num: 1n, den: 1n };
+  const want = computeWantAmount({
+    deposit: 1_000n,
+    give: "base",
+    price,
+    feeBps: 0,
+    safetyBps: 0,
+    feeFlat: 5_000n,
+  });
+  assert.equal(want, 0n);
+});
+
+test("computeWantAmount: omitting fee_flat is identical to passing zero", () => {
+  const price = { num: 65000n, den: 1n };
+  const args = { deposit: 100_000_000n, give: "base" as const, price, feeBps: 20, safetyBps: 50 };
+  assert.equal(computeWantAmount(args), computeWantAmount({ ...args, feeFlat: 0n }));
+});
+
 test("computeWantAmount: exact for values beyond Number.MAX_SAFE_INTEGER", () => {
   const want = computeWantAmount({
     deposit: 10n ** 18n,

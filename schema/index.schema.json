@@ -217,6 +217,14 @@
             "minimum": 0,
             "maximum": 10000
           },
+          "fee_flat": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
+            "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Carried through from the solver's card unchanged."
+          },
           "min_base_amount": {
             "allOf": [
               {

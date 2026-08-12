@@ -125,6 +125,7 @@ const MARKET_KEYS = new Set([
   "price_feed_schema",
   "price_decimals",
   "fee_bps",
+  "fee_flat",
   "min_base_amount",
   "max_base_amount",
   "min_quote_amount",
@@ -206,7 +207,8 @@ const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const
  * - when exactly one side is on the arkade corridor it must be the base
  *   side, so equivalent corridor markets group under one canonical key;
  * - a same-asset market prices identically at 1: the feed fields must be
- *   absent (`fee_bps` is the whole spread; executable terms arrive by RFQ);
+ *   absent (`fee_bps` and `fee_flat` are the whole price; executable terms
+ *   arrive by RFQ);
  * - a cross-asset market needs all three feed fields — the schema no longer
  *   requires them unconditionally, so their presence is enforced here.
  *
@@ -303,6 +305,18 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
     checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
   }
   checkIntRange(errors, `${path}/fee_bps`, v.fee_bps, 0, 10000);
+  // Optional — absent means none. Same canonical form as the size bounds, so a
+  // negative or zero-padded value is rejected rather than coerced: a fee that
+  // silently reads as 0 understates the price.
+  if (v.fee_flat !== undefined) {
+    checkPattern(
+      errors,
+      `${path}/fee_flat`,
+      v.fee_flat,
+      AMOUNT_PATTERN,
+      "must be a decimal string of quote-asset atomic units",
+    );
+  }
   for (const message of marketCorridorErrors(v)) add(errors, path, message);
 
   // Per-side size bounds, always present as canonical decimal strings; the

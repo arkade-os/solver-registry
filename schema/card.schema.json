@@ -220,7 +220,7 @@
             "type": "string",
             "format": "uri",
             "pattern": "^https://",
-            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps is the whole spread and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
+            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"
@@ -235,6 +235,14 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 10000
+          },
+          "fee_flat": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
+            "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Quote-asset in both directions, matching min_quote_amount/max_quote_amount, so a client converts it through the price when the maker receives base. Note that fee_bps alone is therefore not a ranking key: a market with a lower spread and a flat fee can be dearer at small sizes and cheaper at large ones."
           },
           "min_base_amount": {
             "allOf": [

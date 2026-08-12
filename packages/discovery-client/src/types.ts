@@ -129,16 +129,34 @@ export interface Market {
    * Exact URL the maker MUST price from. CORS-permissive so browsers can
    * fetch it. Required when the two sides carry different assets; MUST be
    * absent (with the other feed fields) on a same-asset corridor market,
-   * whose price is identically 1 — `fee_bps` is the whole spread and the
-   * executable terms arrive in the solver's RFQ quote.
+   * whose price is identically 1 — `fee_bps` and `fee_flat` are the whole
+   * price, and the executable terms arrive in the solver's RFQ quote.
    */
   price_feed?: string;
   /** Response contract for `price_feed`; clients MUST use this to extract the feed value. */
   price_feed_schema?: PriceFeedSchema;
   /** Feed value / 10^price_decimals = price in quote-atomic-units per base-atomic-unit. */
   price_decimals?: number;
-  /** The solver's spread, in basis points. Sort key: lower is better expected execution. */
+  /**
+   * The solver's spread, in basis points.
+   *
+   * NOT a sort key on its own once `fee_flat` is in play: a market with a
+   * lower spread and a flat fee can be dearer than a higher-spread one at
+   * small sizes and cheaper at large. Rank by the total fee at the size
+   * actually being traded.
+   */
   fee_bps: number;
+  /**
+   * The solver's flat fee as a decimal string of **quote-asset** atomic units
+   * (see {@link AMOUNT_PATTERN}), or absent for none — the part of the price
+   * that does not scale with size.
+   *
+   * Quote-asset in both directions, matching `min_quote_amount` /
+   * `max_quote_amount`, so it is converted through the price when the maker
+   * receives base. Optional rather than required so that adding it breaks no
+   * existing card.
+   */
+  fee_flat?: string;
   /**
    * Per-side trade-size bounds as decimal strings of that side's atomic units
    * (see {@link AMOUNT_PATTERN}), always present. `max = "0"` disables the
