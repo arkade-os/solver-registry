@@ -119,9 +119,13 @@ function depositForWant(input: {
   safetyBps: number;
   feeFlat: bigint;
 }): bigint {
+  // Wanting nothing costs nothing, whatever the fees are — and this must come
+  // before the flat fee is added below, or asking for zero would quote the
+  // flat fee's worth of deposit. computeWantAmount clamps a zero receive to
+  // 0n, so anything else here would not be its inverse.
+  if (input.wantAmount === 0n) return 0n;
   const netBps = 10000 - input.feeBps - input.safetyBps;
   if (netBps <= 0) {
-    if (input.wantAmount === 0n) return 0n;
     throw new Error("cannot satisfy wantAmount when fee_bps + safetyBps is >= 100%");
   }
   const net = BigInt(netBps);
