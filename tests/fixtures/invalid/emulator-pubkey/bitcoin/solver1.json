@@ -1,7 +1,7 @@
 {
   "version": 0,
   "name": "solver1",
-  "emulator_pubkey": "deadbeef",
+  "emulator_pubkey": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
   "markets": [
     {
       "pair": "BTC/USDT",
