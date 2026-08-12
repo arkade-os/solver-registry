@@ -74,11 +74,13 @@ The RFQ message family is specified separately, in `arkade-os/lightning-swap-ser
 
 | kind | | |
 | --- | --- | --- |
-| `4859` | directed RFQ traffic | NIP-44-sealed, `p`-tagged to the recipient; carries the whole request/quote/refusal/status family |
-| `4860` | open-RFQ broadcast | plaintext, `t`-tagged with the canonical corridor-qualified market key |
-| `38859` | solver advertisement | replaceable, `d` tag `"rfq1"`, unencrypted and **indicative only** — never binding, and never a substitute for a registry card (see the trust note below) |
+| `24859` | directed RFQ traffic | **ephemeral**; NIP-44-sealed, `p`-tagged to the recipient; carries the whole request/quote/refusal/status family |
+| `24860` | open-RFQ broadcast | **ephemeral**; plaintext, `t`-tagged with the canonical corridor-qualified market key |
+| `38859` | solver advertisement | **addressable** — one current version per solver; `d` tag `"rfq1"`, unencrypted and **indicative only** — never binding, and never a substitute for a registry card (see the trust note below) |
 
-The `t` tag on kind 4860 is the *same* canonical corridor-qualified leg-pair key this document defines for the v1 appendix's `d` tag — resolved corridors, canonical asset ids, arkade leg first — and for the same reason: both sides must derive it identically or the subscription silently matches nothing. One derivation, two layers; if either changes, both change.
+The two negotiation kinds moved out of NIP-01's regular range into the ephemeral one (20000–29999): `4859`/`4860` before, `24859`/`24860` now. The reason bears directly on this document's own kind choices — an `rfq_open` is plaintext by design, so while it sat in a retained range every broadcast was a permanent public record of trade intent, pair and size. A conforming relay retains neither negotiation kind now. The advertisement stays addressable, which is already the right semantics for it: the relay keeps the current version and discards the rest.
+
+The `t` tag on kind 24860 is the *same* canonical corridor-qualified leg-pair key this document defines for the v1 appendix's `d` tag — resolved corridors, canonical asset ids, arkade leg first — and for the same reason: both sides must derive it identically or the subscription silently matches nothing. One derivation, two layers; if either changes, both change.
 
 The kind-38859 ad does not compete with a card. The RFQ protocol defers to the registry for trust precisely because a card is git-reviewed and BIP340-signed while an ad is self-asserted, so an ad MAY advertise liveness but MUST NOT be the basis for deciding whom to trade with.
 
@@ -159,7 +161,7 @@ PR validation runs the same schema checks, so a broken card can't merge. The per
 2. Merge: union of all markets across followed registries plus local cards, tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per corridor-qualified leg pair ascending by `fee_bps`, source order as tiebreak; the `pair` ticker label is display only and never a grouping key, and a bare id pair is not one either — it would collapse different corridors. Filter by leg pair, by receive-side solvability (only markets whose receive side is enabled — `max > 0` — qualify; if no market in the merged set solves that side, the direction MUST NOT be offered), and by size against the receive side's bounds. The ranking is a static proxy — the actual execution price still comes from the feed (spot) or the solver's quote (corridor).
 3. Local cards: a client MUST let its user add solver cards directly (a URL to a raw card, or pasted JSON), validated against the same card schema, scoped to a network by the user. Local cards participate in the merge like any registry entry, marked as user-added in any UI.
 4. Fetch the chosen market's `price_feed`, parse the JSON response, read the scalar selected by `price_feed_schema.price_path`, then derive `P` in quote-units-per-base-unit via `price_decimals`. A same-asset corridor market skips this step entirely: `P = 1` exactly, and any pre-quote estimate is `fee_bps` (plus cushion) off 1:1.
-5. Spot market: compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension. Corridor market: send a request-for-quote to the market's `discovery_pubkey` over its `transports`, verify the quote's terms and locally-derived contract addresses, then fund — per the RFQ protocol (`arkade-os/lightning-swap-service` `docs/rfq-protocol.md`), whose directed traffic is nostr kind 4859. Funding is the acceptance; there is no separate accept step.
+5. Spot market: compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension. Corridor market: send a request-for-quote to the market's `discovery_pubkey` over its `transports`, verify the quote's terms and locally-derived contract addresses, then fund — per the RFQ protocol (`arkade-os/lightning-swap-service` `docs/rfq-protocol.md`), whose directed traffic is nostr kind 24859. Funding is the acceptance; there is no separate accept step.
 
 There is no liveness signal in v0 for spot markets: those solvers are not publicly reachable, so nothing can be probed before funding — `generated_at` and local fill history are the only heuristics, and the cost of funding into a dead solver is one cancel transaction. Corridor markets are probed by construction: the quote (or its absence) precedes any funding.
 
@@ -207,7 +209,7 @@ The trust anchor is each registry repo the client follows: PR review is the list
 
 ## Appendix: v1 — signed live quotes over nostr (dormant)
 
-> **Not to be confused with the RFQ protocol.** RFQ (kinds 4859/4860/38859, see *Corridor markets*) is live and deployed; it is *directed negotiation* for corridor markets. This appendix is *broadcast pricing* for spot markets on kind 38173, and nothing implements it. The two share the card's key material and the canonical leg-pair key derivation, and nothing else.
+> **Not to be confused with the RFQ protocol.** RFQ (kinds 24859/24860/38859, see *Corridor markets*) is live and deployed; it is *directed negotiation* for corridor markets. This appendix is *broadcast pricing* for spot markets on kind 38173, and nothing implements it. The two share the card's key material and the canonical leg-pair key derivation, and nothing else.
 
 ### Why this layer exists
 
