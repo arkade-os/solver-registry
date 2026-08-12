@@ -123,27 +123,67 @@ export interface WantAmountInput {
   feeBps: number;
   /** Client-chosen cushion; defaults to `DEFAULT_SAFETY_BPS` (50). */
   safetyBps?: number;
+  /**
+   * The market's `fee_flat`, in **quote-asset** atomic units — the part of the
+   * price that does not scale with size. Omitted means none.
+   *
+   * Quote-asset regardless of direction, because that is how a card
+   * denominates it (matching `min_quote_amount` / `max_quote_amount`). When
+   * the maker receives base it therefore has to be converted through the
+   * price; see the note in the body about which way that rounds.
+   */
+  feeFlat?: bigint | number | string;
 }
 
 /**
  * Compute the want amount (atomic units of the received side) the maker should
- * request, conceding `fee_bps + safety_bps` from fair value. Floor division on
- * bigints keeps it exact and never rounds up in the maker's favor. Returns 0n
- * if the conceded spread is >= 100%.
+ * request, conceding `fee_bps + safety_bps` from fair value and then the
+ * market's flat fee. Floor division on bigints keeps it exact and never rounds
+ * up in the maker's favor. Returns 0n if the conceded spread is >= 100%, or if
+ * the flat fee swallows what is left.
+ *
+ * The spread applies to the whole deposit and the flat fee is charged on top
+ * (`fee = amount·bps/10⁴ + flat`) rather than the spread applying to the
+ * remainder after the flat fee. That is the model the RFQ conformance rules
+ * use, so one card prices identically through this flow and through a quote.
  */
 export function computeWantAmount(input: WantAmountInput): bigint {
   const { give, price, feeBps } = input;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const deposit = toBigIntAmount(input.deposit, "deposit");
+  const feeFlat = input.feeFlat === undefined ? 0n : toBigIntAmount(input.feeFlat, "feeFlat");
   const netBps = 10000 - feeBps - safetyBps;
   if (netBps <= 0) return 0n;
   const net = BigInt(netBps);
   // give base: deposit(base) * price(quote/base) * net/10000
   // give quote: deposit(quote) / price(quote/base) * net/10000  == deposit * (den/num) * net/10000
-  if (give === "base") {
-    return (deposit * price.num * net) / (price.den * 10000n);
-  }
-  return (deposit * price.den * net) / (price.num * 10000n);
+  const flat = flatInReceivedUnits(feeFlat, give, price);
+  const gross =
+    give === "base"
+      ? (deposit * price.num * net) / (price.den * 10000n)
+      : (deposit * price.den * net) / (price.num * 10000n);
+  return gross > flat ? gross - flat : 0n;
+}
+
+/**
+ * A market's quote-denominated `fee_flat` expressed in the units the maker
+ * receives when giving `give`.
+ *
+ * Giving base means receiving quote, which is already the fee's denomination,
+ * so that direction is the identity. Giving quote means receiving base, and the
+ * conversion rounds UP — unlike every other division in this file. This one is
+ * a charge rather than a receipt, and flooring it would concede the sub-unit to
+ * the maker.
+ *
+ * Exported so the forward and inverse computations (`computeWantAmount` here
+ * and `depositForWant` in `offer.ts`) cannot drift apart: if they disagreed by
+ * one atomic unit, planning from a receive amount would quote a deposit that
+ * under-funds it.
+ */
+export function flatInReceivedUnits(feeFlat: bigint, give: Side, price: Rational): bigint {
+  if (feeFlat === 0n) return 0n;
+  if (give === "base") return feeFlat;
+  return (feeFlat * price.den + price.num - 1n) / price.num;
 }
 
 /** The opposite side of a pair: what the maker receives when giving `side`. */

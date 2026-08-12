@@ -5,11 +5,12 @@
 // receive this much". `quoteOffer` only adds the price-feed fetch so the output
 // is ready for createOffer/funding code.
 
-import { isSameAssetMarket, type AssetInfo, type Market, type Side } from "./types.ts";
+import { isAmount, isSameAssetMarket, type AssetInfo, type Market, type Side } from "./types.ts";
 import {
   DEFAULT_SAFETY_BPS,
   computeWantAmount,
   deriveAtomicPrice,
+  flatInReceivedUnits,
   otherSide,
   sideLimits,
   type Rational,
@@ -116,6 +117,7 @@ function depositForWant(input: {
   price: Rational;
   feeBps: number;
   safetyBps: number;
+  feeFlat: bigint;
 }): bigint {
   const netBps = 10000 - input.feeBps - input.safetyBps;
   if (netBps <= 0) {
@@ -123,10 +125,15 @@ function depositForWant(input: {
     throw new Error("cannot satisfy wantAmount when fee_bps + safetyBps is >= 100%");
   }
   const net = BigInt(netBps);
+  // The inverse of computeWantAmount, which subtracts the flat fee AFTER
+  // applying the spread — so it goes back on before dividing, in the same
+  // received-side units, via the shared conversion so the two cannot drift.
+  const gross =
+    input.wantAmount + flatInReceivedUnits(input.feeFlat, input.give, input.price);
   if (input.give === "base") {
-    return ceilDiv(input.wantAmount * input.price.den * 10000n, input.price.num * net);
+    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net);
   }
-  return ceilDiv(input.wantAmount * input.price.num * 10000n, input.price.den * net);
+  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net);
 }
 
 /**
@@ -154,6 +161,13 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       throw new Error(`${key}.decimals must be a non-negative integer`);
     }
   }
+  // Absent is the common case and means none. Present-but-malformed throws
+  // rather than reading as zero: a fee that silently becomes 0 understates the
+  // price, which is the one direction this must never fail in.
+  if (market.fee_flat !== undefined && !isAmount(market.fee_flat)) {
+    throw new Error("fee_flat must be a canonical decimal-string amount");
+  }
+  const feeFlat = market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
@@ -179,6 +193,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       price,
       feeBps: market.fee_bps,
       safetyBps,
+      feeFlat,
     });
   } else {
     receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
@@ -188,6 +203,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       price,
       feeBps: market.fee_bps,
       safetyBps,
+      feeFlat,
     });
   }
 

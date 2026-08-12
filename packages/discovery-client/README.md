@@ -74,8 +74,8 @@ const lnMarket = bestMarket(markets, {
 ```
 
 A same-asset corridor market carries no feed — its price is identically 1 and
-`fee_bps` is the whole spread. `quoteOffer` / `planOffer` handle that
-transparently (nothing is fetched), but the plan is a pre-quote estimate: the
+`fee_bps` plus `fee_flat` are the whole price. `quoteOffer` / `planOffer` handle
+that transparently (nothing is fetched), but the plan is a pre-quote estimate: the
 binding amounts come from the solver's RFQ quote, requested via the market's
 `discovery_pubkey` over its `transports` (both present on every corridor entry).
 The RFQ exchange itself is out of this package's scope.
