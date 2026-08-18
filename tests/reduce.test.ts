@@ -205,3 +205,50 @@ test("golden indexes validate under the client's validateIndex", () => {
     assert.equal(r.ok, true, `${network}: ${r.errors.join("; ")}`);
   }
 });
+
+// The asset identity rule is declared in three places -- both schemas and the
+// client's hand-rolled validator -- and an id that clears one copy but not
+// another is a silent routing miss, not an error. The two literals below are
+// duplicated from the shared vector rather than imported, because this repo's
+// client and tests are dependency-free by design; a 68-character constant that
+// is frozen by definition is safe to duplicate, logic is not.
+//
+// Source: @arkade-os/sdk ASSET_ID_VECTORS, entry "endianness discriminator
+// (gidx 258 = 0x0102)" -- packages/ts-sdk/src/extension/asset/assetIdVectors.json.
+// Keep in sync; see ts-sdk plans/asset-id-shared-vectors.md.
+const ASSET_ID_VECTOR = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f200201";
+const ASSET_ID_VECTOR_UPPERCASE = ASSET_ID_VECTOR.toUpperCase();
+
+test("all three copies of the asset identity rule accept the shared vector and reject uppercase", () => {
+  const drift = (where: string) =>
+    `asset id encoding drifted from @arkade-os/sdk ASSET_ID_VECTORS (${where})`;
+
+  // Both schemas, read as the regex they declare.
+  for (const name of ["card.schema.json", "index.schema.json"]) {
+    const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
+    const pattern = new RegExp(schema.definitions.asset.properties.id.pattern);
+    assert.ok(pattern.test(ASSET_ID_VECTOR), drift(name));
+    assert.ok(!pattern.test(ASSET_ID_VECTOR_UPPERCASE), drift(`${name}: uppercase`));
+    assert.ok(pattern.test("btc"), drift(`${name}: btc sentinel`));
+  }
+
+  // ...and the client's own copy, exercised through the validator rather than
+  // by re-reading the regex, so a drifted call site fails here too.
+  const index = JSON.parse(readFileSync(goldenOf("bitcoin"), "utf8"));
+  const withId = (id: string) => ({
+    ...index,
+    markets: index.markets.map((m: { quote_asset: object }, i: number) =>
+      i === 0 ? { ...m, quote_asset: { ...m.quote_asset, id } } : m,
+    ),
+  });
+
+  const accepted = validateIndex(withId(ASSET_ID_VECTOR), "bitcoin");
+  assert.equal(accepted.ok, true, `${drift("validate.ts")}: ${JSON.stringify(accepted.errors)}`);
+
+  const rejected = validateIndex(withId(ASSET_ID_VECTOR_UPPERCASE), "bitcoin");
+  assert.equal(rejected.ok, false, drift("validate.ts: uppercase"));
+  assert.ok(
+    rejected.errors.some((e) => e.includes("quote_asset/id")),
+    drift("validate.ts: uppercase must fail on the id, not incidentally"),
+  );
+});
