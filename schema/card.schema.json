@@ -69,8 +69,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(btc|[0-9a-f]{68}|0x[0-9a-f]{40})$",
-          "description": "Canonical asset identity: \"btc\", a 68-hex-char AssetId, or a lowercase 0x-prefixed ERC-20 contract address on an EVM corridor. The address is not chain-qualified by itself — the side's corridor names the chain and the leg key is \"<corridor>:<id>\", so one address on two chains is two markets. Lowercase rather than EIP-55 mixed case so the identity is byte-comparable; the checksum belongs to display, not to a grouping key."
+          "pattern": "^(btc|native|[0-9a-f]{68}|0x[0-9a-f]{40})$",
+          "description": "Canonical asset identity: \"btc\", \"native\" for a chain corridor's own coin (ETH on ethereum), a 68-hex-char AssetId, or a lowercase 0x-prefixed contract address. The id is not chain-qualified by itself — the side's corridor names the chain and the leg key is \"<corridor>:<id>\", so one address on two chains is two markets, and \"native\" means a different coin on each chain. Lowercase rather than EIP-55 mixed case so the identity is byte-comparable; the checksum belongs to display, not to a grouping key. A bare name vs an address is also what tells a taker WHICH settlement contract a corridor uses — a native coin and a token are different contracts on every EVM chain — so the standard need not be named separately."
         },
         "name": {
           "type": "string",
@@ -149,7 +149,7 @@
           "$ref": "#/definitions/transports"
         }
       ],
-      "description": "Nostr relay URLs the solver listens on. Required \u2014 with discovery_pubkey and sig \u2014 when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
+      "description": "Nostr relay URLs the solver listens on. Required — with discovery_pubkey and sig — when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
     },
     "markets": {
       "type": "array",
@@ -220,7 +220,7 @@
             "type": "string",
             "format": "uri",
             "pattern": "^https://",
-            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
+            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 — fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"

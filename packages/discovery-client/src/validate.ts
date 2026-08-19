@@ -34,7 +34,7 @@ export interface ValidationResult<T> {
 // "btc", a 68-hex AssetId, or a lowercase ERC-20 address on an EVM corridor.
 // Lowercase, not EIP-55 mixed case: this is a grouping key (see marketLegKey),
 // and a checksum that changes the bytes would split one market into two.
-const ASSET_ID = /^(btc|[0-9a-f]{68}|0x[0-9a-f]{40})$/;
+const ASSET_ID = /^(btc|native|[0-9a-f]{68}|0x[0-9a-f]{40})$/;
 const NAME = /^[a-z0-9-]+$/;
 // A pair side is a ticker, optionally prefixed by a non-default corridor
 // ("lightning:BTC"); the arkade corridor is unmarked. Derived from CORRIDORS
