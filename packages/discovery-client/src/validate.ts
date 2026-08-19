@@ -103,7 +103,7 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
-  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc", 68 lowercase hex chars, or a lowercase 0x ERC-20 address');
+  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc", "native", 68 lowercase hex chars, or a lowercase 0x ERC-20 address');
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
   checkIntRange(errors, `${path}/decimals`, v.decimals, 0, MAX_ASSET_DECIMALS);

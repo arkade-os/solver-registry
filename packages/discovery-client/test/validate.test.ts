@@ -428,3 +428,26 @@ test("validateIndex: ignores a stale emulator_pubkey on a market entry", () => {
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.equal(Object.hasOwn(r.value!.markets[0], "emulator_pubkey"), true);
 });
+
+/**
+ * The rejection MESSAGE, not just the rejection.
+ *
+ * `ASSET_ID` accepts four forms and the message listed three: `native` was
+ * added to the pattern and not to the sentence beside it. Every test passed,
+ * because tests check what a validator ACCEPTS and nothing had ever read what
+ * it says when it refuses — so a solver author submitting a bad id would have
+ * been told, authoritatively, that a form the code accepts is not valid.
+ *
+ * Asserted against the pattern rather than a copy of the list: every alternative
+ * the regex admits must appear in the message it prints when something fails.
+ */
+test("validateCard: the asset-id message names every form the pattern accepts", () => {
+  const card = validCard();
+  card.markets[0].base_asset = { ...card.markets[0].base_asset, id: "not-an-asset-id" };
+  const r = validateCard(card);
+  assert.equal(r.ok, false);
+  const message = r.errors.find((e) => e.includes("/id ")) ?? "";
+  for (const form of ['"btc"', '"native"', "68 lowercase hex", "0x"]) {
+    assert.ok(message.includes(form), `rejection message omits ${form}: ${message}`);
+  }
+});
