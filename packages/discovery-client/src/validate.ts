@@ -15,6 +15,7 @@ import {
   LIMIT_KEYS,
   MAX_ASSET_DECIMALS,
   MAX_RELAYS,
+  V1_CORRIDORS,
   isAmount,
   isCorridor,
   isNetwork,
@@ -30,7 +31,10 @@ export interface ValidationResult<T> {
   value?: T;
 }
 
-const ASSET_ID = /^(btc|[0-9a-f]{68})$/;
+// "btc", a 68-hex AssetId, or a lowercase ERC-20 address on an EVM corridor.
+// Lowercase, not EIP-55 mixed case: this is a grouping key (see marketLegKey),
+// and a checksum that changes the bytes would split one market into two.
+const ASSET_ID = /^(btc|[0-9a-f]{68}|0x[0-9a-f]{40})$/;
 const NAME = /^[a-z0-9-]+$/;
 // A pair side is a ticker, optionally prefixed by a non-default corridor
 // ("lightning:BTC"); the arkade corridor is unmarked. Derived from CORRIDORS
@@ -99,7 +103,7 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
-  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
+  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc", 68 lowercase hex chars, or a lowercase 0x ERC-20 address');
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
   checkIntRange(errors, `${path}/decimals`, v.decimals, 0, MAX_ASSET_DECIMALS);
@@ -366,6 +370,51 @@ export function cardRfqErrors(card: {
   return errors;
 }
 
+/**
+ * Which corridors on this card were introduced after version 0, if any.
+ *
+ * Shape-defensive like its neighbours: a market that is not an object, or a
+ * corridor field that is not a known corridor, contributes nothing here and is
+ * reported by {@link marketCorridorErrors} instead.
+ */
+function v1CorridorsUsed(card: { markets?: unknown }): string[] {
+  if (!Array.isArray(card.markets)) return [];
+  const used = new Set<string>();
+  for (const market of card.markets) {
+    if (!isObject(market)) continue;
+    for (const side of ["base", "quote"] as const) {
+      const corridor = marketCorridor(market, side);
+      if ((V1_CORRIDORS as readonly string[]).includes(corridor)) used.add(corridor);
+    }
+  }
+  return [...used].sort();
+}
+
+/**
+ * The version rule: a card using a corridor that postdates version 0 must say
+ * so in `version`.
+ *
+ * This is about INTERPRETATION, not encoding. The canonical form and the
+ * signature are unchanged by a new rail, so a version-0 consumer would compute
+ * a matching digest and conclude the card is authentic — which it is. It would
+ * then be holding a market on a rail it has no code to settle.
+ *
+ * Today such a consumer degrades safely by accident: an unknown corridor fails
+ * this package's own `marketCorridorErrors` and the market is dropped. That is
+ * a property of the current client, not of the format, and it is per-market
+ * rather than per-card. The version makes it the format's promise instead: a
+ * consumer that understands only 0 rejects the card whole, without needing to
+ * have been written to recognise any particular rail.
+ */
+export function cardVersionErrors(card: { version?: unknown; markets?: unknown }): string[] {
+  const used = v1CorridorsUsed(card);
+  if (used.length === 0) return [];
+  if (card.version === 1) return [];
+  return [
+    `version must be 1 when a market uses a corridor introduced after version 0 (found: ${used.join(", ")})`,
+  ];
+}
+
 function checkTransports(errors: string[], path: string, v: unknown): void {
   if (v === undefined) return;
   if (!isObject(v)) {
@@ -432,7 +481,11 @@ export function validateCard(input: unknown): ValidationResult<Card> {
   }
   const errors: string[] = [];
   checkAllowedKeys(errors, "", input, CARD_KEYS);
-  if (input.version !== 0) add(errors, "/version", "must be 0");
+  // 0 or 1 — which one is not free: `cardVersionErrors` below requires 1 when a
+  // market uses a post-v0 rail, and nothing requires 1 otherwise, so a spot card
+  // that gratuitously declared 1 would shut out v0 consumers for no reason.
+  if (input.version !== 0 && input.version !== 1) add(errors, "/version", "must be 0 or 1");
+  for (const message of cardVersionErrors(input)) add(errors, "/version", message);
   checkPattern(errors, "/name", input.name, NAME, 'must match "^[a-z0-9-]+$"');
   if (input.discovery_pubkey !== undefined) {
     checkPattern(errors, "/discovery_pubkey", input.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");

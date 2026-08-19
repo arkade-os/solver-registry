@@ -1,8 +1,14 @@
 {
-  "version": 0,
-  "network": "regtest",
-  "generated_at": 1700000000,
-  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "version": 1,
+  "name": "evm-solver",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
   "markets": [
     {
       "pair": "BTC/ethereum:USDC",
@@ -29,16 +35,8 @@
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
       "min_quote_amount": "1000000",
-      "max_quote_amount": "50000000000",
-      "solver": "evm-solver",
-      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-      "transports": {
-        "nostr": {
-          "relays": [
-            "wss://relay.example.com"
-          ]
-        }
-      }
+      "max_quote_amount": "50000000000"
     }
-  ]
+  ],
+  "sig": "8884c50d0c6533d8013539ec463a64995fb49f9c1092c13d0cecad151d4c55beb2ce4c1eee0ae1512227960e068fe2c54b974c034ff763a1153a4fa96f1d1ac5"
 }

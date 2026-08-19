@@ -89,7 +89,15 @@ test("mixed: a broken network fails independently without blocking sibling netwo
 });
 
 const REJECTION_CASES: Array<{ case: string; expect: string }> = [
-  { case: "bad-version", expect: "must be equal to constant" },
+  // Ajv words `enum` differently from `const`, and `version` became an enum when
+  // 1 was added. The fixture carries 2 — still an unknown version, which is what
+  // this case is for.
+  { case: "bad-version", expect: "must be equal to one of the allowed values" },
+  // The version rule, from the reducer's side: an EVM rail is a post-v0
+  // corridor, so the card must say version 1. Everything else about this
+  // fixture is valid — it is signed-shaped, fed, and bounded — so a pass here
+  // could only mean the rule is not running.
+  { case: "evm-corridor-needs-v1", expect: "version must be 1" },
   { case: "name-mismatch", expect: "does not match filename" },
   { case: "name-pattern", expect: "must match pattern" },
   { case: "duplicate-name", expect: "duplicate name" },

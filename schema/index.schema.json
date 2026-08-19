@@ -18,9 +18,10 @@
       "enum": [
         "arkade",
         "lightning",
-        "onchain"
+        "onchain",
+        "ethereum"
       ],
-      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market)."
+      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market). EVM rails are named per chain — see the card schema's corridor definition for why one blanket \"evm\" value would give the same token on two chains the same leg key."
     },
     "asset": {
       "type": "object",
@@ -34,8 +35,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(btc|[0-9a-f]{68})$",
-          "description": "Canonical asset identity: \"btc\" or a 68-hex-char AssetId."
+          "pattern": "^(btc|[0-9a-f]{68}|0x[0-9a-f]{40})$",
+          "description": "Canonical asset identity: \"btc\", a 68-hex-char AssetId, or a lowercase 0x-prefixed ERC-20 contract address on an EVM corridor. The side's corridor names the chain, so the address needs no chain prefix of its own."
         },
         "name": {
           "type": "string",
@@ -141,7 +142,7 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$",
+            "pattern": "^((lightning|onchain|ethereum):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain|ethereum):)?[A-Za-z0-9._-]{1,16}$",
             "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Canonical identity is the corridor-qualified leg pair."
           },
           "solver": {

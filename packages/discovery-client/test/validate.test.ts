@@ -156,7 +156,9 @@ test("validateCard: accepts a one-sided market (the other side disabled with 0/0
 });
 
 const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: RegExp }> = [
-  { name: "bad version", mutate: (c) => (c.version = 1), expect: /version/ },
+  // 2, not 1: 1 became a REAL version when EVM corridors landed, so the old
+  // fixture stopped testing "unknown version" and started testing a valid one.
+  { name: "bad version", mutate: (c) => (c.version = 2), expect: /version/ },
   { name: "bad name pattern", mutate: (c) => (c.name = "Alice"), expect: /name/ },
   { name: "additional property", mutate: (c) => (c.extra = true), expect: /not an allowed property/ },
   {

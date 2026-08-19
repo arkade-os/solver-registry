@@ -25,10 +25,29 @@ export function isNetwork(value: unknown): value is Network {
  * corridor itself: only a same-asset market omits the feed fields (its
  * price is identically 1); a cross-asset corridor market still advertises
  * a feed for pre-quote planning.
+ *
+ * EVM rails are named PER CHAIN, not by one blanket "evm". An ERC-20 address
+ * is unique only within a chain, so a chain-blind rail would give the same
+ * token on Ethereum and on an L2 the same leg key — silently collapsing two
+ * markets that cannot settle each other's trades. The corridor carries the
+ * chain and the asset id carries the address, which keeps
+ * {@link marketLegKey} unambiguous without a compound identifier.
+ *
+ * Adding a chain is an edit here and in `schema/card.schema.json`, on purpose:
+ * a free-form rail string would let a card advertise a chain no client can
+ * settle on, and the failure would surface after a maker had already chosen
+ * the solver rather than at validation time.
  */
-export const CORRIDORS = ["arkade", "lightning", "onchain"] as const;
+export const CORRIDORS = ["arkade", "lightning", "onchain", "ethereum"] as const;
 export type Corridor = (typeof CORRIDORS)[number];
 export const DEFAULT_CORRIDOR = "arkade" as const satisfies Corridor;
+
+/**
+ * Corridors that did not exist at card version 0. A card using one MUST
+ * declare `version: 1`, and a consumer that understands only 0 must reject
+ * such a card whole rather than skip the market it does not recognise.
+ */
+export const V1_CORRIDORS = ["ethereum"] as const satisfies readonly Corridor[];
 
 export function isCorridor(value: unknown): value is Corridor {
   return (CORRIDORS as readonly string[]).includes(value as string);
