@@ -31,10 +31,37 @@ export interface ValidationResult<T> {
   value?: T;
 }
 
-// "btc", a 68-hex AssetId, or a lowercase ERC-20 address on an EVM corridor.
-// Lowercase, not EIP-55 mixed case: this is a grouping key (see marketLegKey),
-// and a checksum that changes the bytes would split one market into two.
-const ASSET_ID = /^(btc|native|[0-9a-f]{68}|0x[0-9a-f]{40})$/;
+/**
+ * Every form an asset id may take, each with the words the rejection message
+ * uses for it.
+ *
+ * ONE list, and the pattern and the message are both built from it, for the
+ * same reason `PAIR_SIDE` below is derived from `CORRIDORS`: a form added to
+ * the pattern must not be able to leave the sentence behind. That drift is not
+ * hypothetical — `native` was added to the pattern and reached BOTH the message
+ * and the comment above it late, and every test still passed, because tests
+ * checked what the validator ACCEPTS and nothing read what it says when it
+ * refuses. A solver author would have been told, authoritatively, that a form
+ * the code accepts is not valid.
+ *
+ * Lowercase throughout, not EIP-55 mixed case: this is a grouping key (see
+ * marketLegKey), and a checksum that changes the bytes would split one market
+ * into two.
+ */
+export const ASSET_ID_FORMS = [
+  { pattern: "btc", describedAs: '"btc"' },
+  { pattern: "native", describedAs: '"native"' },
+  { pattern: "[0-9a-f]{68}", describedAs: "68 lowercase hex chars" },
+  { pattern: "0x[0-9a-f]{40}", describedAs: "a lowercase 0x ERC-20 address" },
+] as const;
+
+const ASSET_ID = new RegExp(`^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`);
+
+// "a, b, c, or d" — the last form takes the "or", which is why this is not a
+// plain join.
+const ASSET_ID_MESSAGE = `must be ${ASSET_ID_FORMS.slice(0, -1)
+  .map((f) => f.describedAs)
+  .join(", ")}, or ${ASSET_ID_FORMS[ASSET_ID_FORMS.length - 1]!.describedAs}`;
 const NAME = /^[a-z0-9-]+$/;
 // A pair side is a ticker, optionally prefixed by a non-default corridor
 // ("lightning:BTC"); the arkade corridor is unmarked. Derived from CORRIDORS
@@ -103,7 +130,7 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
-  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, 'must be "btc", "native", 68 lowercase hex chars, or a lowercase 0x ERC-20 address');
+  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, ASSET_ID_MESSAGE);
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
   checkIntRange(errors, `${path}/decimals`, v.decimals, 0, MAX_ASSET_DECIMALS);

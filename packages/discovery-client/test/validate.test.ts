@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateCard, validateIndex } from "../src/validate.ts";
+import { ASSET_ID_FORMS, validateCard, validateIndex } from "../src/validate.ts";
 import { makeMarket, makeOneSidedMarket } from "./helpers.ts";
 
 function validCard(): any {
@@ -438,16 +438,58 @@ test("validateIndex: ignores a stale emulator_pubkey on a market entry", () => {
  * it says when it refuses — so a solver author submitting a bad id would have
  * been told, authoritatively, that a form the code accepts is not valid.
  *
- * Asserted against the pattern rather than a copy of the list: every alternative
- * the regex admits must appear in the message it prints when something fails.
+ * Driven from `ASSET_ID_FORMS`, which is now the single list the pattern and
+ * the message are both built from — so a fifth form extends this test with it
+ * and cannot be asserted about in only one place. An earlier version of this
+ * test claimed to assert "against the pattern" while iterating a hand-copied
+ * list of four strings, which is the same coupling-by-copying that produced the
+ * drift it was written to catch: adding an alternative and forgetting the
+ * sentence left it green.
  */
+const BASE_ASSET_ID_PATH = "/markets/0/base_asset/id ";
+
 test("validateCard: the asset-id message names every form the pattern accepts", () => {
   const card = validCard();
   card.markets[0].base_asset = { ...card.markets[0].base_asset, id: "not-an-asset-id" };
   const r = validateCard(card);
   assert.equal(r.ok, false);
-  const message = r.errors.find((e) => e.includes("/id ")) ?? "";
-  for (const form of ['"btc"', '"native"', "68 lowercase hex", "0x"]) {
-    assert.ok(message.includes(form), `rejection message omits ${form}: ${message}`);
+  // Scoped to the asset under test. A bare "/id " matches the quote asset's
+  // error too, which reads the same but is not the one this sets up.
+  const message = r.errors.find((e) => e.startsWith(BASE_ASSET_ID_PATH)) ?? "";
+  for (const { describedAs } of ASSET_ID_FORMS) {
+    assert.ok(message.includes(describedAs), `rejection message omits ${describedAs}: ${message}`);
+  }
+});
+
+/**
+ * The other half of the binding: each form the list describes is one the
+ * pattern actually accepts.
+ *
+ * Without this, `ASSET_ID_FORMS` could grow an entry whose `pattern` is wrong
+ * and only the sentence would change — the message would advertise a form the
+ * validator refuses, which is the same lie as the original drift with the
+ * direction reversed.
+ */
+test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accepts", () => {
+  const sample: Record<string, string> = {
+    btc: "btc",
+    native: "native",
+    "[0-9a-f]{68}": "a".repeat(68),
+    "0x[0-9a-f]{40}": `0x${"b".repeat(40)}`,
+  };
+  for (const { pattern } of ASSET_ID_FORMS) {
+    const value = sample[pattern];
+    assert.ok(value !== undefined, `no sample id for the form ${pattern} — add one`);
+    const card = validCard();
+    card.markets[0].base_asset = { ...card.markets[0].base_asset, id: value };
+    const r = validateCard(card);
+    // Scoped, so a form that breaks a DIFFERENT asset's id cannot be reported
+    // against whichever form this loop happens to reach first — which is how an
+    // earlier version of this test blamed "btc" for a mutation to the 68-hex
+    // form, and would have sent a reader to the wrong line.
+    assert.ok(
+      !r.errors.some((e) => e.startsWith(BASE_ASSET_ID_PATH)),
+      `ASSET_ID_FORMS describes ${pattern} but the pattern rejects ${value}`,
+    );
   }
 });
