@@ -426,7 +426,7 @@ function checkTransports(errors: string[], path: string, v: unknown): void {
     add(errors, path, "must have at least one protocol key");
   }
   if (protocols.length !== 1 || protocols[0] !== "nostr") {
-    add(errors, path, 'must contain exactly the "nostr" protocol key in v0');
+    add(errors, path, 'must contain exactly the "nostr" protocol key');
   }
   for (const protocol of protocols) {
     if (!RELAY_PROTOCOL.test(protocol)) {

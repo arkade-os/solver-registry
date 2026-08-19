@@ -24,6 +24,61 @@ test("validateCard: accepts a well-formed card", () => {
   assert.ok(r.value);
 });
 
+/**
+ * The v1 happy path through `validateCard` itself, not through the reducer.
+ *
+ * The distinction is the point: the reducer's golden test covers a v1 EVM card
+ * end to end, but the reducer is what CI runs. `validateCard` is the
+ * dependency-free path a maker SDK calls on a card a user PINNED, where no CI
+ * ever looked. Everything else about v1 here is negative — version 2 rejected,
+ * an ethereum market without version 1 rejected — so without this the accepting
+ * direction of the rule is only asserted on the side that is not shipped to
+ * makers.
+ */
+test("validateCard: accepts a v1 card carrying an EVM corridor market", () => {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  card.markets[0] = {
+    ...card.markets[0],
+    pair: "BTC/ethereum:USDC",
+    quote_asset: { id: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", name: "USD Coin", ticker: "USDC", decimals: 6 },
+    quote_corridor: "ethereum",
+    price_feed: "https://feed.example.com/x",
+    price_feed_schema: { type: "json", price_path: "/price" },
+    price_decimals: 8,
+  };
+  const r = validateCard(card);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.value?.version, 1);
+});
+
+/**
+ * The chain's own coin, which has no contract address to be identified by.
+ *
+ * Separate from the token case above because it exercises a different branch of
+ * the `id` pattern, and because it is the shape that was inexpressible before
+ * `native` existed — a `BTC/ETH` market simply could not be written.
+ */
+test("validateCard: accepts a v1 card whose EVM side is the chain's native coin", () => {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  card.markets[0] = {
+    ...card.markets[0],
+    pair: "BTC/ethereum:ETH",
+    quote_asset: { id: "native", name: "Ether", ticker: "ETH", decimals: 18 },
+    quote_corridor: "ethereum",
+    price_feed: "https://feed.example.com/x",
+    price_feed_schema: { type: "json", price_path: "/price" },
+    price_decimals: 8,
+  };
+  const r = validateCard(card);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test("validateCard: accepts a market carrying fee_flat, and one omitting it", () => {
   // Optional: omitted means none, so both shapes are well-formed. The market
   // key set is closed, so this also pins fee_flat as a known field rather than

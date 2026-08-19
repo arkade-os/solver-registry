@@ -205,7 +205,17 @@ export interface TransportMap {
 
 /** A card is one solver's market listing for one network (what a solver PRs / a user pins). */
 export interface Card {
-  version: 0;
+  /**
+   * `0 | 1`, not `0`, and the distinction is load-bearing for consumers rather
+   * than cosmetic: `validateCard` accepts both and casts its input to this type,
+   * so a literal `0` here would type `card.version === 1` as unreachable and
+   * `=== 0` as always true. A consumer writing the version guard this format
+   * asks it to write would be compiling against a lie.
+   *
+   * {@link NetworkIndex} correctly keeps the literal `0` — the reducer sets that
+   * field itself and no v1 index exists.
+   */
+  version: 0 | 1;
   name: string;
   discovery_pubkey?: string;
   sig?: string;
