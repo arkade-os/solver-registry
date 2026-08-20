@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
 import { AMOUNT_PATTERN, ASSET_KEYS, CORRIDORS, MAX_ASSET_DECIMALS, MAX_RELAYS } from "../packages/discovery-client/src/types.ts";
-import { validateIndex } from "../packages/discovery-client/src/validate.ts";
+import { ASSET_ID_FORMS, validateIndex } from "../packages/discovery-client/src/validate.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXED_META = { generatedAt: 1700000000, commit: "a".repeat(40) };
@@ -170,10 +170,18 @@ test("the schemas' amount definitions match the client's AMOUNT_PATTERN", () => 
 // skew in index.schema.json alone escapes the whole suite: that schema is
 // compiled against no document here — only third-party consumers run it.
 test("the schemas' asset definitions match the client's ASSET_KEYS and decimals bound", () => {
+  // The id pattern is the same class of duplicate as `amount` above: each
+  // schema keeps its own literal copy of the alternation the client builds
+  // from ASSET_ID_FORMS. Unpinned, a form added to the client is admitted by
+  // the client and refused by the schemas — and the schemas are what a
+  // third-party consumer runs, so the skew shows up as "this registry accepts
+  // a card my validator rejects", not as a red suite here.
+  const assetIdPattern = `^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`;
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const asset = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8")).definitions.asset;
     assert.deepEqual(asset.required, [...ASSET_KEYS], name);
     assert.deepEqual(Object.keys(asset.properties).sort(), [...ASSET_KEYS].sort(), name);
+    assert.equal(asset.properties.id.pattern, assetIdPattern, name);
     assert.equal(asset.properties.decimals.minimum, 0, name);
     assert.equal(asset.properties.decimals.maximum, MAX_ASSET_DECIMALS, name);
   }
