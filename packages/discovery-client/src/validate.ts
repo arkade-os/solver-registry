@@ -47,6 +47,14 @@ export interface ValidationResult<T> {
  * Lowercase throughout, not EIP-55 mixed case: this is a grouping key (see
  * marketLegKey), and a checksum that changes the bytes would split one market
  * into two.
+ *
+ * EXPORTED, and `src/index.ts` re-exports this module with `export *`, so this
+ * is public API of a published package — changing an entry's shape or wording
+ * is a breaking change for consumers, not an internal edit. Deliberate: a
+ * client rendering its own "asset id must be…" message wants the same list the
+ * validator refuses against, and copying it is how the message drifted from the
+ * pattern in the first place. Nothing pins the export surface, so no test will
+ * tell you; treat this list as versioned.
  */
 export const ASSET_ID_FORMS = [
   { pattern: "btc", describedAs: '"btc"' },
