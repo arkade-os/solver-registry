@@ -21,9 +21,10 @@
       "enum": [
         "arkade",
         "lightning",
-        "onchain"
+        "onchain",
+        "ethereum"
       ],
-      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market). A market with any non-arkade side is a corridor (RFQ) market: terms are negotiated per-trade via the card's discovery_pubkey + transports, not read from a price feed."
+      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market). A market with any non-arkade side is a corridor (RFQ) market: terms are negotiated per-trade via the card's discovery_pubkey + transports, not read from a price feed. EVM rails are named PER CHAIN rather than by a single \"evm\" value: a token address is only unique within one chain, so a chain-blind rail would let two different assets share a leg key. Adding a chain is a deliberate change to this enum, not a free-form string, so the reducer and every client agree on the set."
     },
     "transports": {
       "type": "object",
@@ -68,8 +69,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(btc|[0-9a-f]{68})$",
-          "description": "Canonical asset identity: \"btc\" or a 68-hex-char AssetId."
+          "pattern": "^(btc|native|[0-9a-f]{68}|0x[0-9a-f]{40})$",
+          "description": "Canonical asset identity: \"btc\", \"native\" for a chain corridor's own coin (ETH on ethereum), a 68-hex-char AssetId, or a lowercase 0x-prefixed contract address. The id is not chain-qualified by itself — the side's corridor names the chain and the leg key is \"<corridor>:<id>\", so one address on two chains is two markets, and \"native\" means a different coin on each chain. Lowercase rather than EIP-55 mixed case so the identity is byte-comparable; the checksum belongs to display, not to a grouping key. A bare name vs an address is also what tells a taker WHICH SETTLEMENT path a corridor uses, so the token standard need not be named separately: \"native\" settles as a plain value transfer of the chain's own coin (Boltz's EtherSwap), a 0x address settles through that token's contract (ERC20Swap). The 0x address is the TOKEN's address, never the swap contract's — a taker resolves the latter from the corridor, not from this field."
         },
         "name": {
           "type": "string",
@@ -121,7 +122,11 @@
   },
   "properties": {
     "version": {
-      "const": 0
+      "enum": [
+        0,
+        1
+      ],
+      "description": "Card format version. 0 is every card written before EVM corridors existed. A card MUST declare 1 when any market side uses a corridor introduced after 0 (today: the EVM chain rails); a consumer that understands only 0 MUST reject a version-1 card outright rather than interpret the markets it recognises and skip the rest. Bumping is about INTERPRETATION, not encoding: the canonical form and signature are unchanged, so a v0 verifier would still compute a matching digest — and would then be trusting a rail it cannot settle on."
     },
     "name": {
       "type": "string",
@@ -144,7 +149,7 @@
           "$ref": "#/definitions/transports"
         }
       ],
-      "description": "Nostr relay URLs the solver listens on. Required \u2014 with discovery_pubkey and sig \u2014 when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
+      "description": "Nostr relay URLs the solver listens on. Required — with discovery_pubkey and sig — when any market has a non-arkade corridor (the reducer enforces this cross-field rule): they are the rendezvous makers address request-for-quote messages to."
     },
     "markets": {
       "type": "array",
@@ -181,8 +186,8 @@
         "properties": {
           "pair": {
             "type": "string",
-            "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$",
-            "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise (e.g. \"BTC/USDT\", \"BTC/lightning:BTC\"). Must equal the labels derived from the sides' corridors and tickers (the reducer enforces this). Canonical identity is the corridor-qualified leg pair."
+            "pattern": "^((lightning|onchain|ethereum):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain|ethereum):)?[A-Za-z0-9._-]{1,16}$",
+            "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise (e.g. \"BTC/USDT\", \"BTC/lightning:BTC\", \"BTC/ethereum:USDC\"). Must equal the labels derived from the sides' corridors and tickers (the reducer enforces this). Canonical identity is the corridor-qualified leg pair, NOT this label — note an EVM side's label carries its TICKER while its leg key carries the contract address, because a 42-character address does not fit a 16-character label and would not be readable if it did."
           },
           "base_asset": {
             "allOf": [
@@ -215,7 +220,7 @@
             "type": "string",
             "format": "uri",
             "pattern": "^https://",
-            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
+            "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 — fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
             "$ref": "#/definitions/priceFeedSchema"

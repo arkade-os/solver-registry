@@ -1,0 +1,41 @@
+{
+  "version": 0,
+  "name": "solver1",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
+  "markets": [
+    {
+      "pair": "BTC/ethereum:USDC",
+      "base_asset": {
+        "id": "btc",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "name": "USD Coin",
+        "ticker": "USDC",
+        "decimals": 6
+      },
+      "quote_corridor": "ethereum",
+      "price_feed": "https://feed.example.com/solver1",
+      "price_feed_schema": {
+        "type": "json",
+        "price_path": "/price"
+      },
+      "price_decimals": 8,
+      "fee_bps": 25,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "1000000",
+      "max_quote_amount": "50000000000"
+    }
+  ]
+}

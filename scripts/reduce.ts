@@ -12,6 +12,7 @@ import { verifyCardSig } from "./canonical.ts";
 import {
   cardHasRfqMarket,
   cardRfqErrors,
+  cardVersionErrors,
   marketCorridorErrors,
   marketLimitErrors,
   marketPairError,
@@ -97,6 +98,10 @@ export function reduceNetwork(
         }
       }
       for (const message of cardRfqErrors(card)) messages.push(message);
+      // Same words as the client's own validator, for the same reason the RFQ
+      // rules are shared: a card rejected by CI must be rejected by a consumer
+      // that pinned it locally, and vice versa.
+      for (const message of cardVersionErrors(card)) messages.push(message);
       // The registry's listing gate is stricter than a local pin: the
       // rendezvous must carry the solver's own signature, not just the PR
       // author's word (see cardRfqErrors for the split's rationale).

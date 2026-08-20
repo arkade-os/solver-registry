@@ -116,6 +116,33 @@ Canonical form, CI-enforced: the two legs must differ; when exactly one side is 
 
 One consequence worth naming: corridor markets close v0's liveness gap for their own trades. A spot maker funds blind — nothing can be probed before funding. A corridor maker gets a quote (or a structured refusal, or silence) before committing anything, so a dead solver costs a timeout instead of a cancel transaction.
 
+### EVM corridors — one rail per chain, and card version 1
+
+An EVM corridor trades an Arkade balance against an ERC-20 token, and needs **no new market fields**. The shape already fits: `base_asset`/`quote_asset` carry `decimals`, amounts are atomic-unit decimal strings, and a token-against-BTC market is cross-asset so the existing rule already requires `price_feed`, `price_feed_schema` and `price_decimals`. What it needed was a rail the schema would accept.
+
+**Rails are named per chain — `ethereum`, not `evm`.** Two independent reasons, either sufficient:
+
+- **An ERC-20 address is unique only within one chain.** Canonical identity is the corridor-qualified leg key `"<corridor>:<asset-id>"`, so a single `evm` rail would give USDC-on-Ethereum and USDC-on-some-L2 the *same* key and collapse two markets the reducer must keep apart. Deterministic deployment makes this worse than theoretical: one address can name different tokens on different chains.
+- **"EVM-compatible" is not "interchangeable".** Gas mechanics, fee markets, finality and reorg behaviour differ between chains. A blanket `evm` rail would advertise a capability no solver can back — a maker reading `evm:USDC` would reasonably infer that any EVM chain works.
+
+Adding a chain is therefore a deliberate edit to the `corridor` enum in both schemas and to `CORRIDORS` in the client, not a free-form string. A rail nobody has code for should fail validation, not fail a maker after they have chosen the solver.
+
+CAIP-2 chain ids (`eip155:1`) were considered and rejected: the pair label's grammar is `"<corridor>:<ticker>"`, so a colon-bearing rail fights its own separator, and the existing vocabulary (`lightning`, `onchain`) is human names.
+
+**The two identifiers are not the same string, and conflating them is the easy mistake.** A side's `pair` label carries its **ticker** (`BTC/ethereum:USDC`); the leg key carries its **asset id**, which for an EVM token is the contract address (`ethereum:0xa0b8…`). A 42-character address cannot fit the label's 16-character bound and would not be readable if it could. Addresses are lowercase, not EIP-55 mixed case: the leg key is a grouping key, and a checksum that changes the bytes would split one market in two.
+
+**The chain's own coin is `"native"`, not an address**, because it has none — `{ "id": "native", "ticker": "ETH", "decimals": 18 }` on the `ethereum` corridor. This mirrors how `btc` already names Bitcoin rather than carrying an identifier. `native` is chain-relative by design: the leg key qualifies it (`ethereum:native`), so the same token stays one market and each chain's own coin stays its own. It is spelled `native` rather than `eth` so a chain whose coin is not ether needs no second naming decision.
+
+**This is also why the rail does not name a token standard.** A rail like `ethereum-erc20` looks tempting — a native coin and a token really are settled by different contracts on every EVM chain (Boltz, for instance, ships `EtherSwap` and `ERC20Swap` as separate deployments). But that distinction is already carried, unambiguously, by the asset id: a bare name means the chain's coin, an address means a contract at that address. Encoding it in the rail as well would make the enum the cross product of chains and standards, and would put the same fact in two places that can disagree.
+
+**Limits worth stating rather than discovering.** The `id` shape identifies an asset by *one* value, which covers a native coin and any single-address fungible token — ERC-20 and the standards that are ERC-20-compatible in the transfer path. It does **not** express an asset that needs a compound identifier, ERC-1155 being the live example: a 1155 asset is `(contract address, token id)`, and no combination of the current fields names one. A registry MUST NOT list such a market by putting the token id somewhere else; extending `asset` is the correct route, and would be a further version bump under the same rule as above.
+
+**Card version.** A card whose markets use a rail introduced after version 0 MUST declare `"version": 1`, and a consumer that understands only version 0 MUST reject such a card whole rather than keep the markets it recognises and drop the rest.
+
+This is about interpretation, not encoding. The canonical form and the signature are unchanged by a new rail, so a version-0 verifier would compute a matching digest and correctly conclude the card is authentic — and would then be holding a market on a rail it cannot settle. Today such a consumer happens to degrade safely, because an unknown corridor fails the client's own corridor rules and the market is dropped; but that is a property of the current client rather than a promise of the format, and it is per-market rather than per-card. The version makes it the format's promise.
+
+The **rollout sequencing** rule above applies unchanged, for the same reason it applied to corridor markets: a registry MUST NOT merge its first version-1 card until the clients it serves ship a release that understands version 1.
+
 ## The reducer (GitHub Action)
 
 On every merge to the default branch, CI, independently per network directory:

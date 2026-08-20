@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateCard, validateIndex } from "../src/validate.ts";
+import { ASSET_ID_FORMS, validateCard, validateIndex } from "../src/validate.ts";
 import { makeMarket, makeOneSidedMarket } from "./helpers.ts";
 
 function validCard(): any {
@@ -22,6 +22,61 @@ test("validateCard: accepts a well-formed card", () => {
   const r = validateCard(validCard());
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.ok(r.value);
+});
+
+/**
+ * The v1 happy path through `validateCard` itself, not through the reducer.
+ *
+ * The distinction is the point: the reducer's golden test covers a v1 EVM card
+ * end to end, but the reducer is what CI runs. `validateCard` is the
+ * dependency-free path a maker SDK calls on a card a user PINNED, where no CI
+ * ever looked. Everything else about v1 here is negative — version 2 rejected,
+ * an ethereum market without version 1 rejected — so without this the accepting
+ * direction of the rule is only asserted on the side that is not shipped to
+ * makers.
+ */
+test("validateCard: accepts a v1 card carrying an EVM corridor market", () => {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  card.markets[0] = {
+    ...card.markets[0],
+    pair: "BTC/ethereum:USDC",
+    quote_asset: { id: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", name: "USD Coin", ticker: "USDC", decimals: 6 },
+    quote_corridor: "ethereum",
+    price_feed: "https://feed.example.com/x",
+    price_feed_schema: { type: "json", price_path: "/price" },
+    price_decimals: 8,
+  };
+  const r = validateCard(card);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.value?.version, 1);
+});
+
+/**
+ * The chain's own coin, which has no contract address to be identified by.
+ *
+ * Separate from the token case above because it exercises a different branch of
+ * the `id` pattern, and because it is the shape that was inexpressible before
+ * `native` existed — a `BTC/ETH` market simply could not be written.
+ */
+test("validateCard: accepts a v1 card whose EVM side is the chain's native coin", () => {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  card.markets[0] = {
+    ...card.markets[0],
+    pair: "BTC/ethereum:ETH",
+    quote_asset: { id: "native", name: "Ether", ticker: "ETH", decimals: 18 },
+    quote_corridor: "ethereum",
+    price_feed: "https://feed.example.com/x",
+    price_feed_schema: { type: "json", price_path: "/price" },
+    price_decimals: 8,
+  };
+  const r = validateCard(card);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
 test("validateCard: accepts a market carrying fee_flat, and one omitting it", () => {
@@ -111,9 +166,25 @@ test("validateCard: explicit base_corridor 'arkade' is equivalent to omitting it
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+/**
+ * arkade:BTC base, lightning:USDT quote — different assets, so the feed fields
+ * stay required exactly as on a spot market.
+ *
+ * ALSO the case that pins `asset.id` and the side's corridor as ORTHOGONAL: the
+ * id names the asset, the corridor names the rail it settles on. The quote here
+ * is a 68-hex Arkade AssetId on the `lightning` corridor, and that is a real
+ * market — an asset moved over Lightning — not a contradiction. The schema says
+ * as much ("the id is not chain-qualified by itself; the side's corridor names
+ * the chain and the leg key is <corridor>:<id>"), but the relation is easy to
+ * read the other way round.
+ *
+ * Said here because two independent reviewers have now inferred the opposite —
+ * that an id's FORM should be constrained by its corridor, so a 68-hex id would
+ * be arkade-only and `0x...` ethereum-only — and a validator built on that
+ * reading rejects this market. If the model is ever meant to tighten, it is a
+ * spec decision and a breaking change for published cards, not a missing check.
+ */
 test("validateCard: accepts a cross-asset corridor market carrying a feed", () => {
-  // arkade:BTC base, lightning:USDT quote — different assets, so the feed
-  // fields stay required exactly as on a spot market.
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
@@ -156,7 +227,9 @@ test("validateCard: accepts a one-sided market (the other side disabled with 0/0
 });
 
 const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: RegExp }> = [
-  { name: "bad version", mutate: (c) => (c.version = 1), expect: /version/ },
+  // 2, not 1: 1 became a REAL version when EVM corridors landed, so the old
+  // fixture stopped testing "unknown version" and started testing a valid one.
+  { name: "bad version", mutate: (c) => (c.version = 2), expect: /version/ },
   { name: "bad name pattern", mutate: (c) => (c.name = "Alice"), expect: /name/ },
   { name: "additional property", mutate: (c) => (c.extra = true), expect: /not an allowed property/ },
   {
@@ -370,4 +443,69 @@ test("validateIndex: ignores a stale emulator_pubkey on a market entry", () => {
   const r = validateIndex(idx, "bitcoin");
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.equal(Object.hasOwn(r.value!.markets[0], "emulator_pubkey"), true);
+});
+
+/**
+ * The rejection MESSAGE, not just the rejection.
+ *
+ * `ASSET_ID` accepts four forms and the message listed three: `native` was
+ * added to the pattern and not to the sentence beside it. Every test passed,
+ * because tests check what a validator ACCEPTS and nothing had ever read what
+ * it says when it refuses — so a solver author submitting a bad id would have
+ * been told, authoritatively, that a form the code accepts is not valid.
+ *
+ * Driven from `ASSET_ID_FORMS`, which is now the single list the pattern and
+ * the message are both built from — so a fifth form extends this test with it
+ * and cannot be asserted about in only one place. An earlier version of this
+ * test claimed to assert "against the pattern" while iterating a hand-copied
+ * list of four strings, which is the same coupling-by-copying that produced the
+ * drift it was written to catch: adding an alternative and forgetting the
+ * sentence left it green.
+ */
+const BASE_ASSET_ID_PATH = "/markets/0/base_asset/id ";
+
+test("validateCard: the asset-id message names every form the pattern accepts", () => {
+  const card = validCard();
+  card.markets[0].base_asset = { ...card.markets[0].base_asset, id: "not-an-asset-id" };
+  const r = validateCard(card);
+  assert.equal(r.ok, false);
+  // Scoped to the asset under test. A bare "/id " matches the quote asset's
+  // error too, which reads the same but is not the one this sets up.
+  const message = r.errors.find((e) => e.startsWith(BASE_ASSET_ID_PATH)) ?? "";
+  for (const { describedAs } of ASSET_ID_FORMS) {
+    assert.ok(message.includes(describedAs), `rejection message omits ${describedAs}: ${message}`);
+  }
+});
+
+/**
+ * The other half of the binding: each form the list describes is one the
+ * pattern actually accepts.
+ *
+ * Without this, `ASSET_ID_FORMS` could grow an entry whose `pattern` is wrong
+ * and only the sentence would change — the message would advertise a form the
+ * validator refuses, which is the same lie as the original drift with the
+ * direction reversed.
+ */
+test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accepts", () => {
+  const sample: Record<string, string> = {
+    btc: "btc",
+    native: "native",
+    "[0-9a-f]{68}": "a".repeat(68),
+    "0x[0-9a-f]{40}": `0x${"b".repeat(40)}`,
+  };
+  for (const { pattern } of ASSET_ID_FORMS) {
+    const value = sample[pattern];
+    assert.ok(value !== undefined, `no sample id for the form ${pattern} — add one`);
+    const card = validCard();
+    card.markets[0].base_asset = { ...card.markets[0].base_asset, id: value };
+    const r = validateCard(card);
+    // Scoped, so a form that breaks a DIFFERENT asset's id cannot be reported
+    // against whichever form this loop happens to reach first — which is how an
+    // earlier version of this test blamed "btc" for a mutation to the 68-hex
+    // form, and would have sent a reader to the wrong line.
+    assert.ok(
+      !r.errors.some((e) => e.startsWith(BASE_ASSET_ID_PATH)),
+      `ASSET_ID_FORMS describes ${pattern} but the pattern rejects ${value}`,
+    );
+  }
 });
