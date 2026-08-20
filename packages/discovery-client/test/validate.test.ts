@@ -166,9 +166,25 @@ test("validateCard: explicit base_corridor 'arkade' is equivalent to omitting it
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+/**
+ * arkade:BTC base, lightning:USDT quote — different assets, so the feed fields
+ * stay required exactly as on a spot market.
+ *
+ * ALSO the case that pins `asset.id` and the side's corridor as ORTHOGONAL: the
+ * id names the asset, the corridor names the rail it settles on. The quote here
+ * is a 68-hex Arkade AssetId on the `lightning` corridor, and that is a real
+ * market — an asset moved over Lightning — not a contradiction. The schema says
+ * as much ("the id is not chain-qualified by itself; the side's corridor names
+ * the chain and the leg key is <corridor>:<id>"), but the relation is easy to
+ * read the other way round.
+ *
+ * Said here because two independent reviewers have now inferred the opposite —
+ * that an id's FORM should be constrained by its corridor, so a 68-hex id would
+ * be arkade-only and `0x...` ethereum-only — and a validator built on that
+ * reading rejects this market. If the model is ever meant to tighten, it is a
+ * spec decision and a breaking change for published cards, not a missing check.
+ */
 test("validateCard: accepts a cross-asset corridor market carrying a feed", () => {
-  // arkade:BTC base, lightning:USDT quote — different assets, so the feed
-  // fields stay required exactly as on a spot market.
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
