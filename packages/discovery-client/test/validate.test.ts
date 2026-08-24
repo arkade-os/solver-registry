@@ -126,6 +126,16 @@ test("validateCard: accepts a cross-asset corridor market carrying a feed", () =
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: accepts valid HTTP and HTTPS price feeds", () => {
+  const httpCard = validCard();
+  httpCard.markets[0].price_feed = "http://feed.example.com/btcusdt";
+  assert.equal(validateCard(httpCard).ok, true);
+
+  const httpsCard = validCard();
+  httpsCard.markets[0].price_feed = "https://feed.example.com/btcusdt";
+  assert.equal(validateCard(httpsCard).ok, true);
+});
+
 test("validateCard: accepts a market with both sides off-rail (no canonical leg order)", () => {
   // lightning:BTC / onchain:BTC — a submarine-swap market with no Arkade
   // side. The arkade-must-be-base rule fires only when exactly one side is
@@ -299,13 +309,7 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     mutate: (c) => (c.markets[0].price_feed_schema.price_path = "bitcoin/usd"),
     expect: /JSON Pointer/,
   },
-  {
-    // https only, like the schemas — a laxer client check would admit local
-    // cards the reducer rejects.
-    name: "plain-http price feed",
-    mutate: (c) => (c.markets[0].price_feed = "http://feed.example.com/btcusdt"),
-    expect: /must be an https:\/\/ URL/,
-  },
+  { name: "malformed price feed URL", mutate: (c) => (c.markets[0].price_feed = "http://"), expect: /price_feed/ },
   { name: "fee out of range", mutate: (c) => (c.markets[0].fee_bps = 20_000), expect: /fee_bps/ },
   { name: "sig without pubkey", mutate: (c) => (c.sig = "0".repeat(128)), expect: /discovery_pubkey/ },
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },

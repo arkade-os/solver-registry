@@ -196,7 +196,7 @@
           "price_feed": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https://",
+            "pattern": "^https?://",
             "description": "Present on cross-asset markets only; absent on same-asset corridor markets, whose price is identically 1."
           },
           "price_feed_schema": {
