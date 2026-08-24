@@ -295,8 +295,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // below), since it depends on whether the sides carry the same asset.
   // https only, matching the schemas — a laxer check here would admit local
   // cards the reducer rejects.
-  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https:\/\//))) {
-    add(errors, `${path}/price_feed`, "must be an https:// URL");
+  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//))) {
+    add(errors, `${path}/price_feed`, "must be an http[s]:// URL");
   }
   if (v.price_feed_schema !== undefined) {
     checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
