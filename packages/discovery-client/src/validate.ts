@@ -74,6 +74,15 @@ function checkPattern(errors: string[], path: string, v: unknown, re: RegExp, me
   if (typeof v !== "string" || !re.test(v)) add(errors, path, message);
 }
 
+function isHttpUrlWithHost(v: string): boolean {
+  try {
+    const url = new URL(v);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function checkIntRange(errors: string[], path: string, v: unknown, min: number, max: number): void {
   if (!isInt(v) || v < min || v > max) add(errors, path, `must be an integer in ${min}..${max}`);
 }
@@ -293,10 +302,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // Feed fields are format-checked when present; whether they must be
   // present or absent is the corridor rule set's call (marketCorridorErrors,
   // below), since it depends on whether the sides carry the same asset.
-  // https only, matching the schemas — a laxer check here would admit local
-  // cards the reducer rejects.
-  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https?:\/\//))) {
-    add(errors, `${path}/price_feed`, "must be an http[s]:// URL");
+  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !isHttpUrlWithHost(v.price_feed))) {
+    add(errors, `${path}/price_feed`, "must be a valid http[s]:// URL with host");
   }
   if (v.price_feed_schema !== undefined) {
     checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
