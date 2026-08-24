@@ -214,7 +214,7 @@
           "price_feed": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https://",
+            "pattern": "^https?://",
             "description": "Required when the sides carry different assets; must be absent (with the other feed fields) on a same-asset market, whose price is identically 1 \u2014 fee_bps and fee_flat are the whole price and executable terms arrive in the solver's RFQ quote. The reducer enforces this cross-field rule."
           },
           "price_feed_schema": {
