@@ -274,9 +274,9 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /transports is required when any market has a non-arkade corridor/,
   },
   {
-    name: "non-wss relay",
+    name: "non-ws[s] relay",
     mutate: (c) => (c.transports = { nostr: { relays: ["https://relay.example.com"] } }),
-    expect: /must be a wss:\/\/ URL/,
+    expect: /must be a ws\[s\]:\/\/ URL/,
   },
   {
     name: "empty relays list",

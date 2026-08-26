@@ -46,7 +46,7 @@
               "items": {
                 "type": "string",
                 "format": "uri",
-                "pattern": "^wss://",
+                "pattern": "^wss?://",
                 "description": "A Nostr relay URL the solver listens on."
               }
             }

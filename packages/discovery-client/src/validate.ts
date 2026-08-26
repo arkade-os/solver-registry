@@ -404,7 +404,7 @@ function checkTransports(errors: string[], path: string, v: unknown): void {
       continue;
     }
     list.forEach((relay, i) => {
-      checkPattern(errors, `${path}/${protocol}/relays/${i}`, relay, RELAY, "must be a wss:// URL");
+      checkPattern(errors, `${path}/${protocol}/relays/${i}`, relay, RELAY, "must be a ws[s]:// URL");
     });
   }
 }
