@@ -46,7 +46,7 @@ const PUBKEY = /^[0-9a-f]{64}$/;
 // strict schema to everything that merges; tighten here only if a malformed
 // relay ever survives to a maker.
 const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
-const RELAY = /^wss:\/\/[^\s]+$/;
+const RELAY = /^wss?:\/\/[^\s]+$/;
 // ponytail: format-only — this client never verifies a signature (the
 // dependency-free constraint again; the reducer verifies at CI, local pins
 // are the user's own trust decision). Add verification only if the client
