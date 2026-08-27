@@ -309,7 +309,7 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
     checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
   }
   if (v.price_decimals !== undefined) {
-    checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, 0, 18);
+    checkIntRange(errors, `${path}/price_decimals`, v.price_decimals, -18, 18);
   }
   checkIntRange(errors, `${path}/fee_bps`, v.fee_bps, 0, 10000);
   // Optional — absent means none. Same canonical form as the size bounds, so a
