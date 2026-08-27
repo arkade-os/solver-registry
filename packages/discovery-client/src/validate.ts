@@ -41,10 +41,10 @@ const PAIR = new RegExp(`^${PAIR_SIDE}/${PAIR_SIDE}$`);
 const PUBKEY = /^[0-9a-f]{64}$/;
 // ponytail: RELAY is looser than the schema's `format: uri` — full URI
 // validation needs a spec-grade parser (Ajv brings one; this dependency-free
-// client does not), and the operative guarantees — wss scheme, no whitespace
-// — are what the checks downstream rely on. The reducer still applies the
-// strict schema to everything that merges; tighten here only if a malformed
-// relay ever survives to a maker.
+// client does not), and the operative guarantees — ws or wss scheme, no
+// whitespace — are what the checks downstream rely on. The reducer still 
+// applies the strict schema to everything that merges; tighten here only if a
+// malformed relay ever survives to a maker.
 const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
 const RELAY = /^wss?:\/\/[^\s]+$/;
 // ponytail: format-only — this client never verifies a signature (the
