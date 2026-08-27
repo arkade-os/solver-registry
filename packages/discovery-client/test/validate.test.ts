@@ -101,6 +101,16 @@ test("validateCard: tolerates unknown nostr-transport keys alongside relays", ()
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: accepts valid ws:// and wss:// nostr relays in transports", () => {
+  const ws = validCard();
+  ws.transports = { nostr: { relays: ["ws://relay.example.com"], read: true, write: false } };
+  assert.equal(validateCard(ws).ok, true);
+
+  const wss = validCard();
+  wss.transports = { nostr: { relays: ["wss://relay.example.com"], read: true, write: false } };
+  assert.equal(validateCard(wss).ok, true);
+});
+
 test("validateCard: explicit base_corridor 'arkade' is equivalent to omitting it", () => {
   // marketCorridor defaults an absent side to arkade; writing it out must
   // change nothing — same spot semantics, same pair label, no rendezvous
