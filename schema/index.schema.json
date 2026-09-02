@@ -204,9 +204,9 @@
           },
           "price_decimals": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": -18,
             "maximum": 18,
-            "description": "The feed value divided by 10^price_decimals is the price in quote-atomic-units per base-atomic-unit."
+            "description": "The feed value divided by 10^price_decimals is the price in quote-atomic-units per base-atomic-unit. Negative when the quote asset has more decimals than the base (dividing by 10^-n multiplies by 10^n)."
           },
           "fee_bps": {
             "type": "integer",
