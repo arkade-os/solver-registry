@@ -6,13 +6,13 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:0",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:0",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -35,13 +35,13 @@
     },
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:0",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bolt11:signet/slip44:0",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -64,13 +64,13 @@
     },
     {
       "base_asset": {
-        "id": "bolt11:signet/slip44:0",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:0",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8

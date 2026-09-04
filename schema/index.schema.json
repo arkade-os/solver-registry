@@ -25,7 +25,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(arkade:(?:bitcoin|signet|mutinynet|regtest)/slip44:(?:0|[1-9][0-9]{0,9})|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin|signet|mutinynet|regtest)/slip44:(?:0|[1-9][0-9]{0,9})|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/slip44:(?:0|[1-9][0-9]{0,9})|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
+          "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
           "description": "Canonical asset identity: a CAIP-19-shaped id, \"<chain-namespace>:<chain-reference>/<asset-namespace>:<asset-reference>\" — see the card schema's asset definition for the full grammar and examples. The chain namespace IS the corridor, bundled into the id rather than carried as a separate base_corridor/quote_corridor field."
         },
         "name": {
@@ -164,7 +164,7 @@
                     "items": {
                       "type": "string",
                       "format": "uri",
-                      "pattern": "^wss://"
+                      "pattern": "^wss?://"
                     }
                   }
                 }
@@ -175,7 +175,7 @@
           "price_feed": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https://",
+            "pattern": "^https?://",
             "description": "Present on cross-asset markets only; absent on same-asset corridor markets, whose price is identically 1."
           },
           "price_feed_schema": {

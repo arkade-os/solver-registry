@@ -65,18 +65,26 @@ export interface ValidationResult<T> {
  * tell you; treat this list as versioned.
  */
 const NETWORK_REF = `(?:${NETWORKS.join("|")})`;
+// arkade/bolt11/bitcoin are BTC-only rails, so their slip44 reference isn't
+// an open coin-type space the way eip155's is: it's exactly the SLIP-44
+// "Bitcoin" code (0) on the mainnet network, or SLIP-44's "Testnet (all
+// coins)" code (1) on every other network — never 0 on a testnet or 1 on
+// mainnet, and never any other coin type. "bitcoin:bitcoin/slip44:60" (an
+// EVM-native coin type on an onchain-BTC rail) would clear a coin-type-only
+// pattern; this one refuses it as loudly as a bare "btc" would.
+const BTC_SLIP44_REF = `(?:bitcoin/slip44:0|(?:${NETWORKS.filter((n) => n !== "bitcoin").join("|")})/slip44:1)`;
 export const ASSET_ID_FORMS = [
   {
-    pattern: `arkade:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
-    describedAs: 'an Arkade-corridor SLIP-44 id, e.g. "arkade:bitcoin/slip44:0"',
+    pattern: `arkade:${BTC_SLIP44_REF}`,
+    describedAs: 'an Arkade-corridor BTC id, e.g. "arkade:bitcoin/slip44:0" (mainnet) or "arkade:mutinynet/slip44:1" (testnet)',
   },
   {
     pattern: `arkade:${NETWORK_REF}/asset:[0-9a-f]{68}`,
     describedAs: 'an Arkade-issued asset id, e.g. "arkade:bitcoin/asset:<68-hex>"',
   },
   {
-    pattern: `bolt11:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
-    describedAs: 'a bolt11-corridor SLIP-44 id, e.g. "bolt11:bitcoin/slip44:0"',
+    pattern: `bolt11:${BTC_SLIP44_REF}`,
+    describedAs: 'a bolt11-corridor BTC id, e.g. "bolt11:bitcoin/slip44:0" (mainnet) or "bolt11:mutinynet/slip44:1" (testnet)',
   },
   // An Arkade-issued asset moving over a non-arkade rail is a real market
   // (e.g. a stablecoin submarine-swapped over Lightning), not a
@@ -92,8 +100,8 @@ export const ASSET_ID_FORMS = [
     describedAs: 'an Arkade-issued asset moved over the bolt11 corridor, e.g. "bolt11:bitcoin/asset:<68-hex>"',
   },
   {
-    pattern: `bitcoin:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
-    describedAs: 'a bitcoin-corridor (onchain) SLIP-44 id, e.g. "bitcoin:bitcoin/slip44:0"',
+    pattern: `bitcoin:${BTC_SLIP44_REF}`,
+    describedAs: 'a bitcoin-corridor (onchain) BTC id, e.g. "bitcoin:bitcoin/slip44:0" (mainnet) or "bitcoin:mutinynet/slip44:1" (testnet)',
   },
   {
     pattern: `bitcoin:${NETWORK_REF}/asset:[0-9a-f]{68}`,
@@ -120,12 +128,12 @@ const NAME = /^[a-z0-9-]+$/;
 const PUBKEY = /^[0-9a-f]{64}$/;
 // ponytail: RELAY is looser than the schema's `format: uri` — full URI
 // validation needs a spec-grade parser (Ajv brings one; this dependency-free
-// client does not), and the operative guarantees — wss scheme, no whitespace
-// — are what the checks downstream rely on. The reducer still applies the
-// strict schema to everything that merges; tighten here only if a malformed
-// relay ever survives to a maker.
+// client does not), and the operative guarantees — ws or wss scheme, no
+// whitespace — are what the checks downstream rely on. The reducer still 
+// applies the strict schema to everything that merges; tighten here only if a
+// malformed relay ever survives to a maker.
 const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
-const RELAY = /^wss:\/\/[^\s]+$/;
+const RELAY = /^wss?:\/\/[^\s]+$/;
 // ponytail: format-only — this client never verifies a signature (the
 // dependency-free constraint again; the reducer verifies at CI, local pins
 // are the user's own trust decision). Add verification only if the client
@@ -151,6 +159,15 @@ function add(errors: string[], path: string, message: string): void {
 
 function checkPattern(errors: string[], path: string, v: unknown, re: RegExp, message: string): void {
   if (typeof v !== "string" || !re.test(v)) add(errors, path, message);
+}
+
+function isHttpUrlWithHost(v: string): boolean {
+  try {
+    const url = new URL(v);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function checkIntRange(errors: string[], path: string, v: unknown, min: number, max: number): void {
@@ -353,10 +370,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   // Feed fields are format-checked when present; whether they must be
   // present or absent is the corridor rule set's call (marketCorridorErrors,
   // below), since it depends on whether the sides carry the same asset.
-  // https only, matching the schemas — a laxer check here would admit local
-  // cards the reducer rejects.
-  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !v.price_feed.match(/^https:\/\//))) {
-    add(errors, `${path}/price_feed`, "must be an https:// URL");
+  if (v.price_feed !== undefined && (typeof v.price_feed !== "string" || !isHttpUrlWithHost(v.price_feed))) {
+    add(errors, `${path}/price_feed`, "must be a valid http[s]:// URL with host");
   }
   if (v.price_feed_schema !== undefined) {
     checkPriceFeedSchema(errors, `${path}/price_feed_schema`, v.price_feed_schema, strict);
@@ -502,7 +517,7 @@ function checkTransports(errors: string[], path: string, v: unknown): void {
       continue;
     }
     list.forEach((relay, i) => {
-      checkPattern(errors, `${path}/${protocol}/relays/${i}`, relay, RELAY, "must be a wss:// URL");
+      checkPattern(errors, `${path}/${protocol}/relays/${i}`, relay, RELAY, "must be a ws[s]:// URL");
     });
   }
 }

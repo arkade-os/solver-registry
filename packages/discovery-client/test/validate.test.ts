@@ -150,6 +150,16 @@ test("validateCard: tolerates unknown nostr-transport keys alongside relays", ()
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
+test("validateCard: accepts valid ws:// and wss:// nostr relays in transports", () => {
+  const ws = validCard();
+  ws.transports = { nostr: { relays: ["ws://relay.example.com"], read: true, write: false } };
+  assert.equal(validateCard(ws).ok, true);
+
+  const wss = validCard();
+  wss.transports = { nostr: { relays: ["wss://relay.example.com"], read: true, write: false } };
+  assert.equal(validateCard(wss).ok, true);
+});
+
 /**
  * arkade:BTC base, bolt11:USDT (an Arkade-issued asset moved over Lightning)
  * quote — different assets, so the feed fields stay required exactly as on a
@@ -180,6 +190,16 @@ test("validateCard: accepts a cross-asset corridor market carrying a feed", () =
   c.transports = { nostr: { relays: ["wss://relay.example.com"] } };
   const r = validateCard(c);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
+test("validateCard: accepts valid HTTP and HTTPS price feeds", () => {
+  const httpCard = validCard();
+  httpCard.markets[0].price_feed = "http://feed.example.com/btcusdt";
+  assert.equal(validateCard(httpCard).ok, true);
+
+  const httpsCard = validCard();
+  httpsCard.markets[0].price_feed = "https://feed.example.com/btcusdt";
+  assert.equal(validateCard(httpsCard).ok, true);
 });
 
 test("validateCard: accepts a market with both sides off-rail (no canonical leg order)", () => {
@@ -313,9 +333,9 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /transports is required when any market has a non-arkade corridor/,
   },
   {
-    name: "non-wss relay",
+    name: "non-ws[s] relay",
     mutate: (c) => (c.transports = { nostr: { relays: ["https://relay.example.com"] } }),
-    expect: /must be a wss:\/\/ URL/,
+    expect: /must be a ws\[s\]:\/\/ URL/,
   },
   {
     name: "empty relays list",
@@ -348,13 +368,7 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     mutate: (c) => (c.markets[0].price_feed_schema.price_path = "bitcoin/usd"),
     expect: /JSON Pointer/,
   },
-  {
-    // https only, like the schemas — a laxer client check would admit local
-    // cards the reducer rejects.
-    name: "plain-http price feed",
-    mutate: (c) => (c.markets[0].price_feed = "http://feed.example.com/btcusdt"),
-    expect: /must be an https:\/\/ URL/,
-  },
+  { name: "malformed price feed URL", mutate: (c) => (c.markets[0].price_feed = "http://"), expect: /price_feed/ },
   { name: "fee out of range", mutate: (c) => (c.markets[0].fee_bps = 20_000), expect: /fee_bps/ },
   { name: "sig without pubkey", mutate: (c) => (c.sig = "0".repeat(128)), expect: /discovery_pubkey/ },
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },
@@ -464,12 +478,13 @@ test("validateCard: the asset-id message names every form the pattern accepts", 
  */
 test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accepts", () => {
   const NETWORK_REF = "(?:bitcoin|signet|mutinynet|regtest)";
+  const BTC_SLIP44_REF = "(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)";
   const sample: Record<string, string> = {
-    [`arkade:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "arkade:bitcoin/slip44:0",
+    [`arkade:${BTC_SLIP44_REF}`]: "arkade:bitcoin/slip44:0",
     [`arkade:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `arkade:bitcoin/asset:${"a".repeat(68)}`,
-    [`bolt11:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "bolt11:bitcoin/slip44:0",
+    [`bolt11:${BTC_SLIP44_REF}`]: "bolt11:mutinynet/slip44:1",
     [`bolt11:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bolt11:bitcoin/asset:${"a".repeat(68)}`,
-    [`bitcoin:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "bitcoin:bitcoin/slip44:0",
+    [`bitcoin:${BTC_SLIP44_REF}`]: "bitcoin:bitcoin/slip44:0",
     [`bitcoin:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bitcoin:bitcoin/asset:${"a".repeat(68)}`,
     "eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})": "eip155:1/slip44:60",
     "eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40}": `eip155:1/erc20:0x${"b".repeat(40)}`,

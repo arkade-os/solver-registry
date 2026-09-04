@@ -84,9 +84,9 @@ test("corridor markets group by leg pair: bolt11 and bitcoin(onchain) BTC/BTC st
   assert.deepEqual(
     result.index!.markets.map((m) => marketPairKey(m)),
     [
-      "arkade:signet/slip44:0/bitcoin:signet/slip44:0",
-      "arkade:signet/slip44:0/bolt11:signet/slip44:0",
-      "bolt11:signet/slip44:0/bitcoin:signet/slip44:0",
+      "arkade:signet/slip44:1/bitcoin:signet/slip44:1",
+      "arkade:signet/slip44:1/bolt11:signet/slip44:1",
+      "bolt11:signet/slip44:1/bitcoin:signet/slip44:1",
     ],
   );
 });
@@ -235,4 +235,57 @@ test("golden indexes validate under the client's validateIndex", () => {
     const r = validateIndex(idx, network);
     assert.equal(r.ok, true, `${network}: ${r.errors.join("; ")}`);
   }
+});
+
+// The asset identity rule is declared in three places -- both schemas and the
+// client's hand-rolled validator -- and an id that clears one copy but not
+// another is a silent routing miss, not an error. The 68-hex reference below
+// is duplicated from the shared vector rather than imported, because this
+// repo's client and tests are dependency-free by design; a frozen constant is
+// safe to duplicate, logic is not.
+//
+// Source: @arkade-os/sdk ASSET_ID_VECTORS, entry "endianness discriminator
+// (gidx 258 = 0x0102)" -- packages/ts-sdk/src/extension/asset/assetIdVectors.json.
+// Keep in sync; see ts-sdk plans/asset-id-shared-vectors.md.
+//
+// The vector itself is just the 68-hex asset-reference half of a CAIP-19 id
+// now (see docs/arkade-discovery-spec.md "Asset ids and corridors"); wrap it
+// as an Arkade-issued asset id ("arkade:bitcoin/asset:<vector>") to exercise
+// the full pattern, the same way a real card would carry it.
+const ASSET_ID_VECTOR_REFERENCE = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f200201";
+const ASSET_ID_VECTOR = `arkade:bitcoin/asset:${ASSET_ID_VECTOR_REFERENCE}`;
+const ASSET_ID_VECTOR_UPPERCASE = `arkade:bitcoin/asset:${ASSET_ID_VECTOR_REFERENCE.toUpperCase()}`;
+
+test("all three copies of the asset identity rule accept the shared vector and reject uppercase", () => {
+  const drift = (where: string) =>
+    `asset id encoding drifted from @arkade-os/sdk ASSET_ID_VECTORS (${where})`;
+
+  // Both schemas, read as the regex they declare.
+  for (const name of ["card.schema.json", "index.schema.json"]) {
+    const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
+    const pattern = new RegExp(schema.definitions.asset.properties.id.pattern);
+    assert.ok(pattern.test(ASSET_ID_VECTOR), drift(name));
+    assert.ok(!pattern.test(ASSET_ID_VECTOR_UPPERCASE), drift(`${name}: uppercase`));
+    assert.ok(pattern.test("arkade:bitcoin/slip44:0"), drift(`${name}: slip44 sentinel`));
+  }
+
+  // ...and the client's own copy, exercised through the validator rather than
+  // by re-reading the regex, so a drifted call site fails here too.
+  const index = JSON.parse(readFileSync(goldenOf("bitcoin"), "utf8"));
+  const withId = (id: string) => ({
+    ...index,
+    markets: index.markets.map((m: { quote_asset: object }, i: number) =>
+      i === 0 ? { ...m, quote_asset: { ...m.quote_asset, id } } : m,
+    ),
+  });
+
+  const accepted = validateIndex(withId(ASSET_ID_VECTOR), "bitcoin");
+  assert.equal(accepted.ok, true, `${drift("validate.ts")}: ${JSON.stringify(accepted.errors)}`);
+
+  const rejected = validateIndex(withId(ASSET_ID_VECTOR_UPPERCASE), "bitcoin");
+  assert.equal(rejected.ok, false, drift("validate.ts: uppercase"));
+  assert.ok(
+    rejected.errors.some((e) => e.includes("quote_asset/id")),
+    drift("validate.ts: uppercase must fail on the id, not incidentally"),
+  );
 });

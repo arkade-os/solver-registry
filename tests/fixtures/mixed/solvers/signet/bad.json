@@ -4,7 +4,7 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:0",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8

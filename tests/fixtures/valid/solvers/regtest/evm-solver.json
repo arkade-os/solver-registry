@@ -12,7 +12,7 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:regtest/slip44:0",
+        "id": "arkade:regtest/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -37,7 +37,7 @@
     },
     {
       "base_asset": {
-        "id": "arkade:regtest/slip44:0",
+        "id": "arkade:regtest/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -61,5 +61,5 @@
       "max_quote_amount": "5000000000000000000"
     }
   ],
-  "sig": "de39a81ca11118c2856abb0fb31efb7b209e0d27f0bbd1f766412b9e9f7fa339046149539452d53b6a309a57e5d7e6458dd75267479ad2b2709c533eb4d1c7ce"
+  "sig": "5fe7912f729837009cc49940232dcad576b2de0273ec461dbfbf4be4c624e127a441df23be3554d2478cc8c88b21303bc279ee24c734cfd6c58786b04c50ca46"
 }

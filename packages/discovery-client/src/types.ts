@@ -190,9 +190,9 @@ export interface Market {
 }
 
 /**
- * Nostr transport config. `relays` (wss://, 1-8) is required; the object stays
- * open to future nostr-specific settings (e.g. per-relay read/write markers)
- * without a schema break — v0 only defines `relays`.
+ * Nostr transport config. `relays` (wss:// or ws://, 1-8) is required; the 
+ * object stays open to future nostr-specific settings (e.g. per-relay read/
+ * write markers) without a schema break — v0 only defines `relays`.
  */
 export interface NostrTransport {
   relays: string[];

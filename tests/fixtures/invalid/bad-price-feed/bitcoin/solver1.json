@@ -15,7 +15,7 @@
         "ticker": "USDT",
         "decimals": 6
       },
-      "price_feed": "http://feed.example.com/x",
+      "price_feed": "httx://",
       "price_feed_schema": {
         "type": "json",
         "price_path": "/price"

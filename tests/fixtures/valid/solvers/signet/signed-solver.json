@@ -13,13 +13,13 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:0",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bolt11:signet/slip44:0",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -32,13 +32,13 @@
     },
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:0",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:0",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -51,13 +51,13 @@
     },
     {
       "base_asset": {
-        "id": "bolt11:signet/slip44:0",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:0",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
@@ -69,5 +69,5 @@
       "max_quote_amount": "2000000"
     }
   ],
-  "sig": "3dbde86cfec7b7a709c92a2964e3d7e88b9ccdd71f4167259c0b123169b75e7b47872c44eae83a03485f862d3fed08d71547428bbd053c68073e40f91bccc1a5"
+  "sig": "d982e51ec30818e033e234c7b27591785b64074eb4121e11310fdbb6a77fd60673e5c78a3c1180d89aad365f315c9f6e38610e79b1c3440e2a66956fcd9f2114"
 }
