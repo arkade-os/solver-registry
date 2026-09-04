@@ -42,9 +42,7 @@ test("validateCard: accepts a v1 card carrying an EVM corridor market", () => {
   card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
   card.markets[0] = {
     ...card.markets[0],
-    pair: "BTC/ethereum:USDC",
-    quote_asset: { id: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", name: "USD Coin", ticker: "USDC", decimals: 6 },
-    quote_corridor: "ethereum",
+    quote_asset: { id: "eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", name: "USD Coin", ticker: "USDC", decimals: 6 },
     price_feed: "https://feed.example.com/x",
     price_feed_schema: { type: "json", price_path: "/price" },
     price_decimals: 8,
@@ -55,11 +53,13 @@ test("validateCard: accepts a v1 card carrying an EVM corridor market", () => {
 });
 
 /**
- * The chain's own coin, which has no contract address to be identified by.
+ * The chain's own coin, identified by the SLIP-44 coin type rather than a
+ * contract address it has none of.
  *
  * Separate from the token case above because it exercises a different branch of
  * the `id` pattern, and because it is the shape that was inexpressible before
- * `native` existed — a `BTC/ETH` market simply could not be written.
+ * the `eip155`/`slip44` combination existed — a `BTC/ETH` market simply could
+ * not be written.
  */
 test("validateCard: accepts a v1 card whose EVM side is the chain's native coin", () => {
   const card = validCard();
@@ -68,9 +68,7 @@ test("validateCard: accepts a v1 card whose EVM side is the chain's native coin"
   card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
   card.markets[0] = {
     ...card.markets[0],
-    pair: "BTC/ethereum:ETH",
-    quote_asset: { id: "native", name: "Ether", ticker: "ETH", decimals: 18 },
-    quote_corridor: "ethereum",
+    quote_asset: { id: "eip155:1/slip44:60", name: "Ether", ticker: "ETH", decimals: 18 },
     price_feed: "https://feed.example.com/x",
     price_feed_schema: { type: "json", price_path: "/price" },
     price_decimals: 8,
@@ -121,9 +119,7 @@ test("validateCard: accepts a corridor card carrying the RFQ rendezvous", () => 
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
-    pair: "BTC/lightning:BTC",
-    quote_asset: { ...c.markets[0].base_asset },
-    quote_corridor: "lightning",
+    quote_asset: { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" },
   };
   delete c.markets[0].price_feed;
   delete c.markets[0].price_feed_schema;
@@ -142,9 +138,7 @@ test("validateCard: tolerates unknown nostr-transport keys alongside relays", ()
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
-    pair: "BTC/lightning:BTC",
-    quote_asset: { ...c.markets[0].base_asset },
-    quote_corridor: "lightning",
+    quote_asset: { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" },
   };
   delete c.markets[0].price_feed;
   delete c.markets[0].price_feed_schema;
@@ -156,40 +150,31 @@ test("validateCard: tolerates unknown nostr-transport keys alongside relays", ()
   assert.equal(r.ok, true, JSON.stringify(r.errors));
 });
 
-test("validateCard: explicit base_corridor 'arkade' is equivalent to omitting it", () => {
-  // marketCorridor defaults an absent side to arkade; writing it out must
-  // change nothing — same spot semantics, same pair label, no rendezvous
-  // requirements.
-  const c = validCard();
-  c.markets[0] = { ...c.markets[0], base_corridor: "arkade", quote_corridor: "arkade" };
-  const r = validateCard(c);
-  assert.equal(r.ok, true, JSON.stringify(r.errors));
-});
-
 /**
- * arkade:BTC base, lightning:USDT quote — different assets, so the feed fields
- * stay required exactly as on a spot market.
+ * arkade:BTC base, bolt11:USDT (an Arkade-issued asset moved over Lightning)
+ * quote — different assets, so the feed fields stay required exactly as on a
+ * spot market.
  *
- * ALSO the case that pins `asset.id` and the side's corridor as ORTHOGONAL: the
- * id names the asset, the corridor names the rail it settles on. The quote here
- * is a 68-hex Arkade AssetId on the `lightning` corridor, and that is a real
- * market — an asset moved over Lightning — not a contradiction. The schema says
- * as much ("the id is not chain-qualified by itself; the side's corridor names
- * the chain and the leg key is <corridor>:<id>"), but the relation is easy to
- * read the other way round.
+ * ALSO the case that pins the chain-namespace half of the id and the
+ * asset-namespace half as ORTHOGONAL: the asset-namespace half names the
+ * asset, the chain-namespace half names the rail it settles on. The quote
+ * here is an Arkade-issued asset id on the `bolt11` chain namespace, and
+ * that is a real market — an asset moved over Lightning — not a
+ * contradiction. See the `bolt11:.../asset:` entry in `ASSET_ID_FORMS`
+ * (validate.ts), which exists specifically so this stays expressible.
  *
- * Said here because two independent reviewers have now inferred the opposite —
- * that an id's FORM should be constrained by its corridor, so a 68-hex id would
- * be arkade-only and `0x...` ethereum-only — and a validator built on that
- * reading rejects this market. If the model is ever meant to tighten, it is a
- * spec decision and a breaking change for published cards, not a missing check.
+ * Said here because two independent reviewers, before this id was bundled
+ * with the corridor, inferred the opposite — that an id's FORM should be
+ * constrained by its corridor, so an Arkade-asset id would be arkade-only —
+ * and a validator built on that reading rejects this market. If the model is
+ * ever meant to tighten, it is a spec decision and a breaking change for
+ * published cards, not a missing check.
  */
 test("validateCard: accepts a cross-asset corridor market carrying a feed", () => {
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
-    pair: "BTC/lightning:USDT",
-    quote_corridor: "lightning",
+    quote_asset: { ...c.markets[0].quote_asset, id: `bolt11:bitcoin/asset:${"a".repeat(68)}` },
   };
   c.discovery_pubkey = "d".repeat(64);
   c.transports = { nostr: { relays: ["wss://relay.example.com"] } };
@@ -198,16 +183,14 @@ test("validateCard: accepts a cross-asset corridor market carrying a feed", () =
 });
 
 test("validateCard: accepts a market with both sides off-rail (no canonical leg order)", () => {
-  // lightning:BTC / onchain:BTC — a submarine-swap market with no Arkade
-  // side. The arkade-must-be-base rule fires only when exactly one side is
-  // arkade; the rendezvous requirements still apply.
+  // bolt11:BTC / bitcoin:BTC — a submarine-swap market with no Arkade side.
+  // The arkade-must-be-base rule fires only when exactly one side is arkade;
+  // the rendezvous requirements still apply.
   const c = validCard();
   c.markets[0] = {
     ...c.markets[0],
-    pair: "lightning:BTC/onchain:BTC",
-    quote_asset: { ...c.markets[0].base_asset },
-    base_corridor: "lightning",
-    quote_corridor: "onchain",
+    base_asset: { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" },
+    quote_asset: { ...c.markets[0].base_asset, id: "bitcoin:bitcoin/slip44:0" },
   };
   delete c.markets[0].price_feed;
   delete c.markets[0].price_feed_schema;
@@ -278,14 +261,8 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /at least one side/,
   },
   {
-    name: "pair/ticker mismatch",
-    mutate: (c) => (c.markets[0].pair = "BTC/USD"),
-    expect: /does not match the sides' labels/,
-  },
-  {
     name: "identical legs",
     mutate: (c) => {
-      c.markets[0].pair = "BTC/BTC";
       c.markets[0].quote_asset = { ...c.markets[0].base_asset };
       delete c.markets[0].price_feed;
       delete c.markets[0].price_feed_schema;
@@ -296,9 +273,7 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   {
     name: "feed on a same-asset corridor market",
     mutate: (c) => {
-      c.markets[0].pair = "BTC/lightning:BTC";
-      c.markets[0].quote_asset = { ...c.markets[0].base_asset };
-      c.markets[0].quote_corridor = "lightning";
+      c.markets[0].quote_asset = { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" };
     },
     expect: /must be absent on a same-asset market/,
   },
@@ -314,22 +289,23 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   {
     name: "arkade side not base",
     mutate: (c) => {
-      c.markets[0].pair = "lightning:BTC/USDT";
-      c.markets[0].base_corridor = "lightning";
+      c.markets[0].base_asset = { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" };
     },
     expect: /must be the base side/,
   },
   {
+    // "liquid" is not a recognised chain namespace — now an ordinary
+    // asset-id pattern rejection, since the corridor is bundled into the id
+    // rather than living in a separate field an "unknown corridor" enum
+    // check could target.
     name: "unknown corridor",
-    mutate: (c) => (c.markets[0].quote_corridor = "liquid"),
-    expect: /quote_corridor must be one of arkade, lightning, onchain/,
+    mutate: (c) => (c.markets[0].quote_asset.id = "liquid:bitcoin/slip44:0"),
+    expect: /quote_asset\/id must be/,
   },
   {
     name: "corridor market without the RFQ rendezvous",
     mutate: (c) => {
-      c.markets[0].pair = "BTC/lightning:BTC";
-      c.markets[0].quote_asset = { ...c.markets[0].base_asset };
-      c.markets[0].quote_corridor = "lightning";
+      c.markets[0].quote_asset = { ...c.markets[0].base_asset, id: "bolt11:bitcoin/slip44:0" };
       delete c.markets[0].price_feed;
       delete c.markets[0].price_feed_schema;
       delete c.markets[0].price_decimals;
@@ -487,11 +463,16 @@ test("validateCard: the asset-id message names every form the pattern accepts", 
  * direction reversed.
  */
 test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accepts", () => {
+  const NETWORK_REF = "(?:bitcoin|signet|mutinynet|regtest)";
   const sample: Record<string, string> = {
-    btc: "btc",
-    native: "native",
-    "[0-9a-f]{68}": "a".repeat(68),
-    "0x[0-9a-f]{40}": `0x${"b".repeat(40)}`,
+    [`arkade:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "arkade:bitcoin/slip44:0",
+    [`arkade:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `arkade:bitcoin/asset:${"a".repeat(68)}`,
+    [`bolt11:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "bolt11:bitcoin/slip44:0",
+    [`bolt11:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bolt11:bitcoin/asset:${"a".repeat(68)}`,
+    [`bitcoin:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`]: "bitcoin:bitcoin/slip44:0",
+    [`bitcoin:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bitcoin:bitcoin/asset:${"a".repeat(68)}`,
+    "eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})": "eip155:1/slip44:60",
+    "eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40}": `eip155:1/erc20:0x${"b".repeat(40)}`,
   };
   for (const { pattern } of ASSET_ID_FORMS) {
     const value = sample[pattern];

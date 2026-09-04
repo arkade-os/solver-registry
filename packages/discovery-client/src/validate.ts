@@ -6,22 +6,23 @@
 // mirror `schema/card.schema.json` / `schema/index.schema.json` and the extra
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
-import type { AssetInfo, Card, NetworkIndex, Side } from "./types.ts";
+import type { Card, NetworkIndex } from "./types.ts";
 import {
   AMOUNT_PATTERN,
+  ARKADE_NETWORK_CORRIDORS,
   ASSET_KEYS,
-  CORRIDOR_KEYS,
-  CORRIDORS,
   LIMIT_KEYS,
   MAX_ASSET_DECIMALS,
   MAX_RELAYS,
+  NETWORKS,
   V1_CORRIDORS,
+  assetIdOf,
+  chainReferenceOf,
   isAmount,
-  isCorridor,
   isNetwork,
   isRfqMarket,
+  isSameAssetMarket,
   marketCorridor,
-  pairSideLabel,
 } from "./types.ts";
 
 export interface ValidationResult<T> {
@@ -35,18 +36,25 @@ export interface ValidationResult<T> {
  * Every form an asset id may take, each with the words the rejection message
  * uses for it.
  *
- * ONE list, and the pattern and the message are both built from it, for the
- * same reason `PAIR_SIDE` below is derived from `CORRIDORS`: a form added to
- * the pattern must not be able to leave the sentence behind. That drift is not
- * hypothetical — `native` was added to the pattern and reached BOTH the message
- * and the comment above it late, and every test still passed, because tests
- * checked what the validator ACCEPTS and nothing read what it says when it
- * refuses. A solver author would have been told, authoritatively, that a form
- * the code accepts is not valid.
+ * ONE list, and the pattern and the message are both built from it: a form
+ * added to the pattern must not be able to leave the sentence behind. That
+ * drift is not hypothetical — `native` was added to the old bare-id pattern
+ * and reached BOTH the message and the comment above it late, and every test
+ * still passed, because tests checked what the validator ACCEPTS and nothing
+ * read what it says when it refuses. A solver author would have been told,
+ * authoritatively, that a form the code accepts is not valid.
  *
- * Lowercase throughout, not EIP-55 mixed case: this is a grouping key (see
- * marketLegKey), and a checksum that changes the bytes would split one market
- * into two.
+ * Each entry is a full CAIP-19 asset type, "<chain-namespace>:<chain-
+ * reference>/<asset-namespace>:<asset-reference>" — the corridor is now
+ * bundled into the id itself (see the `Corridor` doc comment in types.ts), so
+ * there is no longer a bare, corridor-free id form. `<chain-reference>` for
+ * `arkade`/`bolt11`/`bitcoin` is one of {@link NETWORKS} — the same Arkade
+ * network the asset settles on, whichever rail it takes; for `eip155` it is
+ * the numeric EIP-155 chain id, unconstrained (any chain id is well-formed —
+ * adding a chain is not a schema edit the way a per-chain corridor enum
+ * required). Lowercase throughout, not EIP-55 mixed case: this is a grouping
+ * key (see marketLegKey), and a checksum that changes the bytes would split
+ * one market into two.
  *
  * EXPORTED, and `src/index.ts` re-exports this module with `export *`, so this
  * is public API of a published package — changing an entry's shape or wording
@@ -56,11 +64,49 @@ export interface ValidationResult<T> {
  * pattern in the first place. Nothing pins the export surface, so no test will
  * tell you; treat this list as versioned.
  */
+const NETWORK_REF = `(?:${NETWORKS.join("|")})`;
 export const ASSET_ID_FORMS = [
-  { pattern: "btc", describedAs: '"btc"' },
-  { pattern: "native", describedAs: '"native"' },
-  { pattern: "[0-9a-f]{68}", describedAs: "68 lowercase hex chars" },
-  { pattern: "0x[0-9a-f]{40}", describedAs: "a lowercase 0x ERC-20 address" },
+  {
+    pattern: `arkade:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
+    describedAs: 'an Arkade-corridor SLIP-44 id, e.g. "arkade:bitcoin/slip44:0"',
+  },
+  {
+    pattern: `arkade:${NETWORK_REF}/asset:[0-9a-f]{68}`,
+    describedAs: 'an Arkade-issued asset id, e.g. "arkade:bitcoin/asset:<68-hex>"',
+  },
+  {
+    pattern: `bolt11:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
+    describedAs: 'a bolt11-corridor SLIP-44 id, e.g. "bolt11:bitcoin/slip44:0"',
+  },
+  // An Arkade-issued asset moving over a non-arkade rail is a real market
+  // (e.g. a stablecoin submarine-swapped over Lightning), not a
+  // contradiction — the asset-namespace half of the id names WHAT settles,
+  // the chain-namespace half names WHICH RAIL it settles on, and the two are
+  // orthogonal. Keep this bolt11/bitcoin pairing even though today's fixtures
+  // only exercise arkade:.../asset:…: the pre-bundling schema deliberately
+  // allowed any asset-id form on any corridor for exactly this reason (see
+  // validate.test.ts), and narrowing it here would be a quiet regression of
+  // that decision, not a natural consequence of bundling.
+  {
+    pattern: `bolt11:${NETWORK_REF}/asset:[0-9a-f]{68}`,
+    describedAs: 'an Arkade-issued asset moved over the bolt11 corridor, e.g. "bolt11:bitcoin/asset:<68-hex>"',
+  },
+  {
+    pattern: `bitcoin:${NETWORK_REF}/slip44:(?:0|[1-9][0-9]{0,9})`,
+    describedAs: 'a bitcoin-corridor (onchain) SLIP-44 id, e.g. "bitcoin:bitcoin/slip44:0"',
+  },
+  {
+    pattern: `bitcoin:${NETWORK_REF}/asset:[0-9a-f]{68}`,
+    describedAs: 'an Arkade-issued asset moved over the bitcoin (onchain) corridor, e.g. "bitcoin:bitcoin/asset:<68-hex>"',
+  },
+  {
+    pattern: "eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})",
+    describedAs: 'an eip155 chain\'s native-coin SLIP-44 id, e.g. "eip155:1/slip44:60"',
+  },
+  {
+    pattern: "eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40}",
+    describedAs: 'an eip155 ERC-20 id, e.g. "eip155:1/erc20:0x…"',
+  },
 ] as const;
 
 const ASSET_ID = new RegExp(`^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`);
@@ -71,12 +117,6 @@ const ASSET_ID_MESSAGE = `must be ${ASSET_ID_FORMS.slice(0, -1)
   .map((f) => f.describedAs)
   .join(", ")}, or ${ASSET_ID_FORMS[ASSET_ID_FORMS.length - 1]!.describedAs}`;
 const NAME = /^[a-z0-9-]+$/;
-// A pair side is a ticker, optionally prefixed by a non-default corridor
-// ("lightning:BTC"); the arkade corridor is unmarked. Derived from CORRIDORS
-// so a new corridor can't leave this behind; the schemas' copy of the
-// pattern is pinned to CORRIDORS by tests.
-const PAIR_SIDE = `(?:(?:${CORRIDORS.filter((c) => c !== "arkade").join("|")}):)?[A-Za-z0-9._-]{1,16}`;
-const PAIR = new RegExp(`^${PAIR_SIDE}/${PAIR_SIDE}$`);
 const PUBKEY = /^[0-9a-f]{64}$/;
 // ponytail: RELAY is looser than the schema's `format: uri` — full URI
 // validation needs a spec-grade parser (Ajv brings one; this dependency-free
@@ -155,11 +195,8 @@ function checkPriceFeedSchema(errors: string[], path: string, v: unknown, strict
 }
 
 const MARKET_KEYS = new Set([
-  "pair",
   "base_asset",
   "quote_asset",
-  "base_corridor",
-  "quote_corridor",
   "price_feed",
   "price_feed_schema",
   "price_decimals",
@@ -207,32 +244,6 @@ export function marketLimitErrors(market: { [key in LimitKey]?: unknown }): stri
   return errors;
 }
 
-/**
- * The pair-label rule, shared with the reducer: `pair` must equal
- * "<base-label>/<quote-label>", where a side's label is its ticker on the
- * arkade corridor and "<corridor>:<ticker>" otherwise. Returns the error
- * message, or null when it matches — or when the fields are too malformed to
- * compare, which the schema layer reports instead.
- */
-export function marketPairError(market: {
-  pair?: unknown;
-  base_asset?: unknown;
-  quote_asset?: unknown;
-  base_corridor?: unknown;
-  quote_corridor?: unknown;
-}): string | null {
-  const base = (market.base_asset as AssetInfo | undefined)?.ticker;
-  const quote = (market.quote_asset as AssetInfo | undefined)?.ticker;
-  if (typeof market.pair !== "string" || typeof base !== "string" || typeof quote !== "string") {
-    return null;
-  }
-  const expected = `${pairSideLabel(marketCorridor(market, "base"), base)}/${pairSideLabel(
-    marketCorridor(market, "quote"),
-    quote,
-  )}`;
-  return market.pair === expected ? null : `pair "${market.pair}" does not match the sides' labels "${expected}"`;
-}
-
 const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const;
 
 /**
@@ -240,46 +251,39 @@ const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const
  * reject the same cards with the same words. Data-dependent, so they live
  * here rather than in the JSON schemas (draft-07 cannot compare two fields):
  *
- * - the two legs (corridor + asset id) must differ — a market trading a leg
- *   against itself is a null trade, and the pre-corridor "BTC/BTC" shape it
- *   used to smuggle is exactly the ambiguity corridors remove;
+ * - the two legs (full CAIP-19 asset ids, corridor and all) must differ — a
+ *   market trading a leg against itself is a null trade;
  * - when exactly one side is on the arkade corridor it must be the base
  *   side, so equivalent corridor markets group under one canonical key;
- * - a same-asset market prices identically at 1: the feed fields must be
- *   absent (`fee_bps` and `fee_flat` are the whole price; executable terms
- *   arrive by RFQ);
+ * - a same-**underlying-asset** market prices identically at 1 regardless of
+ *   which rail each side settles on: the feed fields must be absent
+ *   (`fee_bps` and `fee_flat` are the whole price; executable terms arrive by
+ *   RFQ) — see {@link isSameAssetMarket};
  * - a cross-asset market needs all three feed fields — the schema no longer
  *   requires them unconditionally, so their presence is enforced here.
  *
- * Shape-defensive: sides whose corridor field is present but not a known
- * corridor are reported here (mirroring the schema enum) and read as arkade
- * for the remaining rules.
+ * The old per-side "must be one of arkade, lightning, …" corridor check is
+ * gone: an unrecognised chain namespace is now just a malformed `asset.id`,
+ * caught by {@link checkAsset}'s pattern check instead of a separate field.
  */
 export function marketCorridorErrors(market: {
-  [key in (typeof CORRIDOR_KEYS)[Side] | (typeof FEED_KEYS)[number]]?: unknown;
+  [key in (typeof FEED_KEYS)[number]]?: unknown;
 } & {
   base_asset?: unknown;
   quote_asset?: unknown;
 }): string[] {
   const errors: string[] = [];
-  for (const side of ["base", "quote"] as const) {
-    const raw = market[CORRIDOR_KEYS[side]];
-    if (raw !== undefined && !isCorridor(raw)) {
-      errors.push(`${CORRIDOR_KEYS[side]} must be one of ${CORRIDORS.join(", ")}`);
-    }
-  }
+  const baseId = assetIdOf(market.base_asset);
+  const quoteId = assetIdOf(market.quote_asset);
+  if (baseId === undefined || quoteId === undefined) return errors;
 
-  const baseId = (market.base_asset as AssetInfo | undefined)?.id;
-  const quoteId = (market.quote_asset as AssetInfo | undefined)?.id;
-  if (typeof baseId !== "string" || typeof quoteId !== "string") return errors;
-
-  const baseCorridor = marketCorridor(market, "base");
-  const quoteCorridor = marketCorridor(market, "quote");
-  if (baseId === quoteId && baseCorridor === quoteCorridor) {
+  if (baseId === quoteId) {
     errors.push("market legs must differ: same corridor and asset on both sides is a null trade");
   }
+  const baseCorridor = marketCorridor(market, "base");
+  const quoteCorridor = marketCorridor(market, "quote");
   // ponytail: fires only when EXACTLY one side is arkade — a market with
-  // both sides off-rail (e.g. lightning:BTC / onchain:BTC, a classic
+  // both sides off-rail (e.g. bolt11:BTC / bitcoin:BTC, a classic
   // submarine-swap market) is permitted with no canonical leg order, so its
   // two orientations form two index groups; impose an order here (and in the
   // spec) only if rail-to-rail listings become real and need to aggregate.
@@ -288,7 +292,7 @@ export function marketCorridorErrors(market: {
   }
 
   const presentFeedKeys = FEED_KEYS.filter((key) => market[key] !== undefined);
-  if (baseId === quoteId) {
+  if (isSameAssetMarket(market)) {
     for (const key of presentFeedKeys) {
       errors.push(`${key} must be absent on a same-asset market (the price is identically 1; fee_bps is the spread)`);
     }
@@ -297,6 +301,35 @@ export function marketCorridorErrors(market: {
       if (market[key] === undefined) {
         errors.push(`${key} is required when the sides carry different assets`);
       }
+    }
+  }
+  return errors;
+}
+
+/**
+ * Whether a market's `arkade`/`bolt11`/`bitcoin`-corridor sides name the card's
+ * own network, shared with the reducer (which is the only place that knows a
+ * card's network — it lives in the directory, not the card). Bundling the
+ * corridor into the asset id introduced a redundancy the pre-bundling schema
+ * didn't have: the id's chain reference for these three corridors is itself
+ * an Arkade network, so it can now simply disagree with the path a solver
+ * filed the card under. An `eip155` side names an external chain, not an
+ * Arkade network, so it is exempt.
+ */
+export function marketNetworkErrors(
+  market: { base_asset?: unknown; quote_asset?: unknown },
+  network: string,
+): string[] {
+  const errors: string[] = [];
+  for (const side of ["base", "quote"] as const) {
+    const corridor = marketCorridor(market, side);
+    if (!(ARKADE_NETWORK_CORRIDORS as readonly string[]).includes(corridor)) continue;
+    const asset = side === "base" ? market.base_asset : market.quote_asset;
+    const reference = chainReferenceOf(assetIdOf(asset));
+    if (reference !== undefined && reference !== network) {
+      errors.push(
+        `${side}_asset/id names network "${reference}" but this card lives under the "${network}" directory`,
+      );
     }
   }
   return errors;
@@ -314,20 +347,8 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
   }
   if (strict) checkAllowedKeys(errors, path, v, MARKET_KEYS);
 
-  checkPattern(
-    errors,
-    `${path}/pair`,
-    v.pair,
-    PAIR,
-    'must be "<base>/<quote>" where a non-arkade side is corridor-prefixed, e.g. "BTC/lightning:BTC"',
-  );
   checkAsset(errors, `${path}/base_asset`, v.base_asset, strict);
   checkAsset(errors, `${path}/quote_asset`, v.quote_asset, strict);
-
-  // pair label must equal the sides' labels (identity still lives in the
-  // corridor-qualified leg ids).
-  const pairError = marketPairError(v);
-  if (pairError) add(errors, path, pairError);
 
   // Feed fields are format-checked when present; whether they must be
   // present or absent is the corridor rule set's call (marketCorridorErrors,

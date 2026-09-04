@@ -12,11 +12,13 @@ full protocol.
 Markets span two shapes under one schema. **Spot markets** trade Arkade
 balances against each other, priced from a pinned feed and filled
 non-interactively from the arkd stream. **Corridor markets** trade an Arkade
-balance against another rail — a Lightning payment (`lightning`) or an L1
-output (`onchain`): same card, same index, same `fee_bps` ranking, but the
+balance against another rail — a Lightning payment (`bolt11`) or an L1
+output (`bitcoin`): same card, same index, same `fee_bps` ranking, but the
 price of a same-asset corridor is identically 1 (no feed) and trades are
 negotiated per-trade over RFQ via the card's `discovery_pubkey` and
-`transports`, which corridor cards must therefore carry and sign.
+`transports`, which corridor cards must therefore carry and sign. A side's
+corridor is named as part of its asset id (a CAIP-19-shaped identifier, e.g.
+`arkade:bitcoin/slip44:0`), not a separate field.
 
 ## A registry, not the registry
 

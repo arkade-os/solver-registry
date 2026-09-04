@@ -5,15 +5,14 @@
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6
@@ -32,15 +31,14 @@
       "solver": "alice"
     },
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6
@@ -59,15 +57,14 @@
       "solver": "carol"
     },
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6
@@ -86,20 +83,18 @@
       "solver": "bob"
     },
     {
-      "pair": "BTC/lightning:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "lightning",
       "fee_bps": 20,
       "min_base_amount": "1000",
       "max_base_amount": "4000000",

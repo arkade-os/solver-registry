@@ -4,7 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
-import { AMOUNT_PATTERN, ASSET_KEYS, CORRIDORS, MAX_ASSET_DECIMALS, MAX_RELAYS } from "../packages/discovery-client/src/types.ts";
+import {
+  AMOUNT_PATTERN,
+  ASSET_KEYS,
+  CORRIDORS,
+  MAX_ASSET_DECIMALS,
+  MAX_RELAYS,
+  marketPairKey,
+} from "../packages/discovery-client/src/types.ts";
 import { ASSET_ID_FORMS, validateIndex } from "../packages/discovery-client/src/validate.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +44,7 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
   const result = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
   assert.equal(result.ok, true);
   const solvers = result.index!.markets.map((m) => m.solver);
-  // corridor-solver's BTC/lightning:BTC market sorts into its own leg-pair
+  // corridor-solver's arkade/bolt11 BTC market sorts into its own leg-pair
   // group, after the BTC/USDT group (alice/carol/bob) it doesn't share.
   assert.deepEqual(solvers, ["alice", "carol", "bob", "corridor-solver"]);
 });
@@ -68,14 +75,19 @@ test("a corridor card carrying no emulator_pubkey reduces cleanly", () => {
   assert.equal(Object.keys(entry!).some((k) => k.includes("emulator")), false);
 });
 
-test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
+test("corridor markets group by leg pair: bolt11 and bitcoin(onchain) BTC/BTC stay distinct", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
   assert.equal(result.ok, true);
   // The third entry is the rail-to-rail market (no arkade side): accepted,
-  // and sorted under its own leg-pair key like any other.
+  // and sorted under its own leg-pair key like any other. Corridor is now
+  // bundled into the id, so the leg-pair key IS the base/quote id pair.
   assert.deepEqual(
-    result.index!.markets.map((m) => m.pair),
-    ["BTC/lightning:BTC", "BTC/onchain:BTC", "lightning:BTC/onchain:BTC"],
+    result.index!.markets.map((m) => marketPairKey(m)),
+    [
+      "arkade:signet/slip44:0/bitcoin:signet/slip44:0",
+      "arkade:signet/slip44:0/bolt11:signet/slip44:0",
+      "bolt11:signet/slip44:0/bitcoin:signet/slip44:0",
+    ],
   );
 });
 
@@ -101,15 +113,20 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "name-mismatch", expect: "does not match filename" },
   { case: "name-pattern", expect: "must match pattern" },
   { case: "duplicate-name", expect: "duplicate name" },
-  { case: "bad-pair", expect: "must match pattern" },
   { case: "bad-asset-id", expect: "must match pattern" },
-  { case: "pair-ticker-mismatch", expect: "does not match the sides' labels" },
   { case: "identical-legs", expect: "market legs must differ" },
   { case: "feed-on-same-asset", expect: "must be absent on a same-asset market" },
   { case: "missing-feed", expect: "is required when the sides carry different assets" },
   { case: "corridor-not-base", expect: "must be the base side" },
-  { case: "bad-corridor", expect: "must be equal to one of the allowed values" },
-  { case: "corridor-pair-label", expect: "does not match the sides' labels" },
+  // The card lives under solvers/bitcoin/ but the quote side's id names
+  // mutinynet — a redundancy the corridor-bundled id introduced that the
+  // pre-bundling schema never had to check.
+  { case: "network-mismatch", expect: 'names network "mutinynet" but this card lives under the "bitcoin" directory' },
+  // "liquid" is not a recognised chain namespace, so this is now an ordinary
+  // asset-id pattern rejection rather than a separate corridor-enum check —
+  // the corridor is bundled into the id, so there's no longer a standalone
+  // field for an "unknown corridor" to live in.
+  { case: "bad-corridor", expect: "must match pattern" },
   { case: "bad-relay", expect: "must match pattern" },
   // The fixture's key is well-formed 64-hex: emulator_pubkey is now refused for
   // existing at all, not for being malformed. The card schema is
@@ -187,21 +204,19 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
   }
 });
 
-// The corridor vocabulary is likewise declared once per artifact; a schema-only
-// corridor (or a client-only one) would let cards merge that clients can't
-// group, or reject cards CI accepted.
-test("the schemas' corridor definitions match the client's CORRIDORS and relay bound", () => {
-  // The pair pattern embeds the non-arkade corridors as an alternation; a
-  // corridor added to CORRIDORS without touching the schemas would slip
-  // past the enum check below but not this one.
-  const alternation = `(${CORRIDORS.filter((c) => c !== "arkade").join("|")}):`;
+// The corridor vocabulary no longer has its own schema definition — it is the
+// chain-namespace alternation baked into the asset id pattern (pinned by the
+// "asset definitions" test above). What's worth pinning here is that every
+// entry in CORRIDORS actually appears as a namespace in that pattern, so a
+// corridor added to the client without a matching schema edit is caught, and
+// the relay-count bound stays in sync.
+test("every CORRIDORS entry appears as a chain namespace in the schemas' asset id pattern, and the relay bound matches", () => {
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
-    assert.deepEqual(schema.definitions.corridor.enum, [...CORRIDORS], name);
-    assert.ok(
-      JSON.stringify(schema).includes(alternation),
-      `${name}: pair pattern must embed ${alternation}`,
-    );
+    const idPattern = schema.definitions.asset.properties.id.pattern as string;
+    for (const corridor of CORRIDORS) {
+      assert.ok(idPattern.includes(`${corridor}:`), `${name}: asset id pattern must embed "${corridor}:"`);
+    }
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
   assert.equal(card.definitions.transports.properties.nostr.properties.relays.maxItems, MAX_RELAYS);

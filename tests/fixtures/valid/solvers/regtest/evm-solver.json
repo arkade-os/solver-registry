@@ -11,20 +11,18 @@
   },
   "markets": [
     {
-      "pair": "BTC/ethereum:USDC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:regtest/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "id": "eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         "name": "USD Coin",
         "ticker": "USDC",
         "decimals": 6
       },
-      "quote_corridor": "ethereum",
       "price_feed": "https://feed.example.com/evm-solver",
       "price_feed_schema": {
         "type": "json",
@@ -38,20 +36,18 @@
       "max_quote_amount": "50000000000"
     },
     {
-      "pair": "BTC/ethereum:ETH",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:regtest/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "native",
+        "id": "eip155:1/slip44:60",
         "name": "Ether",
         "ticker": "ETH",
         "decimals": 18
       },
-      "quote_corridor": "ethereum",
       "price_feed": "https://feed.example.com/evm-solver-eth",
       "price_feed_schema": {
         "type": "json",
@@ -65,5 +61,5 @@
       "max_quote_amount": "5000000000000000000"
     }
   ],
-  "sig": "8889ee1a33c5200c47ce8b1509a6ec715469ddf8f8769b333cc0a49f9e7f8545d6d9a0cef88a414f4c28db24713591ab979e3b8c7704fd724b273425ebb79757"
+  "sig": "de39a81ca11118c2856abb0fb31efb7b209e0d27f0bbd1f766412b9e9f7fa339046149539452d53b6a309a57e5d7e6458dd75267479ad2b2709c533eb4d1c7ce"
 }

@@ -8,7 +8,7 @@ The execution path already needs no interactivity: the maker funds a swap VTXO c
 
 v0 is a git repo format (the **registry**) plus a GitHub Action (the **reducer**). Solvers PR a small JSON card describing their markets. CI validates the cards and reduces them into one flat, sorted index per network. Clients fetch one URL per registry they follow, merge, pick a market, price from its pinned feed, concede the fee plus a safety cushion, and fund the standard offer. For a spot card: no signatures, no relays, no messages to the solver, no solver-side tooling beyond writing a JSON file. Corridor markets (below) add exactly one thing — a self-authenticating rendezvous (`discovery_pubkey` + `transports`, signed) — because their trades are negotiated per-trade rather than stream-filled.
 
-Every market side names its **corridor**: the rail it settles on — `arkade` (the unmarked default; both sides of every spot market), `lightning`, or `onchain`. A market's identity is the corridor-qualified leg pair `<corridor>:<asset-id> / <corridor>:<asset-id>`, so the same asset over different rails forms different markets.
+Every market side names its **corridor** — the rail it settles on — `arkade` (the unmarked default; both sides of every spot market), `bolt11` (Lightning), or `bitcoin` (an L1 output) — as part of its **asset id**, a CAIP-19-shaped identifier `<chain-namespace>:<chain-reference>/<asset-namespace>:<asset-reference>` (e.g. `arkade:bitcoin/slip44:0` for BTC on Arkade mainnet). The chain namespace IS the corridor; there is no separate corridor field. A market's identity is simply its base and quote asset ids, `<base-asset-id> / <quote-asset-id>`, so the same asset over different rails — carrying different ids — forms different markets. See *Solver card* below for the full grammar.
 
 Anyone can run a registry: it's a repo layout and a workflow, not an instance. Clients follow a *set* of registries (shipping with well-known defaults) and can additionally pin solver cards directly, so no repo owner is a gatekeeper or single point of failure — a solver rejected or dropped by every registry is still reachable by any client that adds its card by hand (the token-list pattern).
 
@@ -16,7 +16,7 @@ Trust anchors to each registry repo and its PR review, not to keys. A live-quote
 
 ## Solver card
 
-One file per solver per network, `solvers/<network>/<name>.json` (networks: `bitcoin`, `signet`, `mutinynet`, `regtest` — same partitioning as arkade-os/asset-registry), submitted and updated by PR. The network lives in the path, not the card: asset IDs are network-scoped, so a pair is only meaningful within its directory, and a solver active on several networks files one card per network.
+One file per solver per network, `solvers/<network>/<name>.json` (networks: `bitcoin`, `signet`, `mutinynet`, `regtest` — same partitioning as arkade-os/asset-registry), submitted and updated by PR. The network lives in the path, not a top-level card field, and a solver active on several networks files one card per network. `arkade`/`bolt11`/`bitcoin`-corridor asset ids also carry this same network as their chain reference (see *Asset ids and corridors*) — a redundancy the bundled id introduced — and CI rejects a card whose id names a network other than the one it's filed under.
 
 ```json
 {
@@ -26,9 +26,8 @@ One file per solver per network, `solvers/<network>/<name>.json` (networks: `bit
   "sig": "<128-hex schnorr, OPTIONAL>",
   "markets": [
     {
-      "pair": "BTC/USDT",
-      "base_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
-      "quote_asset": { "id": "<asset-id-hex>", "name": "Tether USD", "ticker": "USDT", "decimals": 6 },
+      "base_asset": { "id": "arkade:bitcoin/slip44:0", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
+      "quote_asset": { "id": "arkade:bitcoin/asset:<68-hex>", "name": "Tether USD", "ticker": "USDT", "decimals": 6 },
       "price_feed": "https://feed.example.com/price?pair=...",
       "price_feed_schema": { "type": "json", "price_path": "/price" },
       "price_decimals": 8,
@@ -49,10 +48,25 @@ Field semantics:
 | `name` | Unique within the network directory; must match the filename. CI enforces. |
 | `discovery_pubkey` | Optional in v0, required in v1. The solver's BIP340 identity: signs the card when `sig` is present, and signs v1 quote events. |
 | `sig` | Optional in v0, required in v1. BIP340 Schnorr by `discovery_pubkey` over `sha256(canonical_json)`: the card serialized with `sig` removed, keys sorted lexicographically, no whitespace, UTF-8. If present, `discovery_pubkey` is required and CI MUST verify; if absent, the PR is the authentication. |
-| `pair` | Human-readable label `<base-label>/<quote-label>` where a side's label is its ticker on the arkade corridor and `<corridor>:<ticker>` otherwise (e.g. `BTC/USDT`, `BTC/lightning:BTC`); MUST equal the labels derived from the sides' corridors and tickers, CI enforces. Display only — NOT an identity. The market's identity is the corridor-qualified leg pair: tickers collide, legs don't. Asset-to-asset pairs are first-class; nothing assumes bitcoin on either side. |
-| `base_corridor`, `quote_corridor` | The rail each side settles on: `arkade`, `lightning`, or `onchain`. OPTIONAL; absent means `arkade`, so every pre-corridor card reads unchanged. The two legs MUST differ (same corridor and asset on both sides is a null trade), and when exactly one side is arkade it MUST be the base side, so equivalent markets group under one canonical key. CI enforces both. A market with neither side arkade (e.g. `lightning:BTC / onchain:BTC`) is permitted with no required leg order; note the consequence: the two orientations form two distinct market groups in the index, so listings only aggregate when solvers agree on orientation. If such markets see real use, a future revision may impose a canonical order for them too. |
 | `transports` | The v0 transport map: `{ "nostr": { "relays": ["wss://..."] } }`. Nostr is the only supported protocol key; its `relays` array is required and contains 1–8 relay URLs the solver listens on. The nostr config object stays open to future nostr-specific settings alongside `relays`. OPTIONAL for spot-only cards; REQUIRED — together with `discovery_pubkey` and `sig` — when any market has a non-arkade corridor, since they are the rendezvous makers address request-for-quote messages to and a misdirecting rendezvous must not be forgeable by the PR author alone. Relays are commodity third-party infrastructure, not solver endpoints; the solver stays outbound-only behind them. |
-| `base_asset`, `quote_asset` | Per-side asset descriptor: `id` (the canonical identity: `btc` or the serialized AssetId in lowercase hex), `name`, `ticker`, `decimals` (decimal places of the atomic unit, e.g. 8 for BTC ⇒ amounts in sats; the same field the Arkade asset registry metadata carries). `decimals` is for rendering amounts like `min_base_amount`; it plays no role in pricing math, which stays in atomic units. `name`/`ticker` are unverified labels the solver chose — anyone can call an asset "USDT". Clients MUST group, dedupe, and price by `id` only and MAY badge verification via the asset registry. |
+| `base_asset`, `quote_asset` | Per-side asset descriptor: `id`, `name`, `ticker`, `decimals` (decimal places of the atomic unit, e.g. 8 for BTC ⇒ amounts in sats; the same field the Arkade asset registry metadata carries). `id` is the canonical identity AND carries the side's corridor — see *Asset ids and corridors* below; there is no separate `pair` label and no separate `base_corridor`/`quote_corridor` field. `decimals` is for rendering amounts like `min_base_amount`; it plays no role in pricing math, which stays in atomic units. `name`/`ticker` are unverified labels the solver chose — anyone can call an asset "USDT". Clients MUST group, dedupe, and price by `id` only and MAY badge verification via the asset registry. |
+
+### Asset ids and corridors
+
+An asset's `id` is a CAIP-19-shaped identifier: `<chain-namespace>:<chain-reference>/<asset-namespace>:<asset-reference>`. The chain namespace is the corridor — `arkade`, `bolt11` (Lightning), `bitcoin` (an L1 output), or `eip155` (any EVM chain, keyed by numeric chain id) — and IS bundled into the id rather than carried as a separate field, so the id alone is a market side's whole leg identity: two sides with the same id are the same asset on the same rail on the same network, full stop.
+
+| Corridor | Chain reference | Example |
+|---|---|---|
+| `arkade` | the Arkade network the side settles on (`bitcoin`, `signet`, `mutinynet`, `regtest` — same vocabulary as the card's path) | `arkade:bitcoin/slip44:0` (BTC on Arkade mainnet) |
+| `bolt11` | same Arkade-network vocabulary | `bolt11:bitcoin/slip44:0` (BTC over Lightning) |
+| `bitcoin` | same Arkade-network vocabulary | `bitcoin:bitcoin/slip44:0` (BTC onchain) |
+| `eip155` | the numeric EIP-155 chain id (per CAIP-2) | `eip155:1/erc20:0x…` (an ERC-20 on Ethereum mainnet) |
+
+The asset-namespace half of the id names WHAT settles: `slip44` is a SLIP-44-registered coin — a chain's native coin traded as a plain value transfer (`arkade:bitcoin/slip44:0` is BTC; `eip155:1/slip44:60` is ETH, since Ethereum has no address for its own coin); `asset` is an Arkade-issued asset, identified by its 68-hex-char AssetId (`arkade:bitcoin/asset:<68-hex>`) — also valid on the `bolt11`/`bitcoin` corridors, since an Arkade asset moved over Lightning or onchain (e.g. a submarine-swapped stablecoin) is a real market, not a contradiction; `erc20` is an ERC-20 contract address (`eip155:1/erc20:0x…`), valid only under `eip155`. Lowercase throughout, not EIP-55 mixed case — the id is a grouping key, and a checksum that changes the bytes would split one market into two. An erc20 reference is the TOKEN's contract address, never a swap contract's; a taker resolves the settlement contract from the corridor, not from this field.
+
+Unlike a per-chain corridor enum, `eip155:<any chain id>` is already well-formed: adding an EVM chain needs no schema edit, because CAIP-2 chain ids are open by construction — only the small set of chain *namespaces* (`arkade`, `bolt11`, `bitcoin`, `eip155`) is a deliberate, reducer-enforced vocabulary. A rail nobody has code for still fails validation (an unrecognised namespace is simply a malformed id), so this openness costs nothing at the boundary that matters: a maker never discovers a chain no client can settle on.
+
+The market's identity and grouping key is `<base_asset.id>/<quote_asset.id>` — CI computes this directly from the two ids, with no derived label to keep in sync. The two legs MUST differ (identical ids on both sides is a null trade), and when exactly one side's id names the arkade corridor it MUST be the base side, so equivalent markets group under one canonical key; CI enforces both. A market with neither side on the arkade corridor (e.g. `bolt11:bitcoin/slip44:0` against `bitcoin:bitcoin/slip44:0`) is permitted with no required leg order; note the consequence: the two orientations form two distinct market groups in the index, so listings only aggregate when solvers agree on orientation. If such markets see real use, a future revision may impose a canonical order for them too.
 | `price_feed` | The exact URL the solver's plugin validates against at fill time. Makers MUST price from this URL, not a substitute. MUST be fetchable from browsers (CORS-permissive), otherwise browser wallets cannot price the pair. The response MUST be JSON. REQUIRED (with `price_feed_schema` and `price_decimals`) when the sides carry different assets; MUST be ABSENT on a same-asset market, whose price is identically 1 — `fee_bps` is the whole spread. CI enforces both directions of this rule. |
 | `price_feed_schema` | How to read the numeric feed value from the response. v0 supports `{ "type": "json", "price_path": "<RFC 6901 JSON Pointer>" }`. Examples: Binance ticker price uses `/price`; CoinGecko simple price for `ids=bitcoin&vs_currencies=usd` uses `/bitcoin/usd`; a bare JSON number uses the empty pointer `""`. The pointer MUST resolve to a JSON number or numeric string. Clients MUST NOT infer by scanning arbitrary response bodies. |
 | `price_decimals` | How to normalize the feed's value to quote-units-per-base-unit: the feed value divided by `10^price_decimals` MUST be the price in quote-atomic-units per base-atomic-unit. Mirrors the solver Pair config; the feed is always advertised in base/quote terms, never inverted. Independent of the assets' `decimals`: for a feed quoted in display units (quote-display per base-display, e.g. typical exchange tickers) this works out to `base_asset.decimals − quote_asset.decimals`, but for a feed already in atomic terms it does not — derive it from the feed's actual denomination, never from asset `decimals` alone. |
@@ -63,9 +77,9 @@ Keys and signatures are future-proofing for spot cards, not a requirement: requi
 
 ## Corridor markets
 
-A corridor market has at least one non-arkade side — typically an Arkade balance trading against a Lightning payment (`lightning`) or an L1 output (`onchain`), though both sides may be off-rail (e.g. a `lightning:BTC / onchain:BTC` submarine-swap market). Everything in this section — the rendezvous requirements, the feed rules, leg-pair grouping — keys off "has a non-arkade side" and applies to rail-to-rail markets identically. Discovery works identically — the card advertises the pair, `fee_bps`, and per-side limits, and the reducer ranks it in the same index — but three things differ structurally from a spot market:
+A corridor market has at least one side whose asset id names a non-arkade corridor — typically an Arkade balance trading against a Lightning payment (`bolt11`) or an L1 output (`bitcoin`), though both sides may be off-rail (e.g. a `bolt11:bitcoin/slip44:0` / `bitcoin:bitcoin/slip44:0` submarine-swap market). Everything in this section — the rendezvous requirements, the feed rules, leg-pair grouping — keys off "has a non-arkade side" and applies to rail-to-rail markets identically. Discovery works identically — the card advertises the two asset ids, `fee_bps`, and per-side limits, and the reducer ranks it in the same index — but three things differ structurally from a spot market:
 
-**Pricing.** The interesting corridor pairs are same-asset (BTC against BTC over another rail), where the price is identically 1 and `fee_bps` is the entire cost of trading. Such markets carry no feed fields at all; the executable amounts arrive in the solver's quote. A cross-asset corridor market (say `lightning:BTC` against an Arkade stablecoin) still carries a feed like any spot pair.
+**Pricing.** The interesting corridor pairs are same-asset (BTC against BTC over another rail), where the price is identically 1 and `fee_bps` is the entire cost of trading. Such markets carry no feed fields at all; the executable amounts arrive in the solver's quote. A cross-asset corridor market (say Lightning BTC against an Arkade stablecoin) still carries a feed like any spot pair.
 
 **Negotiation instead of stream-filling.** A spot offer is funded blind and filled by whoever watches the arkd stream; nothing needs to reach the solver. A corridor trade starts with a request-for-quote: the maker addresses the solver's `discovery_pubkey` over the card's `transports` (specifically the `"nostr"` entries), receives a quote binding the terms (amounts, contract parameters, expiry), derives the contracts locally, and funds. There is no accept message — **funding the derived address is acceptance** — so after the quote, filling is non-interactive again: the maker may go offline and the contracts enforce the terms. The registry's job ends at the rendezvous: pubkey + transports.
 
@@ -74,20 +88,20 @@ The RFQ message family is specified separately, in `arkade-os/lightning-swap-ser
 | kind | | |
 | --- | --- | --- |
 | `24859` | directed RFQ traffic | **ephemeral**; NIP-44-sealed, `p`-tagged to the recipient; carries the whole request/quote/refusal/status family |
-| `24860` | open-RFQ broadcast | **ephemeral**; plaintext, `t`-tagged with the canonical corridor-qualified market key |
+| `24860` | open-RFQ broadcast | **ephemeral**; plaintext, `t`-tagged with the canonical market key (`<base-asset-id>/<quote-asset-id>`) |
 | `38859` | solver advertisement | **addressable** — one current version per solver; `d` tag `"rfq1"`, unencrypted and **indicative only** — never binding, and never a substitute for a registry card (see the trust note below) |
 
 The two negotiation kinds moved out of NIP-01's regular range into the ephemeral one (20000–29999): `4859`/`4860` before, `24859`/`24860` now. The reason bears directly on this document's own kind choices — an `rfq_open` is plaintext by design, so while it sat in a retained range every broadcast was a permanent public record of trade intent, pair and size. A conforming relay retains neither negotiation kind now. The advertisement stays addressable, which is already the right semantics for it: the relay keeps the current version and discards the rest.
 
-The `t` tag on kind 24860 is the *same* canonical corridor-qualified leg-pair key this document defines for the v1 appendix's `d` tag — resolved corridors, canonical asset ids, arkade leg first — and for the same reason: both sides must derive it identically or the subscription silently matches nothing. One derivation, two layers; if either changes, both change.
+The `t` tag on kind 24860 is the *same* canonical leg-pair key this document defines for the v1 appendix's `d` tag — the two full asset ids, corridor and all, base leg first — and for the same reason: both sides must derive it identically or the subscription silently matches nothing. One derivation, two layers; if either changes, both change.
 
 The kind-38859 ad does not compete with a card. The RFQ protocol defers to the registry for trust precisely because a card is git-reviewed and BIP340-signed while an ad is self-asserted, so an ad MAY advertise liveness but MUST NOT be the basis for deciding whom to trade with.
 
 **The rendezvous must be self-authenticating.** For a spot card a wrong `discovery_pubkey` is inert. For a corridor card it decides whom makers talk to, so `discovery_pubkey`, `sig`, and `transports` are all REQUIRED on any card with a corridor market, and CI verifies the signature. A wrong rendezvous cannot lose funds — the maker derives and verifies every contract locally before funding, exactly as with spot offers — but it can misdirect makers into silence, which is why it must carry the solver's own signature rather than just the PR author's word. This pulls the v1 appendix's key material forward for corridor cards; the live-quote layer itself stays dormant. (The signature requirement gates *listing*: a user-pinned local corridor card needs only `discovery_pubkey` and `transports` — pinning is the user's own trust decision, and clients carry no signature-verification code.)
 
-Directionality maps onto the existing per-side bounds with no new fields. The bound still applies to the side the solver pays out: a solver quoting `BTC/lightning:BTC` with the quote side enabled pays out Lightning — it serves makers sending an Arkade balance out over Lightning. Enabling the base side serves the opposite direction (maker receives the Arkade side); `max = "0"` disables a direction, as ever.
+Directionality maps onto the existing per-side bounds with no new fields. The bound still applies to the side the solver pays out: a solver quoting Arkade BTC against Lightning BTC with the quote side enabled pays out Lightning — it serves makers sending an Arkade balance out over Lightning. Enabling the base side serves the opposite direction (maker receives the Arkade side); `max = "0"` disables a direction, as ever.
 
-Canonical form, CI-enforced: the two legs must differ; when exactly one side is arkade it is the base side (so `BTC/lightning:BTC` exists and `lightning:BTC/BTC` does not, and equivalent markets group under one key); the `pair` label prefixes non-arkade sides with their corridor.
+Canonical form, CI-enforced: the two legs' ids must differ; when exactly one side's id names the arkade corridor it is the base side (so `arkade:bitcoin/slip44:0` base / `bolt11:bitcoin/slip44:0` quote exists and the reverse does not, and equivalent markets group under one key).
 
 ```json
 {
@@ -97,10 +111,8 @@ Canonical form, CI-enforced: the two legs must differ; when exactly one side is 
   "transports": { "nostr": { "relays": ["wss://relay.example.com"] } },
   "markets": [
     {
-      "pair": "BTC/lightning:BTC",
-      "base_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
-      "quote_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
-      "quote_corridor": "lightning",
+      "base_asset": { "id": "arkade:bitcoin/slip44:0", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
+      "quote_asset": { "id": "bolt11:bitcoin/slip44:0", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
       "fee_bps": 30,
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
@@ -116,30 +128,26 @@ Canonical form, CI-enforced: the two legs must differ; when exactly one side is 
 
 One consequence worth naming: corridor markets close v0's liveness gap for their own trades. A spot maker funds blind — nothing can be probed before funding. A corridor maker gets a quote (or a structured refusal, or silence) before committing anything, so a dead solver costs a timeout instead of a cancel transaction.
 
-### EVM corridors — one rail per chain, and card version 1
+### EVM corridors — CAIP-2 chain ids, and card version 1
 
-An EVM corridor trades an Arkade balance against an ERC-20 token, and needs **no new market fields**. The shape already fits: `base_asset`/`quote_asset` carry `decimals`, amounts are atomic-unit decimal strings, and a token-against-BTC market is cross-asset so the existing rule already requires `price_feed`, `price_feed_schema` and `price_decimals`. What it needed was a rail the schema would accept.
+An EVM corridor trades an Arkade balance against an ERC-20 token, and needs **no new market fields**. The shape already fits: `base_asset`/`quote_asset` carry `decimals`, amounts are atomic-unit decimal strings, and a token-against-BTC market is cross-asset so the existing rule already requires `price_feed`, `price_feed_schema` and `price_decimals`. What it needed was a rail the schema would accept — see *Asset ids and corridors* above for the shape it landed on: `eip155:<chain-id>/erc20:<address>` or `eip155:<chain-id>/slip44:<coin-type>`.
 
-**Rails are named per chain — `ethereum`, not `evm`.** Two independent reasons, either sufficient:
+**Chains are addressed per chain — `eip155:<chain-id>`, not `evm`.** Two independent reasons, either sufficient:
 
-- **An ERC-20 address is unique only within one chain.** Canonical identity is the corridor-qualified leg key `"<corridor>:<asset-id>"`, so a single `evm` rail would give USDC-on-Ethereum and USDC-on-some-L2 the *same* key and collapse two markets the reducer must keep apart. Deterministic deployment makes this worse than theoretical: one address can name different tokens on different chains.
-- **"EVM-compatible" is not "interchangeable".** Gas mechanics, fee markets, finality and reorg behaviour differ between chains. A blanket `evm` rail would advertise a capability no solver can back — a maker reading `evm:USDC` would reasonably infer that any EVM chain works.
+- **An ERC-20 address is unique only within one chain.** Canonical identity is the whole asset id, so a chain-blind rail would give USDC-on-Ethereum and USDC-on-some-L2 the *same* id and collapse two markets the reducer must keep apart. Deterministic deployment makes this worse than theoretical: one address can name different tokens on different chains.
+- **"EVM-compatible" is not "interchangeable".** Gas mechanics, fee markets, finality and reorg behaviour differ between chains. A blanket `evm` rail would advertise a capability no solver can back — a maker reading it would reasonably infer that any EVM chain works.
 
-Adding a chain is therefore a deliberate edit to the `corridor` enum in both schemas and to `CORRIDORS` in the client, not a free-form string. A rail nobody has code for should fail validation, not fail a maker after they have chosen the solver.
+Earlier drafts of this document rejected CAIP-2 chain ids for exactly this purpose, because a colon-bearing rail fought the `pair` label's own `<corridor>:<ticker>` separator. Bundling the corridor into the asset id — and dropping the `pair` label entirely, since identity was always the ids, never the label — removes that conflict: `eip155:1` is now just the leading segment of an id, nothing splits on it. This is also why adding an EVM chain needs no schema edit any more: unlike the old per-chain corridor enum, `eip155:<any chain id>` is already well-formed, and the small, deliberately curated vocabulary lives one level up, at the chain-*namespace* set (`arkade`, `bolt11`, `bitcoin`, `eip155`) — a rail nobody has code for still fails validation, just as an unrecognised namespace rather than an unrecognised enum value.
 
-CAIP-2 chain ids (`eip155:1`) were considered and rejected: the pair label's grammar is `"<corridor>:<ticker>"`, so a colon-bearing rail fights its own separator, and the existing vocabulary (`lightning`, `onchain`) is human names.
+**The chain's own coin is a SLIP-44 id, not an address**, because it has none — `{ "id": "eip155:1/slip44:60", "ticker": "ETH", "decimals": 18 }`. This mirrors how `arkade:bitcoin/slip44:0` already names Bitcoin without an address. Chain-qualified by construction, since it's part of the same id as the chain reference: the same token stays one market and each chain's own coin stays its own.
 
-**The two identifiers are not the same string, and conflating them is the easy mistake.** A side's `pair` label carries its **ticker** (`BTC/ethereum:USDC`); the leg key carries its **asset id**, which for an EVM token is the contract address (`ethereum:0xa0b8…`). A 42-character address cannot fit the label's 16-character bound and would not be readable if it could. Addresses are lowercase, not EIP-55 mixed case: the leg key is a grouping key, and a checksum that changes the bytes would split one market in two.
+**This is also why the id does not separately name a token standard.** An id like `eip155:1/erc20-swap:0x…` looks tempting — a native coin and a token really are settled by different contracts on every EVM chain (Boltz, for instance, ships `EtherSwap` and `ERC20Swap` as separate deployments). But that distinction is already carried, unambiguously, by the asset-namespace half of the id: `slip44` means the chain's coin, `erc20` means a contract at that address. Encoding it a second time would put the same fact in two places that can disagree.
 
-**The chain's own coin is `"native"`, not an address**, because it has none — `{ "id": "native", "ticker": "ETH", "decimals": 18 }` on the `ethereum` corridor. This mirrors how `btc` already names Bitcoin rather than carrying an identifier. `native` is chain-relative by design: the leg key qualifies it (`ethereum:native`), so the same token stays one market and each chain's own coin stays its own. It is spelled `native` rather than `eth` so a chain whose coin is not ether needs no second naming decision.
+**Limits worth stating rather than discovering.** The `id` shape identifies an asset by *one* reference, which covers a native coin and any single-address fungible token — ERC-20 and the standards that are ERC-20-compatible in the transfer path. It does **not** express an asset that needs a compound identifier, ERC-1155 being the live example: a 1155 asset is `(contract address, token id)`, and no combination of the current fields names one. A registry MUST NOT list such a market by putting the token id somewhere else; adding a new asset namespace is the correct route, and would be a further version bump under the same rule as above.
 
-**This is also why the rail does not name a token standard.** A rail like `ethereum-erc20` looks tempting — a native coin and a token really are settled by different contracts on every EVM chain (Boltz, for instance, ships `EtherSwap` and `ERC20Swap` as separate deployments). But that distinction is already carried, unambiguously, by the asset id: a bare name means the chain's coin, an address means a contract at that address. Encoding it in the rail as well would make the enum the cross product of chains and standards, and would put the same fact in two places that can disagree.
+**Card version.** A card whose markets use a corridor introduced after version 0 MUST declare `"version": 1`, and a consumer that understands only version 0 MUST reject such a card whole rather than keep the markets it recognises and drop the rest.
 
-**Limits worth stating rather than discovering.** The `id` shape identifies an asset by *one* value, which covers a native coin and any single-address fungible token — ERC-20 and the standards that are ERC-20-compatible in the transfer path. It does **not** express an asset that needs a compound identifier, ERC-1155 being the live example: a 1155 asset is `(contract address, token id)`, and no combination of the current fields names one. A registry MUST NOT list such a market by putting the token id somewhere else; extending `asset` is the correct route, and would be a further version bump under the same rule as above.
-
-**Card version.** A card whose markets use a rail introduced after version 0 MUST declare `"version": 1`, and a consumer that understands only version 0 MUST reject such a card whole rather than keep the markets it recognises and drop the rest.
-
-This is about interpretation, not encoding. The canonical form and the signature are unchanged by a new rail, so a version-0 verifier would compute a matching digest and correctly conclude the card is authentic — and would then be holding a market on a rail it cannot settle. Today such a consumer happens to degrade safely, because an unknown corridor fails the client's own corridor rules and the market is dropped; but that is a property of the current client rather than a promise of the format, and it is per-market rather than per-card. The version makes it the format's promise.
+This is about interpretation, not encoding. The canonical form and the signature are unchanged by a new corridor, so a version-0 verifier would compute a matching digest and correctly conclude the card is authentic — and would then be holding a market on a rail it cannot settle. Today such a consumer happens to degrade safely, because an unrecognised chain namespace fails the client's own asset-id pattern and the market is dropped; but that is a property of the current client rather than a promise of the format, and it is per-market rather than per-card. The version makes it the format's promise.
 
 The **rollout sequencing** rule above applies unchanged, for the same reason it applied to corridor markets: a registry MUST NOT merge its first version-1 card until the clients it serves ship a release that understands version 1.
 
@@ -147,9 +155,9 @@ The **rollout sequencing** rule above applies unchanged, for the same reason it 
 
 On every merge to the default branch, CI, independently per network directory:
 
-1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed pairs, per-side `min > max`, a zero `min` on an enabled side, both sides disabled, unknown `version`, identical legs, a non-base arkade side when only one side is arkade, feed fields on a same-asset market, a cross-asset market missing them, and a corridor market on a card lacking `discovery_pubkey`/`sig`/`transports`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
+1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed asset ids, per-side `min > max`, a zero `min` on an enabled side, both sides disabled, unknown `version`, identical legs, a non-base arkade side when only one side is arkade, feed fields on a same-asset market, a cross-asset market missing them, and a corridor market on a card lacking `discovery_pubkey`/`sig`/`transports`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
 2. Flattens the network's cards into one market list, each entry carrying its solver's `name` (and `discovery_pubkey`/`transports` when present; `sig` stays in the card, it is not propagated).
-3. Groups by the corridor-qualified leg pair (`<base-corridor>:<base-id>`, `<quote-corridor>:<quote-id>`) — never by the ticker label; within a group, sorts ascending by `fee_bps` (best expected execution first).
+3. Groups by the leg pair (`base_asset.id`, `quote_asset.id`) — never by the ticker; within a group, sorts ascending by `fee_bps` (best expected execution first).
 4. Emits one index per network — `bitcoin.json`, `signet.json`, `mutinynet.json`, `regtest.json` — each stamped with its `network`, `generated_at` (unix seconds, set by CI, never by hand), and the source commit hash.
 5. Publishes via GitHub Pages / raw URL. A broken card in one network must not block publishing the others.
 
@@ -161,11 +169,10 @@ On every merge to the default branch, CI, independently per network directory:
   "commit": "<git sha>",
   "markets": [
     {
-      "pair": "BTC/USDT",
       "solver": "arklabs-solver",
       "discovery_pubkey": "<optional>",
-      "base_asset": { "id": "btc", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
-      "quote_asset": { "id": "<asset-id-hex>", "name": "Tether USD", "ticker": "USDT", "decimals": 6 },
+      "base_asset": { "id": "arkade:bitcoin/slip44:0", "name": "Bitcoin", "ticker": "BTC", "decimals": 8 },
+      "quote_asset": { "id": "arkade:bitcoin/asset:<68-hex>", "name": "Tether USD", "ticker": "USDT", "decimals": 6 },
       "price_feed": "...",
       "price_feed_schema": { "type": "json", "price_path": "/price" },
       "price_decimals": 8,
@@ -184,7 +191,7 @@ PR validation runs the same schema checks, so a broken card can't merge. The per
 ## Maker flow
 
 1. For each followed registry, fetch the index for the wallet's network — `<base-url>/<network>.json` (TTL-cache ~10 min). Network names follow `arkade-os/ts-sdk`; `bitcoin` is the default main Bitcoin network. Reject unknown `version` or a `network` mismatch; treat an old `generated_at` (suggested: > 7 days) as a staleness warning. Registry failures are isolated: one unreachable or invalid registry never blocks pricing from the others or from locally pinned cards.
-2. Merge: union of all markets across followed registries plus local cards, tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per corridor-qualified leg pair ascending by `fee_bps`, source order as tiebreak; the `pair` ticker label is display only and never a grouping key, and a bare id pair is not one either — it would collapse different corridors. Filter by leg pair, by receive-side solvability (only markets whose receive side is enabled — `max > 0` — qualify; if no market in the merged set solves that side, the direction MUST NOT be offered), and by size against the receive side's bounds. The ranking is a static proxy — the actual execution price still comes from the feed (spot) or the solver's quote (corridor).
+2. Merge: union of all markets across followed registries plus local cards, tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per leg pair (`base_asset.id`/`quote_asset.id`) ascending by `fee_bps`, source order as tiebreak; a side's ticker is display only and never a grouping key — grouping by ticker, or by an asset id with its corridor stripped, would collapse markets on different rails. Filter by leg pair, by receive-side solvability (only markets whose receive side is enabled — `max > 0` — qualify; if no market in the merged set solves that side, the direction MUST NOT be offered), and by size against the receive side's bounds. The ranking is a static proxy — the actual execution price still comes from the feed (spot) or the solver's quote (corridor).
 3. Local cards: a client MUST let its user add solver cards directly (a URL to a raw card, or pasted JSON), validated against the same card schema, scoped to a network by the user. Local cards participate in the merge like any registry entry, marked as user-added in any UI.
 4. Fetch the chosen market's `price_feed`, parse the JSON response, read the scalar selected by `price_feed_schema.price_path`, then derive `P` in quote-units-per-base-unit via `price_decimals`. A same-asset corridor market skips this step entirely: `P = 1` exactly, and any pre-quote estimate is `fee_bps` (plus cushion) off 1:1.
 5. Spot market: compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension. Corridor market: send a request-for-quote to the market's `discovery_pubkey` over its `transports`, verify the quote's terms and locally-derived contract addresses, then fund — per the RFQ protocol (`arkade-os/lightning-swap-service` `docs/rfq-protocol.md`), whose directed traffic is nostr kind 24859. Funding is the acceptance; there is no separate accept step.
@@ -213,11 +220,13 @@ The trust anchor is each registry repo the client follows: PR review is the list
 
 **Why are signatures optional rather than required or absent?** Required would mean every solver needs keygen and signing tooling before it can list, for no v0 payoff — the client's decision doesn't depend on solver identity, since the covenant protects the funds either way, and the PR process already gates listing. Absent would break continuity with v1, where the same key must sign quotes. Optional costs nothing: bare cards list freely, signed cards get CI verification and a stable identity today. Corridor cards are the exception where the payoff exists now — the pubkey is whom makers talk to — so there, signing is required.
 
-**Why per-side corridors instead of directional pair entries?** A corridor trade is directional (send vs receive), but a market is not: the solver's real constraint is still inventory on the side it pays out, which the existing per-side bounds already express. One bidirectional entry with corridor-tagged sides reuses `max = "0"` as the direction switch, adds zero new amount fields, and keeps spot and corridor markets structurally identical for ranking and merging.
+**Why per-side corridors instead of directional pair entries?** A corridor trade is directional (send vs receive), but a market is not: the solver's real constraint is still inventory on the side it pays out, which the existing per-side bounds already express. One bidirectional entry with corridor-carrying ids reuses `max = "0"` as the direction switch, adds zero new amount fields, and keeps spot and corridor markets structurally identical for ranking and merging.
 
-**Why must the arkade side be base?** Canonical ordering. Without it, one solver lists `BTC/lightning:BTC` and another `lightning:BTC/BTC`, the leg-pair keys differ, and the same economic market splits into two groups that rank independently. Any fixed rule works; anchoring on the arkade side reads naturally ("the Arkade balance priced in the other rail") and matches how the RFQ pair strings are written.
+**Why bundle the corridor into the asset id instead of a separate `base_corridor`/`quote_corridor` field?** The two were always describing one thing — which leg a side is — and keeping them apart meant every consumer (the reducer's grouping key, the client's `marketLegKey`, this document's own leg-pair key) had to concatenate them back together anyway, and get the concatenation right the same way every time. CAIP-19 already has a standard grammar for exactly this composite — chain plus asset in one string — so adopting it removes a can't-disagree invariant (`quote_corridor` matching what the id actually settles on) rather than just relocating it, and, as a consequence, opens the door to real per-chain CAIP-2 ids instead of a hand-maintained per-chain enum for `eip155`.
 
-**Why do same-asset markets forbid feed fields instead of ignoring them?** Determinism and honesty. A feed on a 1:1 pair can only mislead — there is no market price to read — and permitting a decorative one would make two byte-different encodings of the same market, breaking dedupe and signature stability. The reducer rejecting it also catches the pre-corridor `BTC/BTC` placeholder shape, which was semantically ambiguous exactly because nothing said which rail the second BTC lived on.
+**Why must the arkade side be base?** Canonical ordering. Without it, one solver lists Arkade BTC against Lightning BTC and another lists the reverse, the leg-pair keys differ, and the same economic market splits into two groups that rank independently. Any fixed rule works; anchoring on the arkade side reads naturally ("the Arkade balance priced in the other rail") and matches how the RFQ pair strings are written.
+
+**Why do same-asset markets forbid feed fields instead of ignoring them?** Determinism and honesty. A feed on a 1:1 pair can only mislead — there is no market price to read — and permitting a decorative one would make two byte-different encodings of the same market, breaking dedupe and signature stability. "Same-asset" compares the asset-namespace half of the id only (see *Asset ids and corridors*), so an Arkade BTC balance against a Lightning BTC payment qualifies even though their full ids differ.
 
 **Why is the solver's fill tolerance not in the card?** It's an internal enforcement knob, not a promise to the client. The client-meaningful number is `fee_bps`: concede that plus a cushion and the offer should fill. Publishing tolerance would leak an implementation parameter, drag derived rules into client code, and tempt clients to price against the band's edge — exactly the offers most likely to sit unfilled under feed divergence.
 
@@ -259,11 +268,11 @@ One per (solver, pair):
 kind: 38173
 pubkey: <discovery_pubkey>
 tags:
-  ["d", "<base-corridor>:<base-id>/<quote-corridor>:<quote-id>"]   // leg keys, not tickers — the d tag is an identity, labels collide
+  ["d", "<base-asset-id>/<quote-asset-id>"]   // full CAIP-19 ids, not tickers — the d tag is an identity, labels collide
   ["expiration", "<created_at + 30>"]        // NIP-40
 content: {
   "v": 1,
-  "pair": "<base-corridor>:<base-id>/<quote-corridor>:<quote-id>",
+  "pair": "<base-asset-id>/<quote-asset-id>",
   "price": "1.00020000",
   "fee_bps": 30,
   "min_base_amount": "1000",
@@ -274,7 +283,7 @@ content: {
 }
 ```
 
-The `d` tag and `content.pair` are the **canonical corridor-qualified leg-pair key** (unlike the card schema's display field of the same name, which carries tickers and is NOT an identity), exactly as the reducer computes it: an omitted corridor resolves to `arkade` before serialization, ids are the canonical asset ids (not tickers), and both producers and subscribers MUST use this resolved form — never the card's display `pair` label — or subscriptions silently miss quotes published under the other representation.
+The `d` tag and `content.pair` are the **canonical leg-pair key** — the two sides' `base_asset.id`/`quote_asset.id`, exactly as they appear on the card, joined with `/` — computed identically to the reducer's own grouping key (see *Asset ids and corridors*). Since the corridor is bundled into each id, there is nothing left to resolve or default: both producers and subscribers derive this key by simple string concatenation, and both MUST use it — never a ticker-based label — or subscriptions silently miss quotes published under a different representation.
 
 `price` is a decimal string in quote-units-per-base-unit, already normalized and net of nothing — the maker still concedes `fee_bps` from it. The commitment: an offer funded before `expiration`, within limits, priced at or inside `price` less `fee_bps`, will be filled. How the solver's internal fill-time check accommodates its own quote is its problem, not the protocol's. Kind 38173 is deliberately distinct from NIP-69's 38383 (orders): these are quotes. Activation makes the card's `discovery_pubkey`, `sig`, and `transports` required for every card (corridor cards already require all three today).
 

@@ -15,7 +15,7 @@ import {
   cardVersionErrors,
   marketCorridorErrors,
   marketLimitErrors,
-  marketPairError,
+  marketNetworkErrors,
 } from "../packages/discovery-client/src/validate.ts";
 import { marketPairKey } from "../packages/discovery-client/src/types.ts";
 // The wire types live with the portable client; the reducer imports them so a
@@ -93,7 +93,7 @@ export function reduceNetwork(
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
         const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), marketPairError(m)]) {
+        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
       }

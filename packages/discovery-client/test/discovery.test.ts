@@ -8,7 +8,7 @@ import {
   bestMarket,
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
-import { makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
+import { BTC, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
 const GENERATED_AT = 1_700_000_000;
@@ -132,22 +132,22 @@ test("selectMarkets / bestMarket: filter by id pair and size, keep ranking", asy
     now: NOW,
   });
 
-  const best = bestMarket(res.markets, { baseId: "btc", quoteId: USDT });
+  const best = bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT });
   assert.equal(best!.solver, "dave"); // lowest fee
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, cursor: 1 })!.solver, "bob");
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, cursor: 4 }), null);
-  assert.throws(() => bestMarket(res.markets, { baseId: "btc", quoteId: USDT, cursor: -1 }), /cursor/);
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT, cursor: 1 })!.solver, "bob");
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT, cursor: 4 }), null);
+  assert.throws(() => bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT, cursor: -1 }), /cursor/);
 
   // A want-side size filter is checked against that side's declared bounds.
-  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base", wantAmount: 500 }).length, 0);
-  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base", wantAmount: 2000 }).length, 4);
-  assert.equal(selectMarkets(res.markets, { baseId: "btc", quoteId: "nope" }).length, 0);
-  assert.throws(() => selectMarkets(res.markets, { baseId: "btc", quoteId: USDT, wantAmount: 2000 }), /wantSide/);
+  assert.equal(selectMarkets(res.markets, { baseId: BTC.id, quoteId: USDT, wantSide: "base", wantAmount: 500 }).length, 0);
+  assert.equal(selectMarkets(res.markets, { baseId: BTC.id, quoteId: USDT, wantSide: "base", wantAmount: 2000 }).length, 4);
+  assert.equal(selectMarkets(res.markets, { baseId: BTC.id, quoteId: "nope" }).length, 0);
+  assert.throws(() => selectMarkets(res.markets, { baseId: BTC.id, quoteId: USDT, wantAmount: 2000 }), /wantSide/);
 
   const pairs = listMarkets(res.markets);
   assert.deepEqual(
-    pairs.map((p) => ({ pair: p.pair, count: p.marketCount, solvable: p.solvable })),
-    [{ pair: "BTC/USDT", count: 4, solvable: { base: 4, quote: 4 } }],
+    pairs.map((p) => ({ base: p.base_asset.ticker, quote: p.quote_asset.ticker, count: p.marketCount, solvable: p.solvable })),
+    [{ base: "BTC", quote: "USDT", count: 4, solvable: { base: 4, quote: 4 } }],
   );
 });
 
@@ -166,12 +166,12 @@ test("one-sided markets: selection and listing avoid a side no solver can pay ou
   assert.deepEqual(pairs[0].solvable, { base: 1, quote: 1 });
 
   // Wanting quote can only be served by erin; wanting base only by frank.
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "quote" })!.solver, "erin");
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: USDT, wantSide: "base" })!.solver, "frank");
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT, wantSide: "quote" })!.solver, "erin");
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT, wantSide: "base" })!.solver, "frank");
 
   // With only erin present, the base side is not solvable by any market: no pick.
   const onlyErin = res.markets.filter((m) => m.solver === "erin");
-  assert.equal(bestMarket(onlyErin, { baseId: "btc", quoteId: USDT, wantSide: "base" }), null);
+  assert.equal(bestMarket(onlyErin, { baseId: BTC.id, quoteId: USDT, wantSide: "base" }), null);
   assert.deepEqual(listMarkets(onlyErin)[0].solvable, { base: 0, quote: 1 });
 });
 
@@ -195,21 +195,23 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
 
   const pairs = listMarkets(res.markets);
   assert.deepEqual(
-    pairs.map((p) => ({ pair: p.pair, base: p.base_corridor, quote: p.quote_corridor })),
+    pairs.map((p) => ({ base: p.base_asset.ticker, quote: p.quote_asset.ticker, baseCorridor: p.base_corridor, quoteCorridor: p.quote_corridor })),
     [
-      { pair: "BTC/USDT", base: "arkade", quote: "arkade" },
-      { pair: "BTC/lightning:BTC", base: "arkade", quote: "lightning" },
-      { pair: "BTC/onchain:BTC", base: "arkade", quote: "onchain" },
+      { base: "BTC", quote: "USDT", baseCorridor: "arkade", quoteCorridor: "arkade" },
+      // "bitcoin:" sorts before "bolt11:" lexically, so the onchain leg pair
+      // ranks first even though it was authored second.
+      { base: "BTC", quote: "BTC", baseCorridor: "arkade", quoteCorridor: "bitcoin" },
+      { base: "BTC", quote: "BTC", baseCorridor: "arkade", quoteCorridor: "bolt11" },
     ],
   );
 
-  // Selection defaults to arkade legs: a bare btc/btc query matches no spot
-  // market and must not silently pick a corridor one.
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc" }), null);
-  const lightning = bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "lightning" })!;
+  // The corridor is now baked into the id: selecting the arkade-arkade BTC/BTC
+  // leg pair matches no spot market and must not silently pick a corridor one.
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: BTC.id }), null);
+  const lightning = bestMarket(res.markets, { baseId: BTC.id, quoteId: "bolt11:bitcoin/slip44:0" })!;
   assert.equal(lightning.fee_bps, 25);
   assert.deepEqual(lightning.transports, { nostr: { relays: ["wss://relay.example.com"] } });
-  assert.equal(bestMarket(res.markets, { baseId: "btc", quoteId: "btc", quoteCorridor: "onchain" })!.fee_bps, 40);
+  assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: "bitcoin:bitcoin/slip44:0" })!.fee_bps, 40);
 });
 
 test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {
@@ -220,7 +222,7 @@ test("quoteOffer: end-to-end from discovered market to exact want amount", async
     fetchImpl: mockFetch(routes),
     now: NOW,
   });
-  const best = bestMarket(res.markets, { baseId: "btc", quoteId: USDT })!;
+  const best = bestMarket(res.markets, { baseId: BTC.id, quoteId: USDT })!;
 
   const plan = await quoteOffer(best, {
     give: "base",

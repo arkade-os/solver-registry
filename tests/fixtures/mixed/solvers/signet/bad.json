@@ -3,15 +3,14 @@
   "name": "bad",
   "markets": [
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:signet/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6

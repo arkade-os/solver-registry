@@ -12,20 +12,18 @@
   },
   "markets": [
     {
-      "pair": "BTC/lightning:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "lightning",
       "fee_bps": 25,
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
@@ -33,20 +31,18 @@
       "max_quote_amount": "5000000"
     },
     {
-      "pair": "BTC/onchain:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "onchain",
       "fee_bps": 40,
       "min_base_amount": "0",
       "max_base_amount": "0",
@@ -54,21 +50,18 @@
       "max_quote_amount": "1000000"
     },
     {
-      "pair": "lightning:BTC/onchain:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "bolt11:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:signet/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "base_corridor": "lightning",
-      "quote_corridor": "onchain",
       "fee_bps": 40,
       "min_base_amount": "0",
       "max_base_amount": "0",
@@ -76,5 +69,5 @@
       "max_quote_amount": "2000000"
     }
   ],
-  "sig": "9413a74885f4dd5761e44e58e52d5a4dc694381f224500aa84dc1bf746853777b11c905eca5403aa3ddc9db7e14015c99453352de642b60d7a05f6f5246ea041"
+  "sig": "3dbde86cfec7b7a709c92a2964e3d7e88b9ccdd71f4167259c0b123169b75e7b47872c44eae83a03485f862d3fed08d71547428bbd053c68073e40f91bccc1a5"
 }

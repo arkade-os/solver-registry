@@ -34,10 +34,10 @@ if (warnings.length) console.warn(warnings);
 // 2. List pairs for UI selection, then pick the best market for one pair.
 //    `solvable` counts how many markets can pay out each side — don't offer a
 //    direction whose receive side is at 0.
-console.log(listMarkets(markets).map((p) => `${p.pair} base:${p.solvable.base} quote:${p.solvable.quote}`));
+console.log(listMarkets(markets).map((p) => `${p.base_asset.ticker}/${p.quote_asset.ticker} base:${p.solvable.base} quote:${p.solvable.quote}`));
 const market = bestMarket(markets, {
-  baseId: "btc",
-  quoteId: "47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
+  baseId: "arkade:bitcoin/slip44:0",
+  quoteId: "arkade:bitcoin/asset:47004bf4a5fbdb2221f708030528de68ea28f5980044e546b7bb5a352457d1f30000",
   wantSide: "quote", // we give base and receive quote; skips markets that can't pay out quote
 });
 if (!market) throw new Error("no market solves this side of the pair");
@@ -52,23 +52,30 @@ if (!plan.limits.withinLimits) console.warn("amount is outside the market's size
 
 ## Corridor markets
 
-A market side may settle on another rail: `base_corridor` / `quote_corridor`
-name it (`arkade` — the default — `lightning`, or `onchain`), and market
-identity is the corridor-qualified leg pair, so a Lightning BTC market and an
-onchain BTC market never collapse into one group. Selection takes corridors
-the same way it takes ids:
+A market side may settle on another rail — Lightning (`bolt11`) or an L1
+output (`bitcoin`), besides the `arkade` default — and that corridor is named
+as part of the side's `id`, a CAIP-19-shaped asset id (`arkade:bitcoin/
+slip44:0`, `bolt11:bitcoin/slip44:0`, …), not a separate field. Market
+identity is simply `base_asset.id` + `quote_asset.id`, so a Lightning BTC
+market and an onchain BTC market never collapse into one group. Selection
+takes the whole id, corridor included:
 
 > **Upgrading from 0.1.x:** corridor entries have no feed fields, and 0.1.x
 > `quoteOffer` throws on them (`price_feed` was assumed present; its type is
 > now `string | undefined`). Upgrade before following any registry that lists
 > corridor markets — a registry should not merge its first corridor card until
 > its clients have.
+>
+> **Upgrading from a pre-bundling client (before this rewrite):** `pair`,
+> `base_corridor`, and `quote_corridor` are gone from the wire format —
+> `SelectOptions.baseCorridor`/`quoteCorridor` are removed along with them.
+> Pass the fully-qualified id (e.g. `"bolt11:bitcoin/slip44:0"`, not
+> `"btc"` + `quoteCorridor: "lightning"`) to `baseId`/`quoteId` instead.
 
 ```ts
 const lnMarket = bestMarket(markets, {
-  baseId: "btc",
-  quoteId: "btc",
-  quoteCorridor: "lightning", // omit corridors and you get spot markets only
+  baseId: "arkade:bitcoin/slip44:0",
+  quoteId: "bolt11:bitcoin/slip44:0", // the corridor is part of the id; omit it and you select the arkade leg
   wantSide: "quote",
 });
 ```
