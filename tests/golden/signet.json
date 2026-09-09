@@ -6,16 +6,18 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:signet/slip44:1"
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "bitcoin:signet/slip44:1"
       },
       "fee_bps": 40,
       "min_base_amount": "0",
@@ -37,16 +39,18 @@
     },
     {
       "base_asset": {
-        "id": "arkade:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:signet/slip44:1"
       },
       "quote_asset": {
-        "id": "bolt11:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "bolt11:signet/slip44:1"
       },
       "fee_bps": 25,
       "min_base_amount": "1000",
@@ -68,16 +72,18 @@
     },
     {
       "base_asset": {
-        "id": "bolt11:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "bolt11:signet/slip44:1"
       },
       "quote_asset": {
-        "id": "bitcoin:signet/slip44:1",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "bitcoin:signet/slip44:1"
       },
       "fee_bps": 40,
       "min_base_amount": "0",

@@ -25,8 +25,13 @@
       "properties": {
         "id": {
           "type": "string",
+          "pattern": "^(btc|[0-9a-f]{68})$",
+          "description": "DEPRECATED shape, restored for the v0 compatibility window: \"btc\" or a 68-hex AssetId. The reducer down-projects the card's CAIP-19 id into this field because a v0 client validates it and rejects the ENTIRE index when it fails, which would cost every solver on the network its listing. Read caip19_id for the real identity; this field returns to CAIP-19 when the window closes."
+        },
+        "caip19_id": {
+          "type": "string",
           "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
-          "description": "Canonical asset identity: a CAIP-19-shaped id, \"<chain-namespace>:<chain-reference>/<asset-namespace>:<asset-reference>\" — see the card schema's asset definition for the full grammar and examples. The chain namespace IS the corridor, bundled into the id rather than carried as a separate base_corridor/quote_corridor field."
+          "description": "Canonical CAIP-19 asset identity, carried alongside the down-projected id for the duration of the v0 compatibility window. Authoritative when present: the chain namespace IS the corridor. Absent only on a market with no v0 form, which is held out of the index entirely."
         },
         "name": {
           "type": "string",
@@ -152,7 +157,7 @@
           "pair": {
             "type": "string",
             "pattern": "^((lightning|onchain|eip155):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain|eip155):)?[A-Za-z0-9._-]{1,16}$",
-            "description": "DEPRECATED, removed a release after the CAIP-19 cutover: display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Derived by the reducer from base_asset.id and quote_asset.id, which are the canonical identity — read those instead."
+            "description": "DEPRECATED, removed a release after the CAIP-19 cutover: display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Derived by the reducer from base_asset.id and quote_asset.id, which are the canonical identity \u2014 read those instead."
           },
           "base_corridor": {
             "$ref": "#/definitions/corridor"

@@ -6,16 +6,18 @@
   "markets": [
     {
       "base_asset": {
-        "id": "arkade:bitcoin/slip44:0",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:bitcoin/slip44:0"
       },
       "quote_asset": {
-        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6
+        "decimals": 6,
+        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       "price_feed": "https://feed.example.com/alice",
       "price_feed_schema": {
@@ -33,16 +35,18 @@
     },
     {
       "base_asset": {
-        "id": "arkade:bitcoin/slip44:0",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:bitcoin/slip44:0"
       },
       "quote_asset": {
-        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6
+        "decimals": 6,
+        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       "price_feed": "https://feed.example.com/carol",
       "price_feed_schema": {
@@ -60,16 +64,18 @@
     },
     {
       "base_asset": {
-        "id": "arkade:bitcoin/slip44:0",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:bitcoin/slip44:0"
       },
       "quote_asset": {
-        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6
+        "decimals": 6,
+        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       "price_feed": "https://feed.example.com/bob",
       "price_feed_schema": {
@@ -87,16 +93,18 @@
     },
     {
       "base_asset": {
-        "id": "arkade:bitcoin/slip44:0",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "arkade:bitcoin/slip44:0"
       },
       "quote_asset": {
-        "id": "bolt11:bitcoin/slip44:0",
+        "id": "btc",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8
+        "decimals": 8,
+        "caip19_id": "bolt11:bitcoin/slip44:0"
       },
       "fee_bps": 20,
       "min_base_amount": "1000",

@@ -19,6 +19,7 @@ import {
 } from "../packages/discovery-client/src/validate.ts";
 import {
   DEFAULT_CORRIDOR,
+  legacyAssetId,
   legacyMarketCorridor,
   marketPairKey,
   pairSideLabel,
@@ -46,6 +47,7 @@ export interface NetworkResult {
   ok: boolean;
   errors: CardError[];
   index?: NetworkIndex;
+  excluded?: string[];
 }
 
 const ajv = new Ajv({ allErrors: true, strict: true });
@@ -154,15 +156,25 @@ export function reduceNetwork(
   }
 
   const markets: IndexMarket[] = [];
+  const excluded: string[] = [];
   for (const { card } of cards) {
     for (const market of card.markets) {
       const baseCorridor = legacyMarketCorridor(market, "base");
       const quoteCorridor = legacyMarketCorridor(market, "quote");
+      // No v0 id would fail the whole document for v0 clients: held out, named.
+      const legacy = {
+        base: legacyAssetId(market.base_asset.id),
+        quote: legacyAssetId(market.quote_asset.id),
+      };
+      if (legacy.base === undefined || legacy.quote === undefined) {
+        excluded.push(`${card.name}: ${market.base_asset.id} -> ${market.quote_asset.id}`);
+        continue;
+      }
       const entry: IndexMarket = {
         ...market,
+        base_asset: { ...market.base_asset, id: legacy.base, caip19_id: market.base_asset.id },
+        quote_asset: { ...market.quote_asset, id: legacy.quote, caip19_id: market.quote_asset.id },
         solver: card.name,
-        // Deprecated shim for v0 consumers, dropped a release later. `pair` is
-        // unconditional: the SDK cache guard drops the whole index if one lacks it.
         pair: `${pairSideLabel(baseCorridor, market.base_asset.ticker)}/${pairSideLabel(quoteCorridor, market.quote_asset.ticker)}`,
       };
       if (baseCorridor !== DEFAULT_CORRIDOR) entry.base_corridor = baseCorridor;
@@ -192,6 +204,7 @@ export function reduceNetwork(
     network,
     ok: true,
     errors: [],
+    excluded,
     index: {
       version: 0,
       network,
@@ -239,6 +252,9 @@ function formatReport(results: NetworkResult[]): string {
   for (const result of results) {
     if (result.ok) {
       lines.push(`${result.network}: OK (${result.index!.markets.length} markets)`);
+      for (const held of result.excluded ?? []) {
+        lines.push(`  held out of the index (no v0 asset id; see the deprecation window): ${held}`);
+      }
     } else {
       lines.push(`${result.network}: FAILED`);
       for (const err of result.errors) {

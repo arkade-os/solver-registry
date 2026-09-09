@@ -83,6 +83,7 @@ export interface AssetInfo {
    * string, never by a substring of it.
    */
   id: string;
+  caip19_id?: string;
   name: string;
   ticker: string;
   /**
@@ -263,9 +264,13 @@ type MarketLike = {
   quote_asset?: unknown;
 };
 
-/** Extracts `AssetInfo.id` from an asset value, or undefined if it isn't a string. */
+// The artifacts disagree on purpose while the window is open: a card's `id` is
+// CAIP-19, a published index down-projects it to the v0 grammar (a v0 client
+// rejects the WHOLE document otherwise, delisting every solver) and moves
+// CAIP-19 to `caip19_id`. Read corridors and leg keys through here.
 export function assetIdOf(value: unknown): string | undefined {
-  const id = (value as AssetInfo | undefined)?.id;
+  const asset = value as AssetInfo | undefined;
+  const id = typeof asset?.caip19_id === "string" ? asset.caip19_id : asset?.id;
   return typeof id === "string" ? id : undefined;
 }
 
@@ -345,6 +350,15 @@ export type LegacyCorridor = (typeof LEGACY_CORRIDOR_NAMES)[Corridor];
 
 export function legacyMarketCorridor(market: MarketLike, side: Side): LegacyCorridor {
   return LEGACY_CORRIDOR_NAMES[marketCorridor(market, side)];
+}
+
+export function legacyAssetId(id: string | undefined): string | undefined {
+  const slash = id === undefined ? -1 : id.indexOf("/");
+  if (id === undefined || slash === -1) return undefined;
+  if (!(ARKADE_NETWORK_CORRIDORS as readonly string[]).includes(id.slice(0, id.indexOf(":")))) return undefined;
+  const asset = id.slice(slash + 1);
+  if (asset.startsWith("slip44:")) return "btc";
+  return asset.startsWith("asset:") ? asset.slice("asset:".length) : undefined;
 }
 
 export function pairSideLabel(corridor: LegacyCorridor, ticker: string): string {
