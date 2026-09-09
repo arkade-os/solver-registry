@@ -52,6 +52,39 @@ test("validateCard: accepts a v1 card carrying an EVM corridor market", () => {
   assert.equal(r.value?.version, 1);
 });
 
+test("validateCard: an EVM market spanning two chains is cross-asset, not same-asset", () => {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  const usdc = (chain: number) => ({
+    id: `eip155:${chain}/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
+    name: "USD Coin",
+    ticker: "USDC",
+    decimals: 6,
+  });
+  const market = { ...card.markets[0], base_asset: usdc(1), quote_asset: usdc(137) };
+  delete market.price_feed;
+  delete market.price_feed_schema;
+  delete market.price_decimals;
+
+  card.markets[0] = {
+    ...market,
+    price_feed: "https://feed.example.com/x",
+    price_feed_schema: { type: "json", price_path: "/price" },
+    price_decimals: 8,
+  };
+  assert.equal(validateCard(card).ok, true, "a feed must be allowed across chains");
+
+  card.markets[0] = market;
+  const bare = validateCard(card);
+  assert.equal(bare.ok, false, "and required: pricing two chains' USDC at 1 is a mispricing");
+  assert.ok(
+    bare.errors.some((e) => /is required when the sides carry different assets/.test(e)),
+    bare.errors.join("; "),
+  );
+});
+
 /**
  * The chain's own coin, identified by the SLIP-44 coin type rather than a
  * contract address it has none of.

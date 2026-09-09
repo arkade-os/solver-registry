@@ -370,10 +370,15 @@ export function pairSideLabel(corridor: LegacyCorridor, ticker: string): string 
  * rail each settles on — so the price is identically 1 and no feed applies.
  * An Arkade BTC balance against a Lightning BTC payment qualifies; an Arkade
  * BTC balance against a Lightning USDT payment does not.
+ * The rail (chain namespace) may differ; the chain reference may not — one
+ * ERC-20 address names different tokens on different chains.
  */
 export function isSameAssetMarket(market: MarketLike): boolean {
-  const base = underlyingAssetOf(assetIdOf(market.base_asset));
-  return base !== undefined && base === underlyingAssetOf(assetIdOf(market.quote_asset));
+  const [baseId, quoteId] = [assetIdOf(market.base_asset), assetIdOf(market.quote_asset)];
+  const base = underlyingAssetOf(baseId);
+  if (base === undefined || base !== underlyingAssetOf(quoteId)) return false;
+  const reference = chainReferenceOf(baseId);
+  return reference !== undefined && reference === chainReferenceOf(quoteId);
 }
 
 /**
