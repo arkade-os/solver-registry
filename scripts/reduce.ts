@@ -17,7 +17,12 @@ import {
   marketLimitErrors,
   marketNetworkErrors,
 } from "../packages/discovery-client/src/validate.ts";
-import { marketPairKey } from "../packages/discovery-client/src/types.ts";
+import {
+  DEFAULT_CORRIDOR,
+  legacyMarketCorridor,
+  marketPairKey,
+  pairSideLabel,
+} from "../packages/discovery-client/src/types.ts";
 // The wire types live with the portable client; the reducer imports them so a
 // schema change is a one-place edit. (The client never imports from scripts/ —
 // this direction keeps it dependency-free.)
@@ -151,10 +156,17 @@ export function reduceNetwork(
   const markets: IndexMarket[] = [];
   for (const { card } of cards) {
     for (const market of card.markets) {
+      const baseCorridor = legacyMarketCorridor(market, "base");
+      const quoteCorridor = legacyMarketCorridor(market, "quote");
       const entry: IndexMarket = {
         ...market,
         solver: card.name,
+        // Deprecated shim for v0 consumers, dropped a release later. `pair` is
+        // unconditional: the SDK cache guard drops the whole index if one lacks it.
+        pair: `${pairSideLabel(baseCorridor, market.base_asset.ticker)}/${pairSideLabel(quoteCorridor, market.quote_asset.ticker)}`,
       };
+      if (baseCorridor !== DEFAULT_CORRIDOR) entry.base_corridor = baseCorridor;
+      if (quoteCorridor !== DEFAULT_CORRIDOR) entry.quote_corridor = quoteCorridor;
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
       if (card.transports) entry.transports = card.transports;
       markets.push(entry);

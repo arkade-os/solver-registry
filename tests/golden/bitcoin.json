@@ -28,7 +28,8 @@
       "max_base_amount": "5000000",
       "min_quote_amount": "1000",
       "max_quote_amount": "2000000000000000000",
-      "solver": "alice"
+      "solver": "alice",
+      "pair": "BTC/USDT"
     },
     {
       "base_asset": {
@@ -54,7 +55,8 @@
       "max_base_amount": "0",
       "min_quote_amount": "1000",
       "max_quote_amount": "5000000",
-      "solver": "carol"
+      "solver": "carol",
+      "pair": "BTC/USDT"
     },
     {
       "base_asset": {
@@ -80,7 +82,8 @@
       "max_base_amount": "5000000",
       "min_quote_amount": "0",
       "max_quote_amount": "0",
-      "solver": "bob"
+      "solver": "bob",
+      "pair": "BTC/USDT"
     },
     {
       "base_asset": {
@@ -101,6 +104,8 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "4000000",
       "solver": "corridor-solver",
+      "pair": "BTC/lightning:BTC",
+      "quote_corridor": "lightning",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {

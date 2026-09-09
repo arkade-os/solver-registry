@@ -4,12 +4,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
 import {
   AMOUNT_PATTERN,
   ASSET_KEYS,
   CORRIDORS,
   MAX_ASSET_DECIMALS,
   MAX_RELAYS,
+  legacyMarketCorridor,
   marketPairKey,
 } from "../packages/discovery-client/src/types.ts";
 import { ASSET_ID_FORMS, validateIndex } from "../packages/discovery-client/src/validate.ts";
@@ -234,6 +237,55 @@ test("golden indexes validate under the client's validateIndex", () => {
     const idx = JSON.parse(readFileSync(goldenOf(network), "utf8"));
     const r = validateIndex(idx, network);
     assert.equal(r.ok, true, `${network}: ${r.errors.join("; ")}`);
+  }
+});
+
+// Hardcoded, not re-derived: recomputing via the same helper passes on any mapping.
+test("deprecated index fields: a v1 CAIP-19 card reduces to both the new ids and the derived v0 fields", () => {
+  const regtest = reduceNetwork(fixture("valid", "solvers"), "regtest", FIXED_META);
+  assert.equal(regtest.ok, true);
+  const evm = regtest.index!.markets[0];
+  assert.equal(evm.base_asset.id, "arkade:regtest/slip44:1");
+  assert.equal(evm.quote_asset.id, "eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+  assert.equal(evm.pair, "BTC/eip155:USDC");
+  assert.equal(evm.base_corridor, undefined, "an arkade side omits its corridor, as in v0");
+  assert.equal(evm.quote_corridor, "eip155");
+
+  const bitcoin = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
+  const bolt11 = bitcoin.index!.markets.find((m) => m.solver === "corridor-solver")!;
+  assert.equal(bolt11.quote_asset.id, "bolt11:bitcoin/slip44:0");
+  assert.equal(bolt11.pair, "BTC/lightning:BTC");
+  assert.equal(bolt11.quote_corridor, "lightning");
+  assert.ok(!bolt11.pair!.includes("bolt11"), "a v0 consumer has never heard of the bolt11 namespace");
+
+  const signet = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
+  const bothLegs = signet.index!.markets.find((m) => m.base_corridor !== undefined)!;
+  assert.equal(bothLegs.pair, "lightning:BTC/onchain:BTC");
+  assert.equal(bothLegs.base_corridor, "lightning");
+  assert.equal(bothLegs.quote_corridor, "onchain");
+});
+
+test("deprecated index fields are derived from the asset ids, not carried from the card", () => {
+  const card = JSON.parse(readFileSync(fixture("valid", "solvers", "bitcoin", "corridor-solver.json"), "utf8"));
+  for (const key of ["pair", "base_corridor", "quote_corridor"]) {
+    assert.equal(card.markets[0][key], undefined, `the card must not carry ${key}`);
+  }
+
+  const leg = (id: string) => ({ quote_asset: { id, name: "Bitcoin", ticker: "BTC", decimals: 8 } });
+  assert.equal(legacyMarketCorridor(leg("bolt11:bitcoin/slip44:0"), "quote"), "lightning");
+  assert.equal(legacyMarketCorridor(leg("bitcoin:bitcoin/slip44:0"), "quote"), "onchain");
+  assert.equal(legacyMarketCorridor(leg("eip155:1/slip44:60"), "quote"), "eip155");
+  assert.equal(legacyMarketCorridor(leg("arkade:bitcoin/slip44:0"), "quote"), "arkade");
+});
+
+// Nothing else here compiles index.schema.json; only third-party consumers do.
+test("golden indexes validate under index.schema.json, deprecated fields included", () => {
+  const ajv = new Ajv({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8")));
+  for (const network of NETWORKS) {
+    const idx = JSON.parse(readFileSync(goldenOf(network), "utf8"));
+    assert.ok(validate(idx), `${network}: ${JSON.stringify(validate.errors)}`);
   }
 });
 

@@ -23,6 +23,8 @@
       "min_quote_amount": "20000",
       "max_quote_amount": "1000000",
       "solver": "signed-solver",
+      "pair": "BTC/onchain:BTC",
+      "quote_corridor": "onchain",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {
@@ -52,6 +54,8 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "5000000",
       "solver": "signed-solver",
+      "pair": "BTC/lightning:BTC",
+      "quote_corridor": "lightning",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {
@@ -81,6 +85,9 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "2000000",
       "solver": "signed-solver",
+      "pair": "lightning:BTC/onchain:BTC",
+      "base_corridor": "lightning",
+      "quote_corridor": "onchain",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {

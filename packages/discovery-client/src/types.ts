@@ -235,6 +235,12 @@ export interface IndexMarket extends Market {
   discovery_pubkey?: string;
   /** The solver card's `transports` dictionary, propagated by the reducer when present. */
   transports?: TransportMap;
+  /** @deprecated Derived from the asset ids; read those. Removed a release later. */
+  pair?: string;
+  /** @deprecated Derived from `base_asset.id`. */
+  base_corridor?: LegacyCorridor;
+  /** @deprecated Derived from `quote_asset.id`. */
+  quote_corridor?: LegacyCorridor;
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */
@@ -323,6 +329,26 @@ export function marketCorridor(market: MarketLike, side: Side): Corridor {
  */
 export function isRfqMarket(market: MarketLike): boolean {
   return marketCorridor(market, "base") !== DEFAULT_CORRIDOR || marketCorridor(market, "quote") !== DEFAULT_CORRIDOR;
+}
+
+// NOT the identity: v0 said "lightning"/"onchain" where CAIP-2 says
+// "bolt11"/"bitcoin". `eip155` has no v0 name and self-maps — truthy and not
+// "lightning", so a v0 consumer's checks exclude a rail it cannot settle.
+export const LEGACY_CORRIDOR_NAMES = {
+  arkade: "arkade",
+  bolt11: "lightning",
+  bitcoin: "onchain",
+  eip155: "eip155",
+} as const satisfies Record<Corridor, string>;
+
+export type LegacyCorridor = (typeof LEGACY_CORRIDOR_NAMES)[Corridor];
+
+export function legacyMarketCorridor(market: MarketLike, side: Side): LegacyCorridor {
+  return LEGACY_CORRIDOR_NAMES[marketCorridor(market, side)];
+}
+
+export function pairSideLabel(corridor: LegacyCorridor, ticker: string): string {
+  return corridor === DEFAULT_CORRIDOR ? ticker : `${corridor}:${ticker}`;
 }
 
 /**
