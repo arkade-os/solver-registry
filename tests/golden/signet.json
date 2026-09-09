@@ -1,55 +1,22 @@
 {
-  "version": 0,
+  "version": 1,
   "network": "signet",
   "generated_at": 1700000000,
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
-      "pair": "BTC/lightning:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "lightning",
-      "fee_bps": 25,
-      "min_base_amount": "1000",
-      "max_base_amount": "5000000",
-      "min_quote_amount": "1000",
-      "max_quote_amount": "5000000",
-      "solver": "signed-solver",
-      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-      "transports": {
-        "nostr": {
-          "relays": [
-            "wss://relay.example.com",
-            "wss://relay2.example.com"
-          ]
-        }
-      }
-    },
-    {
-      "pair": "BTC/onchain:BTC",
-      "base_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
-      },
-      "quote_asset": {
-        "id": "btc",
-        "name": "Bitcoin",
-        "ticker": "BTC",
-        "decimals": 8
-      },
-      "quote_corridor": "onchain",
       "fee_bps": 40,
       "min_base_amount": "0",
       "max_base_amount": "0",
@@ -67,21 +34,47 @@
       }
     },
     {
-      "pair": "lightning:BTC/onchain:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "base_corridor": "lightning",
-      "quote_corridor": "onchain",
+      "fee_bps": 25,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "1000",
+      "max_quote_amount": "5000000",
+      "solver": "signed-solver",
+      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+      "transports": {
+        "nostr": {
+          "relays": [
+            "wss://relay.example.com",
+            "wss://relay2.example.com"
+          ]
+        }
+      }
+    },
+    {
+      "base_asset": {
+        "id": "bolt11:signet/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "bitcoin:signet/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
       "fee_bps": 40,
       "min_base_amount": "0",
       "max_base_amount": "0",

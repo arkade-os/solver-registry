@@ -4,8 +4,18 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { reduceAll, reduceNetwork, NETWORKS, findUnknownNetworkDirs } from "../scripts/reduce.ts";
-import { AMOUNT_PATTERN, ASSET_KEYS, CORRIDORS, MAX_ASSET_DECIMALS, MAX_RELAYS } from "../packages/discovery-client/src/types.ts";
-import { validateIndex } from "../packages/discovery-client/src/validate.ts";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import {
+  AMOUNT_PATTERN,
+  ASSET_KEYS,
+  CORRIDORS,
+  MAX_ASSET_DECIMALS,
+  MAX_RELAYS,
+  marketPairKey,
+} from "../packages/discovery-client/src/types.ts";
+import { ASSET_ID_FORMS, validateIndex } from "../packages/discovery-client/src/validate.ts";
+import { selectMarkets } from "../packages/discovery-client/src/discovery.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXED_META = { generatedAt: 1700000000, commit: "a".repeat(40) };
@@ -37,7 +47,7 @@ test("sort order: within a pair, ascending fee_bps, ties broken by solver name",
   const result = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
   assert.equal(result.ok, true);
   const solvers = result.index!.markets.map((m) => m.solver);
-  // corridor-solver's BTC/lightning:BTC market sorts into its own leg-pair
+  // corridor-solver's arkade/bolt11 BTC market sorts into its own leg-pair
   // group, after the BTC/USDT group (alice/carol/bob) it doesn't share.
   assert.deepEqual(solvers, ["alice", "carol", "bob", "corridor-solver"]);
 });
@@ -68,14 +78,19 @@ test("a corridor card carrying no emulator_pubkey reduces cleanly", () => {
   assert.equal(Object.keys(entry!).some((k) => k.includes("emulator")), false);
 });
 
-test("corridor markets group by leg pair: lightning and onchain BTC/BTC stay distinct", () => {
+test("corridor markets group by leg pair: bolt11 and bitcoin(onchain) BTC/BTC stay distinct", () => {
   const result = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
   assert.equal(result.ok, true);
   // The third entry is the rail-to-rail market (no arkade side): accepted,
-  // and sorted under its own leg-pair key like any other.
+  // and sorted under its own leg-pair key like any other. Corridor is now
+  // bundled into the id, so the leg-pair key IS the base/quote id pair.
   assert.deepEqual(
-    result.index!.markets.map((m) => m.pair),
-    ["BTC/lightning:BTC", "BTC/onchain:BTC", "lightning:BTC/onchain:BTC"],
+    result.index!.markets.map((m) => marketPairKey(m)),
+    [
+      "arkade:signet/slip44:1/bitcoin:signet/slip44:1",
+      "arkade:signet/slip44:1/bolt11:signet/slip44:1",
+      "bolt11:signet/slip44:1/bitcoin:signet/slip44:1",
+    ],
   );
 });
 
@@ -89,19 +104,32 @@ test("mixed: a broken network fails independently without blocking sibling netwo
 });
 
 const REJECTION_CASES: Array<{ case: string; expect: string }> = [
-  { case: "bad-version", expect: "must be equal to constant" },
+  // Ajv words `enum` differently from `const`, and `version` became an enum when
+  // 1 was added. The fixture carries 2 — still an unknown version, which is what
+  // this case is for.
+  { case: "bad-version", expect: "must be equal to one of the allowed values" },
+  // The version rule, from the reducer's side: an EVM rail is a post-v0
+  // corridor, so the card must say version 1. Everything else about this
+  // fixture is valid — it is signed-shaped, fed, and bounded — so a pass here
+  // could only mean the rule is not running.
+  { case: "evm-corridor-needs-v1", expect: "version must be 1" },
   { case: "name-mismatch", expect: "does not match filename" },
   { case: "name-pattern", expect: "must match pattern" },
   { case: "duplicate-name", expect: "duplicate name" },
-  { case: "bad-pair", expect: "must match pattern" },
   { case: "bad-asset-id", expect: "must match pattern" },
-  { case: "pair-ticker-mismatch", expect: "does not match the sides' labels" },
   { case: "identical-legs", expect: "market legs must differ" },
   { case: "feed-on-same-asset", expect: "must be absent on a same-asset market" },
   { case: "missing-feed", expect: "is required when the sides carry different assets" },
   { case: "corridor-not-base", expect: "must be the base side" },
-  { case: "bad-corridor", expect: "must be equal to one of the allowed values" },
-  { case: "corridor-pair-label", expect: "does not match the sides' labels" },
+  // The card lives under solvers/bitcoin/ but the quote side's id names
+  // mutinynet — a redundancy the corridor-bundled id introduced that the
+  // pre-bundling schema never had to check.
+  { case: "network-mismatch", expect: 'names network "mutinynet" but this card lives under the "bitcoin" directory' },
+  // "liquid" is not a recognised chain namespace, so this is now an ordinary
+  // asset-id pattern rejection rather than a separate corridor-enum check —
+  // the corridor is bundled into the id, so there's no longer a standalone
+  // field for an "unknown corridor" to live in.
+  { case: "bad-corridor", expect: "must match pattern" },
   { case: "bad-relay", expect: "must match pattern" },
   // The fixture's key is well-formed 64-hex: emulator_pubkey is now refused for
   // existing at all, not for being malformed. The card schema is
@@ -162,30 +190,36 @@ test("the schemas' amount definitions match the client's AMOUNT_PATTERN", () => 
 // skew in index.schema.json alone escapes the whole suite: that schema is
 // compiled against no document here — only third-party consumers run it.
 test("the schemas' asset definitions match the client's ASSET_KEYS and decimals bound", () => {
+  // The id pattern is the same class of duplicate as `amount` above: each
+  // schema keeps its own literal copy of the alternation the client builds
+  // from ASSET_ID_FORMS. Unpinned, a form added to the client is admitted by
+  // the client and refused by the schemas — and the schemas are what a
+  // third-party consumer runs, so the skew shows up as "this registry accepts
+  // a card my validator rejects", not as a red suite here.
+  const assetIdPattern = `^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`;
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const asset = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8")).definitions.asset;
     assert.deepEqual(asset.required, [...ASSET_KEYS], name);
     assert.deepEqual(Object.keys(asset.properties).sort(), [...ASSET_KEYS].sort(), name);
+    assert.equal(asset.properties.id.pattern, assetIdPattern, name);
     assert.equal(asset.properties.decimals.minimum, 0, name);
     assert.equal(asset.properties.decimals.maximum, MAX_ASSET_DECIMALS, name);
   }
 });
 
-// The corridor vocabulary is likewise declared once per artifact; a schema-only
-// corridor (or a client-only one) would let cards merge that clients can't
-// group, or reject cards CI accepted.
-test("the schemas' corridor definitions match the client's CORRIDORS and relay bound", () => {
-  // The pair pattern embeds the non-arkade corridors as an alternation; a
-  // corridor added to CORRIDORS without touching the schemas would slip
-  // past the enum check below but not this one.
-  const alternation = `(${CORRIDORS.filter((c) => c !== "arkade").join("|")}):`;
+// The corridor vocabulary no longer has its own schema definition — it is the
+// chain-namespace alternation baked into the asset id pattern (pinned by the
+// "asset definitions" test above). What's worth pinning here is that every
+// entry in CORRIDORS actually appears as a namespace in that pattern, so a
+// corridor added to the client without a matching schema edit is caught, and
+// the relay-count bound stays in sync.
+test("every CORRIDORS entry appears as a chain namespace in the schemas' asset id pattern, and the relay bound matches", () => {
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
-    assert.deepEqual(schema.definitions.corridor.enum, [...CORRIDORS], name);
-    assert.ok(
-      JSON.stringify(schema).includes(alternation),
-      `${name}: pair pattern must embed ${alternation}`,
-    );
+    const idPattern = schema.definitions.asset.properties.id.pattern as string;
+    for (const corridor of CORRIDORS) {
+      assert.ok(idPattern.includes(`${corridor}:`), `${name}: asset id pattern must embed "${corridor}:"`);
+    }
   }
   const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
   assert.equal(card.definitions.transports.properties.nostr.properties.relays.maxItems, MAX_RELAYS);
@@ -206,30 +240,81 @@ test("golden indexes validate under the client's validateIndex", () => {
   }
 });
 
+test("the v1 index publishes canonical CAIP-19 ids without transitional fields", () => {
+  const bitcoin = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
+  const bolt11 = bitcoin.index!.markets.find((m) => m.solver === "corridor-solver")!;
+  assert.equal(bitcoin.index!.version, 1);
+  assert.equal(bolt11.quote_asset.id, "bolt11:bitcoin/slip44:0");
+  for (const market of bitcoin.index!.markets) {
+    assert.equal("pair" in market, false);
+    assert.equal("base_corridor" in market, false);
+    assert.equal("quote_corridor" in market, false);
+    assert.equal("caip19_id" in market.base_asset, false);
+    assert.equal("caip19_id" in market.quote_asset, false);
+  }
+});
+
+test("EVM markets are published in the v1 index", () => {
+  const regtest = reduceNetwork(fixture("valid", "solvers"), "regtest", FIXED_META);
+  assert.equal(regtest.ok, true);
+  assert.equal(regtest.index!.version, 1);
+  assert.equal(regtest.index!.markets.length, 2);
+  assert.ok(regtest.index!.markets.every((m) => m.quote_asset.id.startsWith("eip155:1/")));
+});
+
+test("selecting by CAIP-19 id works against the canonical index", () => {
+  const markets = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META).index!.markets;
+  assert.ok(markets.every((m) => m.base_asset.id.includes("/")));
+
+  const selected = selectMarkets(markets, {
+    baseId: "arkade:signet/slip44:1",
+    quoteId: "bolt11:signet/slip44:1",
+  });
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0]!.quote_asset.id, "bolt11:signet/slip44:1");
+  assert.equal(selectMarkets(markets, { baseId: "btc", quoteId: "btc" }).length, 0);
+});
+
+// Nothing else here compiles index.schema.json; only third-party consumers do.
+test("golden indexes validate under index.schema.json", () => {
+  const ajv = new Ajv({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8")));
+  for (const network of NETWORKS) {
+    const idx = JSON.parse(readFileSync(goldenOf(network), "utf8"));
+    assert.ok(validate(idx), `${network}: ${JSON.stringify(validate.errors)}`);
+  }
+});
+
 // The asset identity rule is declared in three places -- both schemas and the
 // client's hand-rolled validator -- and an id that clears one copy but not
-// another is a silent routing miss, not an error. The two literals below are
-// duplicated from the shared vector rather than imported, because this repo's
-// client and tests are dependency-free by design; a 68-character constant that
-// is frozen by definition is safe to duplicate, logic is not.
+// another is a silent routing miss, not an error. The 68-hex reference below
+// is duplicated from the shared vector rather than imported, because this
+// repo's client and tests are dependency-free by design; a frozen constant is
+// safe to duplicate, logic is not.
 //
 // Source: @arkade-os/sdk ASSET_ID_VECTORS, entry "endianness discriminator
 // (gidx 258 = 0x0102)" -- packages/ts-sdk/src/extension/asset/assetIdVectors.json.
 // Keep in sync; see ts-sdk plans/asset-id-shared-vectors.md.
-const ASSET_ID_VECTOR = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f200201";
-const ASSET_ID_VECTOR_UPPERCASE = ASSET_ID_VECTOR.toUpperCase();
+//
+// The vector itself is just the 68-hex asset-reference half of a CAIP-19 id
+// now (see docs/arkade-discovery-spec.md "Asset ids and corridors"); wrap it
+// as an Arkade-issued asset id ("arkade:bitcoin/asset:<vector>") to exercise
+// the full pattern, the same way a real card would carry it.
+const ASSET_ID_VECTOR_REFERENCE = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f200201";
+const ASSET_ID_VECTOR = `arkade:bitcoin/asset:${ASSET_ID_VECTOR_REFERENCE}`;
+const ASSET_ID_VECTOR_UPPERCASE = `arkade:bitcoin/asset:${ASSET_ID_VECTOR_REFERENCE.toUpperCase()}`;
 
 test("all three copies of the asset identity rule accept the shared vector and reject uppercase", () => {
   const drift = (where: string) =>
     `asset id encoding drifted from @arkade-os/sdk ASSET_ID_VECTORS (${where})`;
 
-  // Both schemas, read as the regex they declare.
   for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
     const pattern = new RegExp(schema.definitions.asset.properties.id.pattern);
     assert.ok(pattern.test(ASSET_ID_VECTOR), drift(name));
     assert.ok(!pattern.test(ASSET_ID_VECTOR_UPPERCASE), drift(`${name}: uppercase`));
-    assert.ok(pattern.test("btc"), drift(`${name}: btc sentinel`));
+    assert.ok(pattern.test("arkade:bitcoin/slip44:0"), drift(`${name}: slip44 sentinel`));
   }
 
   // ...and the client's own copy, exercised through the validator rather than

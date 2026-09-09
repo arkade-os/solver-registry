@@ -1,8 +1,14 @@
 {
   "version": 1,
-  "network": "regtest",
-  "generated_at": 1700000000,
-  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "name": "evm-solver",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
   "markets": [
     {
       "base_asset": {
@@ -27,16 +33,7 @@
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
       "min_quote_amount": "1000000",
-      "max_quote_amount": "50000000000",
-      "solver": "evm-solver",
-      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-      "transports": {
-        "nostr": {
-          "relays": [
-            "wss://relay.example.com"
-          ]
-        }
-      }
+      "max_quote_amount": "50000000000"
     },
     {
       "base_asset": {
@@ -61,16 +58,8 @@
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
       "min_quote_amount": "10000000000000000",
-      "max_quote_amount": "5000000000000000000",
-      "solver": "evm-solver",
-      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
-      "transports": {
-        "nostr": {
-          "relays": [
-            "wss://relay.example.com"
-          ]
-        }
-      }
+      "max_quote_amount": "5000000000000000000"
     }
-  ]
+  ],
+  "sig": "5fe7912f729837009cc49940232dcad576b2de0273ec461dbfbf4be4c624e127a441df23be3554d2478cc8c88b21303bc279ee24c734cfd6c58786b04c50ca46"
 }

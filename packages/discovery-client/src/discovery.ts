@@ -7,6 +7,7 @@
 import {
   DEFAULT_NETWORK,
   marketCorridor,
+  marketLegKey,
   marketPairKey,
   stableStringify,
   type AssetInfo,
@@ -225,14 +226,15 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
 }
 
 export interface SelectOptions {
-  /** Canonical base asset id (e.g. "btc"). */
+  /**
+   * Canonical base asset id — a full CAIP-19 id, corridor and all (e.g.
+   * "arkade:bitcoin/slip44:0"). The corridor is no longer a separate filter:
+   * it is baked into the id, so selecting "bolt11:bitcoin/slip44:0" instead
+   * of "arkade:bitcoin/slip44:0" is what used to be `baseCorridor: "lightning"`.
+   */
   baseId: string;
-  /** Canonical quote asset id. */
+  /** Canonical quote asset id — see `baseId`. */
   quoteId: string;
-  /** The base side's corridor. Defaults to "arkade", matching every spot market. */
-  baseCorridor?: Corridor;
-  /** The quote side's corridor. Defaults to "arkade". */
-  quoteCorridor?: Corridor;
   /**
    * The side the maker wants to receive. When given, only markets with that
    * side enabled (max > 0) — able to pay it out — match, so a direction no
@@ -244,11 +246,9 @@ export interface SelectOptions {
 }
 
 export interface MarketPair {
-  /** Display label from the first ranked market for this leg pair. */
-  pair: string;
   base_asset: AssetInfo;
   quote_asset: AssetInfo;
-  /** The legs' corridors, defaults resolved (absent reads as "arkade"). */
+  /** The legs' corridors, parsed from each side's asset id (defaults resolved). */
   base_corridor: Corridor;
   quote_corridor: Corridor;
   marketCount: number;
@@ -267,9 +267,7 @@ function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
   }
   const amount = opts.wantAmount === undefined ? undefined : BigInt(opts.wantAmount);
   return (m) => {
-    if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
-    if (marketCorridor(m, "base") !== (opts.baseCorridor ?? "arkade")) return false;
-    if (marketCorridor(m, "quote") !== (opts.quoteCorridor ?? "arkade")) return false;
+    if (marketLegKey(m, "base") !== opts.baseId || marketLegKey(m, "quote") !== opts.quoteId) return false;
     if (wantSide === undefined) return true;
     const limits = sideLimits(m, wantSide);
     if (limits === null) return false;
@@ -300,7 +298,6 @@ export function listMarkets<T extends IndexMarket>(markets: T[]): MarketPair[] {
     let entry = byPair.get(key);
     if (!entry) {
       entry = {
-        pair: market.pair,
         base_asset: market.base_asset,
         quote_asset: market.quote_asset,
         base_corridor: marketCorridor(market, "base"),

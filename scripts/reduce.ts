@@ -12,9 +12,10 @@ import { verifyCardSig } from "./canonical.ts";
 import {
   cardHasRfqMarket,
   cardRfqErrors,
+  cardVersionErrors,
   marketCorridorErrors,
   marketLimitErrors,
-  marketPairError,
+  marketNetworkErrors,
 } from "../packages/discovery-client/src/validate.ts";
 import { marketPairKey } from "../packages/discovery-client/src/types.ts";
 // The wire types live with the portable client; the reducer imports them so a
@@ -92,11 +93,15 @@ export function reduceNetwork(
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
         const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), marketPairError(m)]) {
+        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
       }
       for (const message of cardRfqErrors(card)) messages.push(message);
+      // Same words as the client's own validator, for the same reason the RFQ
+      // rules are shared: a card rejected by CI must be rejected by a consumer
+      // that pinned it locally, and vice versa.
+      for (const message of cardVersionErrors(card)) messages.push(message);
       // The registry's listing gate is stricter than a local pin: the
       // rendezvous must carry the solver's own signature, not just the PR
       // author's word (see cardRfqErrors for the split's rationale).
@@ -176,7 +181,7 @@ export function reduceNetwork(
     ok: true,
     errors: [],
     index: {
-      version: 0,
+      version: 1,
       network,
       generated_at: meta.generatedAt,
       commit: meta.commit,

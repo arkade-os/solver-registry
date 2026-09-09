@@ -13,15 +13,6 @@
     "markets"
   ],
   "definitions": {
-    "corridor": {
-      "type": "string",
-      "enum": [
-        "arkade",
-        "lightning",
-        "onchain"
-      ],
-      "description": "The rail a market side settles on. Absent means \"arkade\" (every spot market)."
-    },
     "asset": {
       "type": "object",
       "additionalProperties": false,
@@ -34,8 +25,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(btc|[0-9a-f]{68})$",
-          "description": "Canonical asset identity: \"btc\" or a 68-hex-char AssetId."
+          "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
+          "description": "Canonical CAIP-19 asset identity. The chain namespace is the corridor; see the card schema's asset definition for the full grammar and examples."
         },
         "name": {
           "type": "string",
@@ -86,7 +77,7 @@
   },
   "properties": {
     "version": {
-      "const": 0
+      "const": 1
     },
     "network": {
       "type": "string",
@@ -112,7 +103,6 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "pair",
           "solver",
           "base_asset",
           "quote_asset",
@@ -139,11 +129,6 @@
           }
         ],
         "properties": {
-          "pair": {
-            "type": "string",
-            "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$",
-            "description": "Display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Canonical identity is the corridor-qualified leg pair."
-          },
           "solver": {
             "type": "string",
             "pattern": "^[a-z0-9-]+$"
@@ -153,12 +138,6 @@
           },
           "quote_asset": {
             "$ref": "#/definitions/asset"
-          },
-          "base_corridor": {
-            "$ref": "#/definitions/corridor"
-          },
-          "quote_corridor": {
-            "$ref": "#/definitions/corridor"
           },
           "discovery_pubkey": {
             "type": "string",

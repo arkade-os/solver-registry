@@ -115,11 +115,10 @@ test("planOffer: names the field when a market's asset decimals are malformed", 
 
 // --- offer quotes ---
 
-const DEPIX_ID = "4".repeat(68);
+const DEPIX_ID = `arkade:bitcoin/asset:${"4".repeat(68)}`;
 
 function arkadeMarket(overrides: Partial<Market> = {}): Market {
   return makeMarket({
-    pair: "BTC/DePix",
     quote_asset: {
       id: DEPIX_ID,
       name: "Decentralized Pix",

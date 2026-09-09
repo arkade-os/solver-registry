@@ -16,29 +16,50 @@ export function isNetwork(value: unknown): value is Network {
 }
 
 /**
- * The corridor a market side settles on. `arkade` is the unmarked default —
- * every v0 spot market has it on both sides. A non-arkade side makes the
- * market a corridor (RFQ) market: the two sides of the pair live on
- * different rails (e.g. an Arkade balance vs a Lightning payment or an L1
- * output), and the binding per-trade terms arrive in the solver's quote,
- * negotiated over the card's transports. Feed metadata is unaffected by the
- * corridor itself: only a same-asset market omits the feed fields (its
- * price is identically 1); a cross-asset corridor market still advertises
- * a feed for pre-quote planning.
+ * The rail a market side settles on. This is no longer a wire field: it is
+ * the CAIP-2 chain namespace parsed off the FRONT of `AssetInfo.id`, which is
+ * a CAIP-19-shaped asset type — `<chain-namespace>:<chain-reference>/<asset-
+ * namespace>:<asset-reference>` (e.g. `"arkade:bitcoin/slip44:0"`,
+ * `"eip155:1/erc20:0xa0b8…"`). Bundling the corridor into the id is what makes
+ * the id the market's whole leg identity: two sides with the same id are the
+ * same leg on the same rail on the same network, full stop, so
+ * {@link marketLegKey} and {@link marketPairKey} need no separate corridor
+ * component any more.
+ *
+ * `arkade` is the unmarked default in the sense that every spot market has it
+ * on both sides. A non-arkade side makes the market a corridor (RFQ) market:
+ * the two sides of the pair live on different rails (e.g. an Arkade balance
+ * vs a Lightning payment or an L1 output), and the binding per-trade terms
+ * arrive in the solver's quote, negotiated over the card's transports. Feed
+ * metadata is unaffected by the corridor itself: only a same-underlying-asset
+ * market omits the feed fields (its price is identically 1); a cross-asset
+ * corridor market still advertises a feed for pre-quote planning — see
+ * {@link isSameAssetMarket}.
+ *
+ * EVM chains are named PER CHAIN under the single `eip155` namespace, with
+ * the chain id as the CAIP-2 reference (`eip155:1`, `eip155:42161`, …) —
+ * never a blanket `evm` value. An ERC-20 address is unique only within a
+ * chain, so a chain-blind rail would give the same token on Ethereum and on
+ * an L2 the same leg key — silently collapsing two markets that cannot
+ * settle each other's trades. Unlike the old per-chain enum, this needs no
+ * edit here to add a chain: `eip155:<any chain id>` is already well-formed,
+ * which is the point of anchoring to CAIP-2 instead of inventing a rail name
+ * per chain.
  */
-export const CORRIDORS = ["arkade", "lightning", "onchain"] as const;
+export const CORRIDORS = ["arkade", "bolt11", "bitcoin", "eip155"] as const;
 export type Corridor = (typeof CORRIDORS)[number];
 export const DEFAULT_CORRIDOR = "arkade" as const satisfies Corridor;
+
+/**
+ * Corridors that did not exist at card version 0. A card using one MUST
+ * declare `version: 1`, and a consumer that understands only 0 must reject
+ * such a card whole rather than skip the market it does not recognise.
+ */
+export const V1_CORRIDORS = ["eip155"] as const satisfies readonly Corridor[];
 
 export function isCorridor(value: unknown): value is Corridor {
   return (CORRIDORS as readonly string[]).includes(value as string);
 }
-
-/** The per-side corridor field names — the single side -> field mapping. */
-export const CORRIDOR_KEYS = {
-  base: "base_corridor",
-  quote: "quote_corridor",
-} as const;
 
 /** Inclusive upper bound on each protocol's `relays` list within a card's `transports` map. */
 export const MAX_RELAYS = 8;
@@ -51,7 +72,16 @@ export const MAX_ASSET_DECIMALS = 18;
 
 /** Per-side asset descriptor. `id` is the canonical identity; the rest is display metadata. */
 export interface AssetInfo {
-  /** Canonical asset identity: "btc" or a 68-hex-char AssetId. Group and price by this only. */
+  /**
+   * Canonical asset identity: a CAIP-19-shaped id, `"<chain-namespace>:
+   * <chain-reference>/<asset-namespace>:<asset-reference>"`, e.g.
+   * `"arkade:bitcoin/slip44:0"` (BTC on Arkade mainnet), `"bolt11:bitcoin/
+   * slip44:0"` (BTC over Lightning), `"arkade:bitcoin/asset:<68-hex>"` (an
+   * Arkade-issued asset), or `"eip155:1/erc20:0x…"` (an ERC-20 on Ethereum
+   * mainnet). The corridor is the leading chain namespace — see
+   * {@link marketCorridor} — so group, price, and dedupe by this whole
+   * string, never by a substring of it.
+   */
   id: string;
   name: string;
   ticker: string;
@@ -112,19 +142,8 @@ export const LIMIT_KEYS = {
 
 /** A single market as advertised by a solver. */
 export interface Market {
-  /**
-   * Display label "<base-label>/<quote-label>", where a side's label is its
-   * ticker when the side's corridor is arkade and "<corridor>:<ticker>"
-   * otherwise (e.g. "BTC/USDT", "BTC/lightning:BTC"). Identity is the
-   * corridor-qualified leg pair — see {@link marketPairKey}.
-   */
-  pair: string;
   base_asset: AssetInfo;
   quote_asset: AssetInfo;
-  /** The base side's corridor. Absent means "arkade" (every spot market). */
-  base_corridor?: Corridor;
-  /** The quote side's corridor. Absent means "arkade" (every spot market). */
-  quote_corridor?: Corridor;
   /**
    * Exact URL the maker MUST price from. CORS-permissive so browsers can
    * fetch it. Required when the two sides carry different assets; MUST be
@@ -186,7 +205,16 @@ export interface TransportMap {
 
 /** A card is one solver's market listing for one network (what a solver PRs / a user pins). */
 export interface Card {
-  version: 0;
+  /**
+   * `0 | 1`, not `0`, and the distinction is load-bearing for consumers rather
+   * than cosmetic: `validateCard` accepts both and casts its input to this type,
+   * so a literal `0` here would type `card.version === 1` as unreachable and
+   * `=== 0` as always true. A consumer writing the version guard this format
+   * asks it to write would be compiling against a lie.
+   *
+   * Card versions are independent from the published index version.
+   */
+  version: 0 | 1;
   name: string;
   discovery_pubkey?: string;
   sig?: string;
@@ -210,7 +238,7 @@ export interface IndexMarket extends Market {
 
 /** A published per-network index: `<base-url>/<network>.json`. */
 export interface NetworkIndex {
-  version: 0;
+  version: 1;
   network: Network;
   /** Unix seconds the index was generated (set by CI, used for staleness). */
   generated_at: number;
@@ -220,20 +248,70 @@ export interface NetworkIndex {
 
 // Corridor helpers. All shape-defensive (they run inside validators on
 // unvalidated input, so every field reads as unknown): a missing or
-// malformed corridor field reads as the arkade default, and missing asset
-// ids surface as "undefined" in keys rather than throwing.
+// malformed id reads as "undefined" in keys and defaults its corridor to
+// arkade, rather than throwing.
 
 type MarketLike = {
   base_asset?: unknown;
   quote_asset?: unknown;
-  base_corridor?: unknown;
-  quote_corridor?: unknown;
 };
 
-/** A side's corridor, defaulting the absent (and any malformed) field to arkade. */
+/** Extracts `AssetInfo.id` from an asset value, or undefined if it isn't a string. */
+export function assetIdOf(value: unknown): string | undefined {
+  const id = (value as AssetInfo | undefined)?.id;
+  return typeof id === "string" ? id : undefined;
+}
+
+/**
+ * The chain namespace prefixing a CAIP-19 asset id — the part before the
+ * first ":" (and before the "/"). `undefined` for anything that isn't a
+ * string shaped like "<namespace>:<reference>/...".
+ */
+function chainNamespaceOf(id: string | undefined): string | undefined {
+  if (id === undefined) return undefined;
+  const slash = id.indexOf("/");
+  if (slash === -1) return undefined;
+  const colon = id.indexOf(":");
+  if (colon === -1 || colon > slash) return undefined;
+  return id.slice(0, colon);
+}
+
+/**
+ * The chain reference of a CAIP-19 asset id — the part between the first ":"
+ * and the "/". For the `arkade`/`bolt11`/`bitcoin` corridors this is the
+ * Arkade network the side settles on (e.g. "bitcoin", "mutinynet"); for
+ * `eip155` it is the numeric EIP-155 chain id. `undefined` for anything that
+ * isn't a string shaped like "<namespace>:<reference>/...".
+ */
+export function chainReferenceOf(id: string | undefined): string | undefined {
+  if (id === undefined) return undefined;
+  const slash = id.indexOf("/");
+  if (slash === -1) return undefined;
+  const colon = id.indexOf(":");
+  if (colon === -1 || colon > slash) return undefined;
+  return id.slice(colon + 1, slash);
+}
+
+/** Corridors whose chain reference is an Arkade network, not an external chain id. */
+export const ARKADE_NETWORK_CORRIDORS = ["arkade", "bolt11", "bitcoin"] as const satisfies readonly Corridor[];
+
+/**
+ * The asset-type half of a CAIP-19 id — everything after the chain's "/",
+ * i.e. "<asset-namespace>:<asset-reference>". Two ids with the same
+ * underlying asset but different chain namespaces (e.g. an Arkade BTC
+ * balance and a Lightning BTC payment) share this and nothing else.
+ */
+function underlyingAssetOf(id: string | undefined): string | undefined {
+  if (id === undefined) return undefined;
+  const slash = id.indexOf("/");
+  return slash === -1 ? undefined : id.slice(slash + 1);
+}
+
+/** A side's corridor: the chain namespace parsed off its asset id, defaulting to arkade. */
 export function marketCorridor(market: MarketLike, side: Side): Corridor {
-  const raw = market[CORRIDOR_KEYS[side]];
-  return isCorridor(raw) ? raw : DEFAULT_CORRIDOR;
+  const asset = side === "base" ? market.base_asset : market.quote_asset;
+  const namespace = chainNamespaceOf(assetIdOf(asset));
+  return isCorridor(namespace) ? namespace : DEFAULT_CORRIDOR;
 }
 
 /**
@@ -246,35 +324,38 @@ export function isRfqMarket(market: MarketLike): boolean {
   return marketCorridor(market, "base") !== DEFAULT_CORRIDOR || marketCorridor(market, "quote") !== DEFAULT_CORRIDOR;
 }
 
-function assetIdOf(value: unknown): string | undefined {
-  const id = (value as AssetInfo | undefined)?.id;
-  return typeof id === "string" ? id : undefined;
-}
-
-/** Whether both sides carry the same asset id — the price is identically 1 and no feed applies. */
+/**
+ * Whether both sides carry the same underlying asset — regardless of which
+ * rail each settles on — so the price is identically 1 and no feed applies.
+ * An Arkade BTC balance against a Lightning BTC payment qualifies; an Arkade
+ * BTC balance against a Lightning USDT payment does not.
+ * The rail (chain namespace) may differ; the chain reference may not — one
+ * ERC-20 address names different tokens on different chains.
+ */
 export function isSameAssetMarket(market: MarketLike): boolean {
-  const baseId = assetIdOf(market.base_asset);
-  return baseId !== undefined && baseId === assetIdOf(market.quote_asset);
-}
-
-/** One side's canonical leg identity, "<corridor>:<asset-id>". */
-export function marketLegKey(market: MarketLike, side: Side): string {
-  const asset = side === "base" ? market.base_asset : market.quote_asset;
-  return `${marketCorridor(market, side)}:${assetIdOf(asset)}`;
+  const [baseId, quoteId] = [assetIdOf(market.base_asset), assetIdOf(market.quote_asset)];
+  const base = underlyingAssetOf(baseId);
+  if (base === undefined || base !== underlyingAssetOf(quoteId)) return false;
+  const reference = chainReferenceOf(baseId);
+  return reference !== undefined && reference === chainReferenceOf(quoteId);
 }
 
 /**
- * The market's canonical identity and grouping key: the corridor-qualified
- * leg pair "<base-corridor>:<base-id>/<quote-corridor>:<quote-id>". This —
- * never the `pair` label, and no longer the bare id pair — is what the
- * reducer sorts by and clients group by: two BTC/BTC markets on different
- * corridors are different markets.
+ * One side's canonical leg identity. Now simply that side's whole CAIP-19
+ * asset id — the corridor is already baked into it, so no separate prefixing
+ * is needed the way the pre-bundling `"<corridor>:<asset-id>"` form required.
+ */
+export function marketLegKey(market: MarketLike, side: Side): string {
+  const asset = side === "base" ? market.base_asset : market.quote_asset;
+  return `${assetIdOf(asset)}`;
+}
+
+/**
+ * The market's canonical identity and grouping key: "<base-id>/<quote-id>".
+ * This is what the reducer sorts by and clients group by: two BTC/BTC
+ * markets on different corridors carry different ids and so are different
+ * markets, even though nothing named a "corridor" here at all.
  */
 export function marketPairKey(market: MarketLike): string {
   return `${marketLegKey(market, "base")}/${marketLegKey(market, "quote")}`;
-}
-
-/** A side's display label for the `pair` field: the bare ticker on the arkade corridor, "<corridor>:<ticker>" otherwise. */
-export function pairSideLabel(corridor: Corridor, ticker: string): string {
-  return corridor === DEFAULT_CORRIDOR ? ticker : `${corridor}:${ticker}`;
 }

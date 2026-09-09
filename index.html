@@ -241,17 +241,31 @@
         regtest: "http://localhost:7080",
       };
 
-      // A pair side: BTC as plain text, an asset as an explorer link. Label is
-      // the ticker, prefixed with the side's corridor when it is not the
-      // arkade default (e.g. "lightning:BTC"); the canonical identity is the
-      // corridor-qualified leg.
-      function assetCell(network, asset, corridor) {
+      // asset.id is a CAIP-19-shaped id, "<chain-namespace>:<chain-reference>/
+      // <asset-namespace>:<asset-reference>" — the chain namespace IS the
+      // corridor, bundled into the id rather than a separate field.
+      function parseAssetId(id) {
+        const slash = typeof id === "string" ? id.indexOf("/") : -1;
+        const colon = slash === -1 ? -1 : id.indexOf(":");
+        if (colon === -1 || colon > slash) return null;
+        const corridor = id.slice(0, colon);
+        const [assetNamespace, assetReference] = id.slice(slash + 1).split(":");
+        return { corridor, assetNamespace, assetReference };
+      }
+
+      // A pair side: a plain SLIP-44 coin (BTC, ETH, …) as plain text, an
+      // Arkade-issued asset as an explorer link. Label is the ticker, prefixed
+      // with the side's corridor when it is not the arkade default (e.g.
+      // "bolt11:BTC"); the canonical identity is the whole asset id.
+      function assetCell(network, asset) {
+        const parsed = parseAssetId(asset.id);
+        const corridor = parsed?.corridor;
         const label = corridor && corridor !== "arkade" ? `${corridor}:${asset.ticker}` : asset.ticker;
         const title = `${asset.name} · decimals ${asset.decimals ?? "?"} · ${asset.id}`;
         const explorer = EXPLORERS[network];
-        if (asset.id === "btc" || !explorer) return el("span", { title, text: label });
+        if (!parsed || parsed.assetNamespace !== "asset" || !explorer) return el("span", { title, text: label });
         return el("a", {
-          href: `${explorer}/asset/${asset.id}`,
+          href: `${explorer}/asset/${parsed.assetReference}`,
           target: "_blank",
           rel: "noopener",
           title,
@@ -329,7 +343,7 @@
         function copyButton(indexMarket) {
           const { solver, discovery_pubkey, transports, ...market } = indexMarket;
           const card = {
-            version: 0,
+            version: 1,
             name: solver,
             ...(discovery_pubkey ? { discovery_pubkey } : {}),
             ...(transports ? { transports } : {}),
@@ -371,9 +385,9 @@
             el("tr", {}, [
               el("td", {}, [
                 el("code", {}, [
-                  assetCell(network, m.base_asset, m.base_corridor),
+                  assetCell(network, m.base_asset),
                   el("span", { text: "/" }),
-                  assetCell(network, m.quote_asset, m.quote_corridor),
+                  assetCell(network, m.quote_asset),
                 ]),
               ]),
               el("td", { text: m.solver }),

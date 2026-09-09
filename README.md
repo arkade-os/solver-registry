@@ -12,11 +12,13 @@ full protocol.
 Markets span two shapes under one schema. **Spot markets** trade Arkade
 balances against each other, priced from a pinned feed and filled
 non-interactively from the arkd stream. **Corridor markets** trade an Arkade
-balance against another rail — a Lightning payment (`lightning`) or an L1
-output (`onchain`): same card, same index, same `fee_bps` ranking, but the
+balance against another rail — a Lightning payment (`bolt11`) or an L1
+output (`bitcoin`): same card, same index, same `fee_bps` ranking, but the
 price of a same-asset corridor is identically 1 (no feed) and trades are
 negotiated per-trade over RFQ via the card's `discovery_pubkey` and
-`transports`, which corridor cards must therefore carry and sign.
+`transports`, which corridor cards must therefore carry and sign. A side's
+corridor is named as part of its asset id (a CAIP-19-shaped identifier, e.g.
+`arkade:bitcoin/slip44:0`), not a separate field.
 
 ## A registry, not the registry
 
@@ -62,7 +64,9 @@ Human-readable overview: <https://arkade-os.github.io/solver-registry/>
 | Mutinynet | <https://arkade-os.github.io/solver-registry/mutinynet.json> |
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
-that network, stamped with `generated_at` and the source `commit`, matching
+that network. Index version 1 uses canonical CAIP-19 values directly in
+`base_asset.id` and `quote_asset.id`; version 0 indexes are not accepted by
+the current client. Each index is stamped with `generated_at` and the source `commit`, matching
 [`schema/index.schema.json`](schema/index.schema.json). Fetch one URL per
 registry you follow, merge, filter by pair, price from the market's
 `price_feed`, and extract the scalar using `price_feed_schema`.
