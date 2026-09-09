@@ -7,6 +7,7 @@
 import {
   DEFAULT_NETWORK,
   marketCorridor,
+  marketLegKey,
   marketPairKey,
   stableStringify,
   type AssetInfo,
@@ -266,7 +267,7 @@ function selectionPredicate(opts: SelectOptions): (m: IndexMarket) => boolean {
   }
   const amount = opts.wantAmount === undefined ? undefined : BigInt(opts.wantAmount);
   return (m) => {
-    if (m.base_asset.id !== opts.baseId || m.quote_asset.id !== opts.quoteId) return false;
+    if (marketLegKey(m, "base") !== opts.baseId || marketLegKey(m, "quote") !== opts.quoteId) return false;
     if (wantSide === undefined) return true;
     const limits = sideLimits(m, wantSide);
     if (limits === null) return false;

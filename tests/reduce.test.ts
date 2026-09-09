@@ -17,6 +17,7 @@ import {
   marketPairKey,
 } from "../packages/discovery-client/src/types.ts";
 import { ASSET_ID_FORMS, LEGACY_ASSET_ID, validateIndex } from "../packages/discovery-client/src/validate.ts";
+import { selectMarkets } from "../packages/discovery-client/src/discovery.ts";
 import { validateIndex as validateIndexV023 } from "./compat/v023-validate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -290,6 +291,21 @@ test("deprecated index fields are derived from the asset ids, not carried from t
   assert.equal(legacyMarketCorridor(leg("bitcoin:bitcoin/slip44:0"), "quote"), "onchain");
   assert.equal(legacyMarketCorridor(leg("eip155:1/slip44:60"), "quote"), "eip155");
   assert.equal(legacyMarketCorridor(leg("arkade:bitcoin/slip44:0"), "quote"), "arkade");
+});
+
+// The client tests feed selection hand-written CAIP-19 markets, so nothing else
+// notices that a published index spells `id` differently.
+test("selecting by CAIP-19 id works against a down-projected index", () => {
+  const markets = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META).index!.markets;
+  assert.deepEqual([...new Set(markets.map((m) => m.base_asset.id))], ["btc"]);
+
+  const selected = selectMarkets(markets, {
+    baseId: "arkade:signet/slip44:1",
+    quoteId: "bolt11:signet/slip44:1",
+  });
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0]!.quote_asset.caip19_id, "bolt11:signet/slip44:1");
+  assert.equal(selectMarkets(markets, { baseId: "btc", quoteId: "btc" }).length, 0);
 });
 
 // The consumer, not the producer: 0.2.3 is all-or-nothing, so one bad market
