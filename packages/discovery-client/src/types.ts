@@ -83,7 +83,6 @@ export interface AssetInfo {
    * string, never by a substring of it.
    */
   id: string;
-  caip19_id?: string;
   name: string;
   ticker: string;
   /**
@@ -213,8 +212,7 @@ export interface Card {
    * `=== 0` as always true. A consumer writing the version guard this format
    * asks it to write would be compiling against a lie.
    *
-   * {@link NetworkIndex} correctly keeps the literal `0` — the reducer sets that
-   * field itself and no v1 index exists.
+   * Card versions are independent from the published index version.
    */
   version: 0 | 1;
   name: string;
@@ -236,17 +234,11 @@ export interface IndexMarket extends Market {
   discovery_pubkey?: string;
   /** The solver card's `transports` dictionary, propagated by the reducer when present. */
   transports?: TransportMap;
-  /** @deprecated Derived from the asset ids; read those. Removed a release later. */
-  pair?: string;
-  /** @deprecated Derived from `base_asset.id`. */
-  base_corridor?: LegacyCorridor;
-  /** @deprecated Derived from `quote_asset.id`. */
-  quote_corridor?: LegacyCorridor;
 }
 
 /** A published per-network index: `<base-url>/<network>.json`. */
 export interface NetworkIndex {
-  version: 0;
+  version: 1;
   network: Network;
   /** Unix seconds the index was generated (set by CI, used for staleness). */
   generated_at: number;
@@ -264,13 +256,9 @@ type MarketLike = {
   quote_asset?: unknown;
 };
 
-// The artifacts disagree on purpose while the window is open: a card's `id` is
-// CAIP-19, a published index down-projects it to the v0 grammar (a v0 client
-// rejects the WHOLE document otherwise, delisting every solver) and moves
-// CAIP-19 to `caip19_id`. Read corridors and leg keys through here.
+/** Extracts `AssetInfo.id` from an asset value, or undefined if it isn't a string. */
 export function assetIdOf(value: unknown): string | undefined {
-  const asset = value as AssetInfo | undefined;
-  const id = typeof asset?.caip19_id === "string" ? asset.caip19_id : asset?.id;
+  const id = (value as AssetInfo | undefined)?.id;
   return typeof id === "string" ? id : undefined;
 }
 
@@ -334,35 +322,6 @@ export function marketCorridor(market: MarketLike, side: Side): Corridor {
  */
 export function isRfqMarket(market: MarketLike): boolean {
   return marketCorridor(market, "base") !== DEFAULT_CORRIDOR || marketCorridor(market, "quote") !== DEFAULT_CORRIDOR;
-}
-
-// NOT the identity: v0 said "lightning"/"onchain" where CAIP-2 says
-// "bolt11"/"bitcoin". `eip155` has no v0 name and self-maps — truthy and not
-// "lightning", so a v0 consumer's checks exclude a rail it cannot settle.
-export const LEGACY_CORRIDOR_NAMES = {
-  arkade: "arkade",
-  bolt11: "lightning",
-  bitcoin: "onchain",
-  eip155: "eip155",
-} as const satisfies Record<Corridor, string>;
-
-export type LegacyCorridor = (typeof LEGACY_CORRIDOR_NAMES)[Corridor];
-
-export function legacyMarketCorridor(market: MarketLike, side: Side): LegacyCorridor {
-  return LEGACY_CORRIDOR_NAMES[marketCorridor(market, side)];
-}
-
-export function legacyAssetId(id: string | undefined): string | undefined {
-  const slash = id === undefined ? -1 : id.indexOf("/");
-  if (id === undefined || slash === -1) return undefined;
-  if (!(ARKADE_NETWORK_CORRIDORS as readonly string[]).includes(id.slice(0, id.indexOf(":")))) return undefined;
-  const asset = id.slice(slash + 1);
-  if (asset.startsWith("slip44:")) return "btc";
-  return asset.startsWith("asset:") ? asset.slice("asset:".length) : undefined;
-}
-
-export function pairSideLabel(corridor: LegacyCorridor, ticker: string): string {
-  return corridor === DEFAULT_CORRIDOR ? ticker : `${corridor}:${ticker}`;
 }
 
 /**

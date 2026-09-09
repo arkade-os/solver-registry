@@ -6,7 +6,7 @@ Status: draft. Scope: how makers discover solver markets, prices, fees, and limi
 
 The execution path already needs no interactivity: the maker funds a swap VTXO carrying the TLV offer, and any solver watching the arkd stream can fill it. The covenant enforces the terms and does not bind a specific filler. Discovery therefore only answers one question for the maker: what `wantAmount` for pair Y will clear right now?
 
-v0 is a git repo format (the **registry**) plus a GitHub Action (the **reducer**). Solvers PR a small JSON card describing their markets. CI validates the cards and reduces them into one flat, sorted index per network. Clients fetch one URL per registry they follow, merge, pick a market, price from its pinned feed, concede the fee plus a safety cushion, and fund the standard offer. For a spot card: no signatures, no relays, no messages to the solver, no solver-side tooling beyond writing a JSON file. Corridor markets (below) add exactly one thing — a self-authenticating rendezvous (`discovery_pubkey` + `transports`, signed) — because their trades are negotiated per-trade rather than stream-filled.
+v0 is a git repo format (the **registry**) plus a GitHub Action (the **reducer**). Solvers PR a small JSON card describing their markets. CI validates the cards and reduces them into one flat, sorted version-1 index per network. Clients fetch one URL per registry they follow, merge, pick a market, price from its pinned feed, concede the fee plus a safety cushion, and fund the standard offer. For a spot card: no signatures, no relays, no messages to the solver, no solver-side tooling beyond writing a JSON file. Corridor markets (below) add exactly one thing — a self-authenticating rendezvous (`discovery_pubkey` + `transports`, signed) — because their trades are negotiated per-trade rather than stream-filled.
 
 Every market side names its **corridor** — the rail it settles on — `arkade` (the unmarked default; both sides of every spot market), `bolt11` (Lightning), or `bitcoin` (an L1 output) — as part of its **asset id**, a CAIP-19-shaped identifier `<chain-namespace>:<chain-reference>/<asset-namespace>:<asset-reference>` (e.g. `arkade:bitcoin/slip44:0` for BTC on Arkade mainnet). The chain namespace IS the corridor; there is no separate corridor field. A market's identity is simply its base and quote asset ids, `<base-asset-id> / <quote-asset-id>`, so the same asset over different rails — carrying different ids — forms different markets. See *Solver card* below for the full grammar.
 
@@ -163,7 +163,7 @@ On every merge to the default branch, CI, independently per network directory:
 
 ```json
 {
-  "version": 0,
+  "version": 1,
   "network": "bitcoin",
   "generated_at": 1783958400,
   "commit": "<git sha>",
@@ -293,7 +293,7 @@ Publish to all card-listed relays. Refresh every `TTL - 5s` and immediately on p
 
 ### Consumer behavior
 
-Subscribe `{kinds:[38173], "#d":[pair], authors:[index pubkeys]}`. Verify sig; drop pubkeys absent from the index; drop expired (±5s skew); dedupe per pubkey by `created_at`; on conflicts with the index, quote wins for pricing, index wins for trust. Price with `safety_bps` near zero. Fall back to v0 index pricing when no quote survives.
+Subscribe `{kinds:[38173], "#d":[pair], authors:[index pubkeys]}`. Verify sig; drop pubkeys absent from the index; drop expired (±5s skew); dedupe per pubkey by `created_at`; on conflicts with the index, quote wins for pricing, index wins for trust. Price with `safety_bps` near zero. Fall back to static index pricing when no quote survives.
 
 ### Fill-failure report
 

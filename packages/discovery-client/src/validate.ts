@@ -119,8 +119,6 @@ export const ASSET_ID_FORMS = [
 
 const ASSET_ID = new RegExp(`^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`);
 
-export const LEGACY_ASSET_ID = /^(btc|[0-9a-f]{68})$/;
-
 // "a, b, c, or d" — the last form takes the "or", which is why this is not a
 // plain join.
 const ASSET_ID_MESSAGE = `must be ${ASSET_ID_FORMS.slice(0, -1)
@@ -197,12 +195,7 @@ function checkAsset(errors: string[], path: string, v: unknown, strict: boolean)
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
-  if (!strict && v.caip19_id !== undefined) {
-    checkPattern(errors, `${path}/caip19_id`, v.caip19_id, ASSET_ID, ASSET_ID_MESSAGE);
-    checkPattern(errors, `${path}/id`, v.id, LEGACY_ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
-  } else {
-    checkPattern(errors, `${path}/id`, v.id, ASSET_ID, ASSET_ID_MESSAGE);
-  }
+  checkPattern(errors, `${path}/id`, v.id, ASSET_ID, ASSET_ID_MESSAGE);
   checkStringLength(errors, `${path}/name`, v.name, 1, 64);
   checkStringLength(errors, `${path}/ticker`, v.ticker, 1, 16);
   checkIntRange(errors, `${path}/decimals`, v.decimals, 0, MAX_ASSET_DECIMALS);
@@ -595,7 +588,7 @@ export function validateIndex(input: unknown, expectedNetwork?: string): Validat
     return { ok: false, errors: ["/ must be an object"] };
   }
   const errors: string[] = [];
-  if (input.version !== 0) add(errors, "/version", "must be 0 (unknown index version)");
+  if (input.version !== 1) add(errors, "/version", "must be 1 (unknown index version)");
   if (!isNetwork(input.network)) {
     add(errors, "/network", "must be one of bitcoin, signet, mutinynet, regtest");
   } else if (expectedNetwork !== undefined && input.network !== expectedNetwork) {

@@ -10,7 +10,7 @@ function validCard(): any {
 function validIndex(): any {
   const card = validCard();
   return {
-    version: 0,
+    version: 1,
     network: "bitcoin",
     generated_at: 1_700_000_000,
     commit: "a".repeat(40),
@@ -434,7 +434,7 @@ test("validateIndex: tolerates unknown forward-compatible fields", () => {
 
 test("validateIndex: rejects unknown version", () => {
   const idx = validIndex();
-  idx.version = 1;
+  idx.version = 0;
   assert.match(validateIndex(idx).errors.join("\n"), /version/);
 });
 

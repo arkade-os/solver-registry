@@ -343,7 +343,7 @@
         function copyButton(indexMarket) {
           const { solver, discovery_pubkey, transports, ...market } = indexMarket;
           const card = {
-            version: 0,
+            version: 1,
             name: solver,
             ...(discovery_pubkey ? { discovery_pubkey } : {}),
             ...(transports ? { transports } : {}),

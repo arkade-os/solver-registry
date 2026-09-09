@@ -1,23 +1,21 @@
 {
-  "version": 0,
+  "version": 1,
   "network": "signet",
   "generated_at": 1700000000,
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:signet/slip44:1"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "bitcoin:signet/slip44:1"
+        "decimals": 8
       },
       "fee_bps": 40,
       "min_base_amount": "0",
@@ -25,8 +23,6 @@
       "min_quote_amount": "20000",
       "max_quote_amount": "1000000",
       "solver": "signed-solver",
-      "pair": "BTC/onchain:BTC",
-      "quote_corridor": "onchain",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {
@@ -39,18 +35,16 @@
     },
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:signet/slip44:1"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "bolt11:signet/slip44:1"
+        "decimals": 8
       },
       "fee_bps": 25,
       "min_base_amount": "1000",
@@ -58,8 +52,6 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "5000000",
       "solver": "signed-solver",
-      "pair": "BTC/lightning:BTC",
-      "quote_corridor": "lightning",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {
@@ -72,18 +64,16 @@
     },
     {
       "base_asset": {
-        "id": "btc",
+        "id": "bolt11:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "bolt11:signet/slip44:1"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:signet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "bitcoin:signet/slip44:1"
+        "decimals": 8
       },
       "fee_bps": 40,
       "min_base_amount": "0",
@@ -91,9 +81,6 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "2000000",
       "solver": "signed-solver",
-      "pair": "lightning:BTC/onchain:BTC",
-      "base_corridor": "lightning",
-      "quote_corridor": "onchain",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {

@@ -1,23 +1,21 @@
 {
-  "version": 0,
+  "version": 1,
   "network": "bitcoin",
   "generated_at": 1700000000,
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "markets": [
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:bitcoin/slip44:0"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6,
-        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/alice",
       "price_feed_schema": {
@@ -30,23 +28,20 @@
       "max_base_amount": "5000000",
       "min_quote_amount": "1000",
       "max_quote_amount": "2000000000000000000",
-      "solver": "alice",
-      "pair": "BTC/USDT"
+      "solver": "alice"
     },
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:bitcoin/slip44:0"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6,
-        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/carol",
       "price_feed_schema": {
@@ -59,23 +54,20 @@
       "max_base_amount": "0",
       "min_quote_amount": "1000",
       "max_quote_amount": "5000000",
-      "solver": "carol",
-      "pair": "BTC/USDT"
+      "solver": "carol"
     },
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:bitcoin/slip44:0"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
-        "decimals": 6,
-        "caip19_id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "decimals": 6
       },
       "price_feed": "https://feed.example.com/bob",
       "price_feed_schema": {
@@ -88,23 +80,20 @@
       "max_base_amount": "5000000",
       "min_quote_amount": "0",
       "max_quote_amount": "0",
-      "solver": "bob",
-      "pair": "BTC/USDT"
+      "solver": "bob"
     },
     {
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "arkade:bitcoin/slip44:0"
+        "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
-        "decimals": 8,
-        "caip19_id": "bolt11:bitcoin/slip44:0"
+        "decimals": 8
       },
       "fee_bps": 20,
       "min_base_amount": "1000",
@@ -112,8 +101,6 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "4000000",
       "solver": "corridor-solver",
-      "pair": "BTC/lightning:BTC",
-      "quote_corridor": "lightning",
       "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
       "transports": {
         "nostr": {

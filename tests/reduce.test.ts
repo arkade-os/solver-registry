@@ -12,13 +12,10 @@ import {
   CORRIDORS,
   MAX_ASSET_DECIMALS,
   MAX_RELAYS,
-  legacyAssetId,
-  legacyMarketCorridor,
   marketPairKey,
 } from "../packages/discovery-client/src/types.ts";
-import { ASSET_ID_FORMS, LEGACY_ASSET_ID, validateIndex } from "../packages/discovery-client/src/validate.ts";
+import { ASSET_ID_FORMS, validateIndex } from "../packages/discovery-client/src/validate.ts";
 import { selectMarkets } from "../packages/discovery-client/src/discovery.ts";
-import { validateIndex as validateIndexV023 } from "./compat/v023-validate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXED_META = { generatedAt: 1700000000, commit: "a".repeat(40) };
@@ -200,19 +197,14 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
   // third-party consumer runs, so the skew shows up as "this registry accepts
   // a card my validator rejects", not as a red suite here.
   const assetIdPattern = `^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`;
-  for (const [name, caipKey, keys] of [
-    ["card.schema.json", "id", [...ASSET_KEYS]],
-    ["index.schema.json", "caip19_id", [...ASSET_KEYS, "caip19_id"]],
-  ] as const) {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
     const asset = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8")).definitions.asset;
     assert.deepEqual(asset.required, [...ASSET_KEYS], name);
-    assert.deepEqual(Object.keys(asset.properties).sort(), [...keys].sort(), name);
-    assert.equal(asset.properties[caipKey].pattern, assetIdPattern, name);
+    assert.deepEqual(Object.keys(asset.properties).sort(), [...ASSET_KEYS].sort(), name);
+    assert.equal(asset.properties.id.pattern, assetIdPattern, name);
     assert.equal(asset.properties.decimals.minimum, 0, name);
     assert.equal(asset.properties.decimals.maximum, MAX_ASSET_DECIMALS, name);
   }
-  const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
-  assert.equal(index.definitions.asset.properties.id.pattern, LEGACY_ASSET_ID.source);
 });
 
 // The corridor vocabulary no longer has its own schema definition — it is the
@@ -222,9 +214,9 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
 // corridor added to the client without a matching schema edit is caught, and
 // the relay-count bound stays in sync.
 test("every CORRIDORS entry appears as a chain namespace in the schemas' asset id pattern, and the relay bound matches", () => {
-  for (const [name, caipKey] of [["card.schema.json", "id"], ["index.schema.json", "caip19_id"]] as const) {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
-    const idPattern = schema.definitions.asset.properties[caipKey].pattern as string;
+    const idPattern = schema.definitions.asset.properties.id.pattern as string;
     for (const corridor of CORRIDORS) {
       assert.ok(idPattern.includes(`${corridor}:`), `${name}: asset id pattern must embed "${corridor}:"`);
     }
@@ -248,78 +240,43 @@ test("golden indexes validate under the client's validateIndex", () => {
   }
 });
 
-test("deprecated index fields: a v1 CAIP-19 card reduces to both the new ids and the derived v0 fields", () => {
+test("the v1 index publishes canonical CAIP-19 ids without transitional fields", () => {
   const bitcoin = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
   const bolt11 = bitcoin.index!.markets.find((m) => m.solver === "corridor-solver")!;
-  assert.equal(bolt11.quote_asset.caip19_id, "bolt11:bitcoin/slip44:0");
-  assert.equal(bolt11.quote_asset.id, "btc", "the published id is down-projected for v0");
-  assert.equal(bolt11.pair, "BTC/lightning:BTC");
-  assert.equal(bolt11.quote_corridor, "lightning");
-  assert.ok(!bolt11.pair!.includes("bolt11"), "a v0 consumer has never heard of the bolt11 namespace");
-
-  const signet = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META);
-  const bothLegs = signet.index!.markets.find((m) => m.base_corridor !== undefined)!;
-  assert.equal(bothLegs.pair, "lightning:BTC/onchain:BTC");
-  assert.equal(bothLegs.base_corridor, "lightning");
-  assert.equal(bothLegs.quote_corridor, "onchain");
-  assert.equal(bothLegs.base_asset.id, "btc");
-  assert.equal(bothLegs.quote_asset.id, "btc");
+  assert.equal(bitcoin.index!.version, 1);
+  assert.equal(bolt11.quote_asset.id, "bolt11:bitcoin/slip44:0");
+  for (const market of bitcoin.index!.markets) {
+    assert.equal("pair" in market, false);
+    assert.equal("base_corridor" in market, false);
+    assert.equal("quote_corridor" in market, false);
+    assert.equal("caip19_id" in market.base_asset, false);
+    assert.equal("caip19_id" in market.quote_asset, false);
+  }
 });
 
-test("a market with no v0 asset id is held out of the index and reported", () => {
+test("EVM markets are published in the v1 index", () => {
   const regtest = reduceNetwork(fixture("valid", "solvers"), "regtest", FIXED_META);
   assert.equal(regtest.ok, true);
-  assert.deepEqual(regtest.index!.markets, [], "the EVM fixture's markets must not be published");
-  assert.equal(regtest.excluded!.length, 2);
-  for (const held of regtest.excluded!) assert.match(held, /^evm-solver: arkade:regtest\/slip44:1 -> eip155:1\//);
-
-  assert.equal(legacyAssetId("eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), undefined);
-  assert.equal(legacyAssetId("eip155:1/slip44:60"), undefined);
-  assert.equal(legacyAssetId("arkade:bitcoin/slip44:0"), "btc");
-  assert.equal(legacyAssetId("bolt11:mutinynet/slip44:1"), "btc");
-  assert.equal(legacyAssetId(`arkade:bitcoin/asset:${"a".repeat(68)}`), "a".repeat(68));
+  assert.equal(regtest.index!.version, 1);
+  assert.equal(regtest.index!.markets.length, 2);
+  assert.ok(regtest.index!.markets.every((m) => m.quote_asset.id.startsWith("eip155:1/")));
 });
 
-test("deprecated index fields are derived from the asset ids, not carried from the card", () => {
-  const card = JSON.parse(readFileSync(fixture("valid", "solvers", "bitcoin", "corridor-solver.json"), "utf8"));
-  for (const key of ["pair", "base_corridor", "quote_corridor"]) {
-    assert.equal(card.markets[0][key], undefined, `the card must not carry ${key}`);
-  }
-
-  const leg = (id: string) => ({ quote_asset: { id, name: "Bitcoin", ticker: "BTC", decimals: 8 } });
-  assert.equal(legacyMarketCorridor(leg("bolt11:bitcoin/slip44:0"), "quote"), "lightning");
-  assert.equal(legacyMarketCorridor(leg("bitcoin:bitcoin/slip44:0"), "quote"), "onchain");
-  assert.equal(legacyMarketCorridor(leg("eip155:1/slip44:60"), "quote"), "eip155");
-  assert.equal(legacyMarketCorridor(leg("arkade:bitcoin/slip44:0"), "quote"), "arkade");
-});
-
-// The client tests feed selection hand-written CAIP-19 markets, so nothing else
-// notices that a published index spells `id` differently.
-test("selecting by CAIP-19 id works against a down-projected index", () => {
+test("selecting by CAIP-19 id works against the canonical index", () => {
   const markets = reduceNetwork(fixture("valid", "solvers"), "signet", FIXED_META).index!.markets;
-  assert.deepEqual([...new Set(markets.map((m) => m.base_asset.id))], ["btc"]);
+  assert.ok(markets.every((m) => m.base_asset.id.includes("/")));
 
   const selected = selectMarkets(markets, {
     baseId: "arkade:signet/slip44:1",
     quoteId: "bolt11:signet/slip44:1",
   });
   assert.equal(selected.length, 1);
-  assert.equal(selected[0]!.quote_asset.caip19_id, "bolt11:signet/slip44:1");
+  assert.equal(selected[0]!.quote_asset.id, "bolt11:signet/slip44:1");
   assert.equal(selectMarkets(markets, { baseId: "btc", quoteId: "btc" }).length, 0);
 });
 
-// The consumer, not the producer: 0.2.3 is all-or-nothing, so one bad market
-// discovers zero markets for the whole network.
-test("a migrated index still validates under the frozen discovery-client 0.2.3", () => {
-  for (const result of reduceAll(fixture("valid", "solvers"), FIXED_META)) {
-    assert.equal(result.ok, true);
-    const r = validateIndexV023(result.index!, result.network);
-    assert.equal(r.ok, true, `${result.network} is rejected by 0.2.3: ${r.errors.join("; ")}`);
-  }
-});
-
 // Nothing else here compiles index.schema.json; only third-party consumers do.
-test("golden indexes validate under index.schema.json, deprecated fields included", () => {
+test("golden indexes validate under index.schema.json", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   addFormats(ajv);
   const validate = ajv.compile(JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8")));
@@ -352,9 +309,9 @@ test("all three copies of the asset identity rule accept the shared vector and r
   const drift = (where: string) =>
     `asset id encoding drifted from @arkade-os/sdk ASSET_ID_VECTORS (${where})`;
 
-  for (const [name, caipKey] of [["card.schema.json", "id"], ["index.schema.json", "caip19_id"]] as const) {
+  for (const name of ["card.schema.json", "index.schema.json"]) {
     const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
-    const pattern = new RegExp(schema.definitions.asset.properties[caipKey].pattern);
+    const pattern = new RegExp(schema.definitions.asset.properties.id.pattern);
     assert.ok(pattern.test(ASSET_ID_VECTOR), drift(name));
     assert.ok(!pattern.test(ASSET_ID_VECTOR_UPPERCASE), drift(`${name}: uppercase`));
     assert.ok(pattern.test("arkade:bitcoin/slip44:0"), drift(`${name}: slip44 sentinel`));
@@ -363,10 +320,10 @@ test("all three copies of the asset identity rule accept the shared vector and r
   // ...and the client's own copy, exercised through the validator rather than
   // by re-reading the regex, so a drifted call site fails here too.
   const index = JSON.parse(readFileSync(goldenOf("bitcoin"), "utf8"));
-  const withId = (caip19_id: string) => ({
+  const withId = (id: string) => ({
     ...index,
     markets: index.markets.map((m: { quote_asset: object }, i: number) =>
-      i === 0 ? { ...m, quote_asset: { ...m.quote_asset, caip19_id } } : m,
+      i === 0 ? { ...m, quote_asset: { ...m.quote_asset, id } } : m,
     ),
   });
 
@@ -376,7 +333,7 @@ test("all three copies of the asset identity rule accept the shared vector and r
   const rejected = validateIndex(withId(ASSET_ID_VECTOR_UPPERCASE), "bitcoin");
   assert.equal(rejected.ok, false, drift("validate.ts: uppercase"));
   assert.ok(
-    rejected.errors.some((e) => e.includes("quote_asset/caip19_id")),
+    rejected.errors.some((e) => e.includes("quote_asset/id")),
     drift("validate.ts: uppercase must fail on the id, not incidentally"),
   );
 });

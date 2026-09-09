@@ -66,19 +66,13 @@ takes the whole id, corridor included:
 > corridor markets — a registry should not merge its first corridor card until
 > its clients have.
 >
-> **Upgrading from a pre-bundling client (before this rewrite):** `pair`,
-> `base_corridor`, and `quote_corridor` are gone from **solver cards**, and
+> **Breaking change from a pre-bundling client:** `pair`, `base_corridor`,
+> and `quote_corridor` are gone from solver cards and published indexes, and
 > `SelectOptions.baseCorridor`/`quoteCorridor` are removed along with them.
 > Pass the fully-qualified id (e.g. `"bolt11:bitcoin/slip44:0"`, not
 > `"btc"` + `quoteCorridor: "lightning"`) to `baseId`/`quoteId` instead.
->
-> **Published indexes still carry all three for one release**, so a v0 client
-> keeps working across the cutover. For the same reason an index's `id` is
-> down-projected to the v0 grammar (`"btc"` or a 68-hex AssetId) and the
-> CAIP-19 identity travels in `caip19_id` beside it — read it via `assetIdOf`,
-> and pass CAIP-19 to `baseId`/`quoteId` as above, which matches either
-> spelling. Every one of these fields disappears when the window closes; none
-> of them exists on a card.
+> Index version 1 stores that CAIP-19 identity directly in `asset.id`; version
+> 0 indexes are rejected.
 
 ```ts
 const lnMarket = bestMarket(markets, {

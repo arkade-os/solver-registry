@@ -18,7 +18,7 @@ function idxMarket(solver: string, fee: number) {
 }
 
 function index(commit: string, markets: unknown[]) {
-  return JSON.stringify({ version: 0, network: "bitcoin", generated_at: GENERATED_AT, commit, markets });
+  return JSON.stringify({ version: 1, network: "bitcoin", generated_at: GENERATED_AT, commit, markets });
 }
 
 // Registry A: alice(30), bob(20). Registry B: alice(30) [dup], carol(25).

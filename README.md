@@ -64,7 +64,9 @@ Human-readable overview: <https://arkade-os.github.io/solver-registry/>
 | Mutinynet | <https://arkade-os.github.io/solver-registry/mutinynet.json> |
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
-that network, stamped with `generated_at` and the source `commit`, matching
+that network. Index version 1 uses canonical CAIP-19 values directly in
+`base_asset.id` and `quote_asset.id`; version 0 indexes are not accepted by
+the current client. Each index is stamped with `generated_at` and the source `commit`, matching
 [`schema/index.schema.json`](schema/index.schema.json). Fetch one URL per
 registry you follow, merge, filter by pair, price from the market's
 `price_feed`, and extract the scalar using `price_feed_schema`.

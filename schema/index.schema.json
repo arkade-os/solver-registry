@@ -25,13 +25,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(btc|[0-9a-f]{68})$",
-          "description": "DEPRECATED shape, restored for the v0 compatibility window: \"btc\" or a 68-hex AssetId. The reducer down-projects the card's CAIP-19 id into this field because a v0 client validates it and rejects the ENTIRE index when it fails, which would cost every solver on the network its listing. Read caip19_id for the real identity; this field returns to CAIP-19 when the window closes."
-        },
-        "caip19_id": {
-          "type": "string",
           "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
-          "description": "Canonical CAIP-19 asset identity, carried alongside the down-projected id for the duration of the v0 compatibility window. Authoritative when present: the chain namespace IS the corridor. Absent only on a market with no v0 form, which is held out of the index entirely."
+          "description": "Canonical CAIP-19 asset identity. The chain namespace is the corridor; see the card schema's asset definition for the full grammar and examples."
         },
         "name": {
           "type": "string",
@@ -69,16 +64,6 @@
         }
       }
     },
-    "corridor": {
-      "type": "string",
-      "enum": [
-        "arkade",
-        "lightning",
-        "onchain",
-        "eip155"
-      ],
-      "description": "DEPRECATED, removed a release after the CAIP-19 cutover: the rail a market side settles on, under its v0 name. Absent means \"arkade\". Derived by the reducer from the side's asset id chain namespace, which is canonical: bolt11 reports as \"lightning\" and bitcoin as \"onchain\", the names v0 consumers match on. \"eip155\" has no v0 name and reports as itself, so a v0 consumer's corridor checks exclude it."
-    },
     "amount": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]{0,29})$",
@@ -92,7 +77,7 @@
   },
   "properties": {
     "version": {
-      "const": 0
+      "const": 1
     },
     "network": {
       "type": "string",
@@ -153,17 +138,6 @@
           },
           "quote_asset": {
             "$ref": "#/definitions/asset"
-          },
-          "pair": {
-            "type": "string",
-            "pattern": "^((lightning|onchain|eip155):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain|eip155):)?[A-Za-z0-9._-]{1,16}$",
-            "description": "DEPRECATED, removed a release after the CAIP-19 cutover: display pair \"<base-label>/<quote-label>\", where a side's label is its ticker on the arkade corridor and \"<corridor>:<ticker>\" otherwise. Derived by the reducer from base_asset.id and quote_asset.id, which are the canonical identity \u2014 read those instead."
-          },
-          "base_corridor": {
-            "$ref": "#/definitions/corridor"
-          },
-          "quote_corridor": {
-            "$ref": "#/definitions/corridor"
           },
           "discovery_pubkey": {
             "type": "string",
