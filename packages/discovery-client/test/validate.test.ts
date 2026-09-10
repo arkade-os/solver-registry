@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ASSET_ID_FORMS, validateCard, validateIndex } from "../src/validate.ts";
+import { isRfqMarket, isSameAssetMarket, marketCorridor, marketPairKey } from "../src/types.ts";
 import { makeMarket, makeOneSidedMarket } from "./helpers.ts";
 
 function validCard(): any {
@@ -22,6 +23,57 @@ test("validateCard: accepts a well-formed card", () => {
   const r = validateCard(validCard());
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.ok(r.value);
+});
+
+test("validateCard: accepts a legacy v0 corridor card during the compatibility window", () => {
+  const card = {
+    version: 0,
+    name: "ln-solver-mutinynet",
+    discovery_pubkey: "3f831510a6d7678d0c90d7d6fbc4057720517e2e30681ef4c87cc57aaf57e8d5",
+    transports: { nostr: { relays: ["wss://nostr.arkade.sh"] } },
+    markets: [
+      {
+        pair: "BTC/lightning:BTC",
+        base_asset: { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 },
+        quote_asset: { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 },
+        quote_corridor: "lightning",
+        fee_bps: 30,
+        min_base_amount: "1000",
+        max_base_amount: "50000",
+        min_quote_amount: "1000",
+        max_quote_amount: "25000",
+      },
+    ],
+    sig: "9eb76dddd0c793a0d0a7bf1a78ea63e41a8e751df006721c116be0898b4189d2a9ea4b4fb23ddd8c0c88cf5c425f6ca96fab4d6dc1f8c5986cca143ccee8404a",
+  };
+
+  const result = validateCard(card);
+
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
+test("legacy v0 helpers classify a short-id corridor market like its canonical equivalent", () => {
+  const market = {
+    base_asset: { id: "btc" },
+    quote_asset: { id: "btc" },
+    quote_corridor: "lightning",
+  };
+
+  assert.equal(marketCorridor(market, "base"), "arkade");
+  assert.equal(marketCorridor(market, "quote"), "bolt11");
+  assert.equal(isSameAssetMarket(market), true);
+  assert.equal(isRfqMarket(market), true);
+  assert.equal(marketPairKey(market), "arkade:btc/lightning:btc");
+});
+
+test("validateCard: rejects a hybrid market with legacy fields and canonical ids", () => {
+  const card = validCard();
+  card.markets[0].pair = "BTC/USDT";
+
+  const result = validateCard(card);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /must be "btc" or 68 lowercase hex chars/);
 });
 
 /**

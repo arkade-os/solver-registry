@@ -143,8 +143,14 @@ export const LIMIT_KEYS = {
 
 /** A single market as advertised by a solver. */
 export interface Market {
+  /** @deprecated Legacy v0 display label; canonical cards derive it from the two asset ids. */
+  pair?: string;
   base_asset: AssetInfo;
   quote_asset: AssetInfo;
+  /** @deprecated Legacy v0 wire field; canonical cards encode the corridor in `base_asset.id`. */
+  base_corridor?: LegacyCorridor;
+  /** @deprecated Legacy v0 wire field; canonical cards encode the corridor in `quote_asset.id`. */
+  quote_corridor?: LegacyCorridor;
   /**
    * Exact URL the maker MUST price from. CORS-permissive so browsers can
    * fetch it. Required when the two sides carry different assets; MUST be
@@ -262,6 +268,8 @@ export interface NetworkIndex {
 type MarketLike = {
   base_asset?: unknown;
   quote_asset?: unknown;
+  base_corridor?: unknown;
+  quote_corridor?: unknown;
 };
 
 // The artifacts disagree on purpose while the window is open: a card's `id` is
@@ -319,11 +327,19 @@ function underlyingAssetOf(id: string | undefined): string | undefined {
   return slash === -1 ? undefined : id.slice(slash + 1);
 }
 
-/** A side's corridor: the chain namespace parsed off its asset id, defaulting to arkade. */
+/**
+ * A side's corridor. Canonical CAIP-19 ids take precedence; legacy v0 cards
+ * fall back to their separate `*_corridor` fields during the compatibility
+ * window.
+ */
 export function marketCorridor(market: MarketLike, side: Side): Corridor {
   const asset = side === "base" ? market.base_asset : market.quote_asset;
   const namespace = chainNamespaceOf(assetIdOf(asset));
-  return isCorridor(namespace) ? namespace : DEFAULT_CORRIDOR;
+  if (isCorridor(namespace)) return namespace;
+  const legacy = side === "base" ? market.base_corridor : market.quote_corridor;
+  if (legacy === "lightning") return "bolt11";
+  if (legacy === "onchain") return "bitcoin";
+  return DEFAULT_CORRIDOR;
 }
 
 /**
@@ -376,19 +392,21 @@ export function pairSideLabel(corridor: LegacyCorridor, ticker: string): string 
 export function isSameAssetMarket(market: MarketLike): boolean {
   const [baseId, quoteId] = [assetIdOf(market.base_asset), assetIdOf(market.quote_asset)];
   const base = underlyingAssetOf(baseId);
-  if (base === undefined || base !== underlyingAssetOf(quoteId)) return false;
+  if (base === undefined) return baseId !== undefined && baseId === quoteId;
+  if (base !== underlyingAssetOf(quoteId)) return false;
   const reference = chainReferenceOf(baseId);
   return reference !== undefined && reference === chainReferenceOf(quoteId);
 }
 
 /**
- * One side's canonical leg identity. Now simply that side's whole CAIP-19
- * asset id — the corridor is already baked into it, so no separate prefixing
- * is needed the way the pre-bundling `"<corridor>:<asset-id>"` form required.
+ * One side's canonical leg identity. A CAIP-19 side is already complete;
+ * during the compatibility window a legacy short id is qualified with its
+ * separate corridor so distinct rails never collapse into one key.
  */
 export function marketLegKey(market: MarketLike, side: Side): string {
   const asset = side === "base" ? market.base_asset : market.quote_asset;
-  return `${assetIdOf(asset)}`;
+  const id = assetIdOf(asset);
+  return id?.includes("/") ? id : `${legacyMarketCorridor(market, side)}:${id}`;
 }
 
 /**

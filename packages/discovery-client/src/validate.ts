@@ -6,7 +6,7 @@
 // mirror `schema/card.schema.json` / `schema/index.schema.json` and the extra
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
-import type { Card, NetworkIndex } from "./types.ts";
+import type { AssetInfo, Card, NetworkIndex } from "./types.ts";
 import {
   AMOUNT_PATTERN,
   ARKADE_NETWORK_CORRIDORS,
@@ -22,7 +22,9 @@ import {
   isNetwork,
   isRfqMarket,
   isSameAssetMarket,
+  legacyMarketCorridor,
   marketCorridor,
+  pairSideLabel,
 } from "./types.ts";
 
 export interface ValidationResult<T> {
@@ -143,6 +145,9 @@ const RELAY = /^wss?:\/\/[^\s]+$/;
 const SIG = /^[0-9a-f]{128}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
+const LEGACY_PAIR_SIDE = "(?:(?:lightning|onchain):)?[A-Za-z0-9._-]{1,16}";
+const LEGACY_PAIR = new RegExp(`^${LEGACY_PAIR_SIDE}/${LEGACY_PAIR_SIDE}$`);
+const LEGACY_CORRIDORS = new Set(["arkade", "lightning", "onchain"]);
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -191,15 +196,21 @@ function checkAllowedKeys(errors: string[], path: string, obj: Record<string, un
 const ASSET_KEY_SET = new Set<string>(ASSET_KEYS);
 const PRICE_FEED_SCHEMA_KEYS = new Set(["type", "price_path"]);
 
-function checkAsset(errors: string[], path: string, v: unknown, strict: boolean): void {
+function checkAsset(errors: string[], path: string, v: unknown, strict: boolean, legacy = false): void {
   if (!isObject(v)) {
     add(errors, path, "must be an object");
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, ASSET_KEY_SET);
-  if (!strict && v.caip19_id !== undefined) {
+  if (legacy) {
+    checkPattern(errors, `${path}/id`, v.id, LEGACY_ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
+  } else if (!strict && v.caip19_id !== undefined) {
     checkPattern(errors, `${path}/caip19_id`, v.caip19_id, ASSET_ID, ASSET_ID_MESSAGE);
     checkPattern(errors, `${path}/id`, v.id, LEGACY_ASSET_ID, 'must be "btc" or 68 lowercase hex chars');
+  } else if (!strict) {
+    if (typeof v.id !== "string" || (!LEGACY_ASSET_ID.test(v.id) && !ASSET_ID.test(v.id))) {
+      add(errors, `${path}/id`, 'must be a canonical CAIP-19 id, "btc", or 68 lowercase hex chars');
+    }
   } else {
     checkPattern(errors, `${path}/id`, v.id, ASSET_ID, ASSET_ID_MESSAGE);
   }
@@ -230,6 +241,13 @@ const MARKET_KEYS = new Set([
   "max_base_amount",
   "min_quote_amount",
   "max_quote_amount",
+]);
+
+const LEGACY_MARKET_KEYS = new Set([
+  ...MARKET_KEYS,
+  "pair",
+  "base_corridor",
+  "quote_corridor",
 ]);
 
 const LIMIT_SIDES = [LIMIT_KEYS.base, LIMIT_KEYS.quote] as const;
@@ -270,6 +288,24 @@ export function marketLimitErrors(market: { [key in LimitKey]?: unknown }): stri
 
 const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const;
 
+/** Check the redundant display label carried by a legacy v0 market. */
+export function marketPairError(market: {
+  pair?: unknown;
+  base_asset?: unknown;
+  quote_asset?: unknown;
+  base_corridor?: unknown;
+  quote_corridor?: unknown;
+}): string | null {
+  const base = (market.base_asset as AssetInfo | undefined)?.ticker;
+  const quote = (market.quote_asset as AssetInfo | undefined)?.ticker;
+  if (typeof market.pair !== "string" || typeof base !== "string" || typeof quote !== "string") return null;
+  const expected = `${pairSideLabel(legacyMarketCorridor(market, "base"), base)}/${pairSideLabel(
+    legacyMarketCorridor(market, "quote"),
+    quote,
+  )}`;
+  return market.pair === expected ? null : `pair "${market.pair}" does not match the sides' labels "${expected}"`;
+}
+
 /**
  * Corridor cross-field rules, shared with the reducer so CI and clients
  * reject the same cards with the same words. Data-dependent, so they live
@@ -293,19 +329,31 @@ const FEED_KEYS = ["price_feed", "price_feed_schema", "price_decimals"] as const
 export function marketCorridorErrors(market: {
   [key in (typeof FEED_KEYS)[number]]?: unknown;
 } & {
+  pair?: unknown;
   base_asset?: unknown;
   quote_asset?: unknown;
+  base_corridor?: unknown;
+  quote_corridor?: unknown;
 }): string[] {
   const errors: string[] = [];
+  if (market.pair !== undefined) {
+    for (const side of ["base", "quote"] as const) {
+      const key = `${side}_corridor` as const;
+      const raw = market[key];
+      if (raw !== undefined && !LEGACY_CORRIDORS.has(raw as string)) {
+        errors.push(`${key} must be one of arkade, lightning, onchain`);
+      }
+    }
+  }
   const baseId = assetIdOf(market.base_asset);
   const quoteId = assetIdOf(market.quote_asset);
   if (baseId === undefined || quoteId === undefined) return errors;
 
-  if (baseId === quoteId) {
-    errors.push("market legs must differ: same corridor and asset on both sides is a null trade");
-  }
   const baseCorridor = marketCorridor(market, "base");
   const quoteCorridor = marketCorridor(market, "quote");
+  if (baseId === quoteId && baseCorridor === quoteCorridor) {
+    errors.push("market legs must differ: same corridor and asset on both sides is a null trade");
+  }
   // ponytail: fires only when EXACTLY one side is arkade — a market with
   // both sides off-rail (e.g. bolt11:BTC / bitcoin:BTC, a classic
   // submarine-swap market) is permitted with no canonical leg order, so its
@@ -369,10 +417,26 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
     add(errors, path, "must be an object");
     return;
   }
-  if (strict) checkAllowedKeys(errors, path, v, MARKET_KEYS);
+  const legacy = strict && v.pair !== undefined;
+  if (strict) checkAllowedKeys(errors, path, v, legacy ? LEGACY_MARKET_KEYS : MARKET_KEYS);
 
-  checkAsset(errors, `${path}/base_asset`, v.base_asset, strict);
-  checkAsset(errors, `${path}/quote_asset`, v.quote_asset, strict);
+  if (legacy) {
+    checkPattern(
+      errors,
+      `${path}/pair`,
+      v.pair,
+      LEGACY_PAIR,
+      'must be "<base>/<quote>" where a non-arkade side is corridor-prefixed, e.g. "BTC/lightning:BTC"',
+    );
+  }
+
+  checkAsset(errors, `${path}/base_asset`, v.base_asset, strict, legacy);
+  checkAsset(errors, `${path}/quote_asset`, v.quote_asset, strict, legacy);
+
+  if (legacy) {
+    const pairError = marketPairError(v);
+    if (pairError) add(errors, path, pairError);
+  }
 
   // Feed fields are format-checked when present; whether they must be
   // present or absent is the corridor rule set's call (marketCorridorErrors,

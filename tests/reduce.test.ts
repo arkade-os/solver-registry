@@ -213,6 +213,34 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
   }
   const index = JSON.parse(readFileSync(join(here, "..", "schema", "index.schema.json"), "utf8"));
   assert.equal(index.definitions.asset.properties.id.pattern, LEGACY_ASSET_ID.source);
+  const card = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
+  assert.deepEqual(card.definitions.legacyAsset.required, [...ASSET_KEYS]);
+  assert.equal(card.definitions.legacyAsset.properties.id.pattern, LEGACY_ASSET_ID.source);
+});
+
+test("card schema accepts both complete market shapes but rejects a hybrid", () => {
+  const ajv = new Ajv({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const schema = JSON.parse(readFileSync(join(here, "..", "schema", "card.schema.json"), "utf8"));
+  const validate = ajv.compile(schema);
+  const canonical = JSON.parse(readFileSync(fixture("valid", "solvers", "bitcoin", "alice.json"), "utf8"));
+  const legacy = JSON.parse(
+    readFileSync(join(here, "..", "solvers", "mutinynet", "ln-solver-mutinynet.json"), "utf8"),
+  );
+
+  assert.equal(validate(canonical), true, JSON.stringify(validate.errors));
+  assert.equal(validate(legacy), true, JSON.stringify(validate.errors));
+  canonical.markets[0].pair = "BTC/USDT";
+  assert.equal(validate(canonical), false, "canonical ids plus a legacy pair must not form a third wire shape");
+});
+
+test("the checked-in legacy signed card reduces to an index the current client accepts", () => {
+  const result = reduceNetwork(join(here, "..", "solvers"), "mutinynet", FIXED_META);
+
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  assert.equal(result.index!.markets.length, 3);
+  assert.equal(validateIndex(result.index, "mutinynet").ok, true);
+  assert.equal(result.index!.markets[0]!.base_asset.caip19_id, undefined);
 });
 
 // The corridor vocabulary no longer has its own schema definition — it is the

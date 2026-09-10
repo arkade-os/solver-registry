@@ -159,6 +159,16 @@ export function reduceNetwork(
   const excluded: string[] = [];
   for (const { card } of cards) {
     for (const market of card.markets) {
+      // An already-signed legacy card is already in the v0 index shape. Keep
+      // its bytes semantically intact instead of trying to down-project the
+      // short ids a second time.
+      if (market.pair !== undefined) {
+        const entry: IndexMarket = { ...market, solver: card.name };
+        if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
+        if (card.transports) entry.transports = card.transports;
+        markets.push(entry);
+        continue;
+      }
       const baseCorridor = legacyMarketCorridor(market, "base");
       const quoteCorridor = legacyMarketCorridor(market, "quote");
       // No v0 id would fail the whole document for v0 clients: held out, named.

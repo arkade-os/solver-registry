@@ -80,6 +80,38 @@
         }
       }
     },
+    "legacyAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "ticker",
+        "decimals"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(btc|[0-9a-f]{68})$",
+          "description": "Legacy v0 asset identity retained so already-signed cards remain valid during the compatibility window."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "ticker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        }
+      }
+    },
     "priceFeedSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -172,22 +204,54 @@
             }
           }
         ],
+        "oneOf": [
+          {
+            "description": "Canonical CAIP-19 market shape.",
+            "not": {
+              "anyOf": [
+                { "properties": { "pair": {} }, "required": ["pair"] },
+                { "properties": { "base_corridor": {} }, "required": ["base_corridor"] },
+                { "properties": { "quote_corridor": {} }, "required": ["quote_corridor"] }
+              ]
+            },
+            "properties": {
+              "base_asset": { "$ref": "#/definitions/asset" },
+              "quote_asset": { "$ref": "#/definitions/asset" }
+            }
+          },
+          {
+            "description": "Legacy v0 market shape retained for already-signed cards during the compatibility window.",
+            "required": ["pair"],
+            "properties": {
+              "pair": {
+                "type": "string",
+                "pattern": "^((lightning|onchain):)?[A-Za-z0-9._-]{1,16}/((lightning|onchain):)?[A-Za-z0-9._-]{1,16}$"
+              },
+              "base_asset": { "$ref": "#/definitions/legacyAsset" },
+              "quote_asset": { "$ref": "#/definitions/legacyAsset" },
+              "base_corridor": { "enum": ["arkade", "lightning", "onchain"] },
+              "quote_corridor": { "enum": ["arkade", "lightning", "onchain"] }
+            }
+          }
+        ],
         "properties": {
+          "pair": {
+            "type": "string",
+            "description": "Legacy v0 display pair. Canonical markets omit this field."
+          },
           "base_asset": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/asset"
-              }
-            ],
             "description": "The pair's base side. Its `id` carries the corridor (chain namespace) as well as the asset \u2014 see `#/definitions/asset`. When exactly one side's id names the arkade corridor it must be this side (the reducer enforces this), so equivalent corridor markets group under one canonical key."
           },
           "quote_asset": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/asset"
-              }
-            ],
             "description": "The pair's quote side. Its `id` carries the corridor (chain namespace) as well as the asset \u2014 see `#/definitions/asset`."
+          },
+          "base_corridor": {
+            "type": "string",
+            "description": "Legacy v0 base corridor. Canonical markets omit this field."
+          },
+          "quote_corridor": {
+            "type": "string",
+            "description": "Legacy v0 quote corridor. Canonical markets omit this field."
           },
           "price_feed": {
             "type": "string",
