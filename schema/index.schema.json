@@ -30,7 +30,7 @@
         },
         "caip19_id": {
           "type": "string",
-          "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40})$",
+          "pattern": "^(arkade:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|arkade:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bolt11:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bolt11:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|bitcoin:(?:bitcoin/slip44:0|(?:signet|mutinynet|regtest)/slip44:1)|bitcoin:(?:bitcoin|signet|mutinynet|regtest)/asset:[0-9a-f]{68}|eip155:[1-9][0-9]{0,31}/slip44:(?:0|[1-9][0-9]{0,9})|eip155:[1-9][0-9]{0,31}/erc20:0x[0-9a-f]{40})$",
           "description": "Canonical CAIP-19 asset identity, carried alongside the down-projected id for the duration of the v0 compatibility window. Authoritative when present: the chain namespace IS the corridor. Absent only on a market with no v0 form, which is held out of the index entirely."
         },
         "name": {

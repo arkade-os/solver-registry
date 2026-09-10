@@ -408,3 +408,15 @@ test("all three copies of the asset identity rule accept the shared vector and r
     drift("validate.ts: uppercase must fail on the id, not incidentally"),
   );
 });
+
+test("both schemas enforce the 32-character CAIP-2 bound for EIP-155 references", () => {
+  const maximum = `eip155:${"1".repeat(32)}/slip44:60`;
+  const overlong = `eip155:${"1".repeat(33)}/slip44:60`;
+
+  for (const [name, caipKey] of [["card.schema.json", "id"], ["index.schema.json", "caip19_id"]] as const) {
+    const schema = JSON.parse(readFileSync(join(here, "..", "schema", name), "utf8"));
+    const pattern = new RegExp(schema.definitions.asset.properties[caipKey].pattern);
+    assert.equal(pattern.test(maximum), true, `${name} rejects the CAIP-2 maximum`);
+    assert.equal(pattern.test(overlong), false, `${name} accepts a reference beyond the CAIP-2 maximum`);
+  }
+});

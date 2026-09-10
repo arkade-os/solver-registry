@@ -571,8 +571,8 @@ test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accep
     [`bolt11:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bolt11:bitcoin/asset:${"a".repeat(68)}`,
     [`bitcoin:${BTC_SLIP44_REF}`]: "bitcoin:bitcoin/slip44:0",
     [`bitcoin:${NETWORK_REF}/asset:[0-9a-f]{68}`]: `bitcoin:bitcoin/asset:${"a".repeat(68)}`,
-    "eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})": "eip155:1/slip44:60",
-    "eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40}": `eip155:1/erc20:0x${"b".repeat(40)}`,
+    "eip155:[1-9][0-9]{0,31}/slip44:(?:0|[1-9][0-9]{0,9})": "eip155:1/slip44:60",
+    "eip155:[1-9][0-9]{0,31}/erc20:0x[0-9a-f]{40}": `eip155:1/erc20:0x${"b".repeat(40)}`,
   };
   for (const { pattern } of ASSET_ID_FORMS) {
     const value = sample[pattern];
@@ -589,4 +589,31 @@ test("validateCard: every form ASSET_ID_FORMS describes is one the pattern accep
       `ASSET_ID_FORMS describes ${pattern} but the pattern rejects ${value}`,
     );
   }
+});
+
+function cardWithEip155Reference(reference: string): any {
+  const card = validCard();
+  card.version = 1;
+  card.discovery_pubkey = "d".repeat(64);
+  card.transports = { nostr: { relays: ["wss://relay.example.com"] } };
+  card.markets[0].quote_asset = {
+    id: `eip155:${reference}/slip44:60`,
+    name: "Ether",
+    ticker: "ETH",
+    decimals: 18,
+  };
+  return card;
+}
+
+test("validateCard: accepts a 32-character EIP-155 reference allowed by CAIP-2", () => {
+  const result = validateCard(cardWithEip155Reference("1".repeat(32)));
+
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
+test("validateCard: rejects an EIP-155 reference beyond the CAIP-2 limit", () => {
+  const result = validateCard(cardWithEip155Reference("1".repeat(33)));
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.startsWith("/markets/0/quote_asset/id ")));
 });

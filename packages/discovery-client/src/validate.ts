@@ -110,11 +110,11 @@ export const ASSET_ID_FORMS = [
     describedAs: 'an Arkade-issued asset moved over the bitcoin (onchain) corridor, e.g. "bitcoin:bitcoin/asset:<68-hex>"',
   },
   {
-    pattern: "eip155:[1-9][0-9]{0,9}/slip44:(?:0|[1-9][0-9]{0,9})",
+    pattern: "eip155:[1-9][0-9]{0,31}/slip44:(?:0|[1-9][0-9]{0,9})",
     describedAs: 'an eip155 chain\'s native-coin SLIP-44 id, e.g. "eip155:1/slip44:60"',
   },
   {
-    pattern: "eip155:[1-9][0-9]{0,9}/erc20:0x[0-9a-f]{40}",
+    pattern: "eip155:[1-9][0-9]{0,31}/erc20:0x[0-9a-f]{40}",
     describedAs: 'an eip155 ERC-20 id, e.g. "eip155:1/erc20:0x…"',
   },
 ] as const;
