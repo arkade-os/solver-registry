@@ -4,15 +4,14 @@
   "discovery_pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
   "markets": [
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6

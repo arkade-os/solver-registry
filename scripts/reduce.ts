@@ -12,11 +12,18 @@ import { verifyCardSig } from "./canonical.ts";
 import {
   cardHasRfqMarket,
   cardRfqErrors,
+  cardVersionErrors,
   marketCorridorErrors,
   marketLimitErrors,
-  marketPairError,
+  marketNetworkErrors,
 } from "../packages/discovery-client/src/validate.ts";
-import { marketPairKey } from "../packages/discovery-client/src/types.ts";
+import {
+  DEFAULT_CORRIDOR,
+  legacyAssetId,
+  legacyMarketCorridor,
+  marketPairKey,
+  pairSideLabel,
+} from "../packages/discovery-client/src/types.ts";
 // The wire types live with the portable client; the reducer imports them so a
 // schema change is a one-place edit. (The client never imports from scripts/ —
 // this direction keeps it dependency-free.)
@@ -40,6 +47,7 @@ export interface NetworkResult {
   ok: boolean;
   errors: CardError[];
   index?: NetworkIndex;
+  excluded?: string[];
 }
 
 const ajv = new Ajv({ allErrors: true, strict: true });
@@ -92,11 +100,15 @@ export function reduceNetwork(
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
         const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), marketPairError(m)]) {
+        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
       }
       for (const message of cardRfqErrors(card)) messages.push(message);
+      // Same words as the client's own validator, for the same reason the RFQ
+      // rules are shared: a card rejected by CI must be rejected by a consumer
+      // that pinned it locally, and vice versa.
+      for (const message of cardVersionErrors(card)) messages.push(message);
       // The registry's listing gate is stricter than a local pin: the
       // rendezvous must carry the solver's own signature, not just the PR
       // author's word (see cardRfqErrors for the split's rationale).
@@ -144,12 +156,39 @@ export function reduceNetwork(
   }
 
   const markets: IndexMarket[] = [];
+  const excluded: string[] = [];
   for (const { card } of cards) {
     for (const market of card.markets) {
+      // An already-signed legacy card is already in the v0 index shape. Keep
+      // its bytes semantically intact instead of trying to down-project the
+      // short ids a second time.
+      if (market.pair !== undefined) {
+        const entry: IndexMarket = { ...market, solver: card.name };
+        if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
+        if (card.transports) entry.transports = card.transports;
+        markets.push(entry);
+        continue;
+      }
+      const baseCorridor = legacyMarketCorridor(market, "base");
+      const quoteCorridor = legacyMarketCorridor(market, "quote");
+      // No v0 id would fail the whole document for v0 clients: held out, named.
+      const legacy = {
+        base: legacyAssetId(market.base_asset.id),
+        quote: legacyAssetId(market.quote_asset.id),
+      };
+      if (legacy.base === undefined || legacy.quote === undefined) {
+        excluded.push(`${card.name}: ${market.base_asset.id} -> ${market.quote_asset.id}`);
+        continue;
+      }
       const entry: IndexMarket = {
         ...market,
+        base_asset: { ...market.base_asset, id: legacy.base, caip19_id: market.base_asset.id },
+        quote_asset: { ...market.quote_asset, id: legacy.quote, caip19_id: market.quote_asset.id },
         solver: card.name,
+        pair: `${pairSideLabel(baseCorridor, market.base_asset.ticker)}/${pairSideLabel(quoteCorridor, market.quote_asset.ticker)}`,
       };
+      if (baseCorridor !== DEFAULT_CORRIDOR) entry.base_corridor = baseCorridor;
+      if (quoteCorridor !== DEFAULT_CORRIDOR) entry.quote_corridor = quoteCorridor;
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
       if (card.transports) entry.transports = card.transports;
       markets.push(entry);
@@ -175,6 +214,7 @@ export function reduceNetwork(
     network,
     ok: true,
     errors: [],
+    excluded,
     index: {
       version: 0,
       network,
@@ -222,6 +262,9 @@ function formatReport(results: NetworkResult[]): string {
   for (const result of results) {
     if (result.ok) {
       lines.push(`${result.network}: OK (${result.index!.markets.length} markets)`);
+      for (const held of result.excluded ?? []) {
+        lines.push(`  held out of the index (no v0 asset id; see the deprecation window): ${held}`);
+      }
     } else {
       lines.push(`${result.network}: FAILED`);
       for (const err of result.errors) {

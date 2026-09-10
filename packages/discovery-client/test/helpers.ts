@@ -3,14 +3,13 @@
 import type { AssetInfo, Market, Side } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
 
-export const BTC: AssetInfo = { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 };
+export const BTC: AssetInfo = { id: "arkade:bitcoin/slip44:0", name: "Bitcoin", ticker: "BTC", decimals: 8 };
 
-export const USDT_ID = "a".repeat(68);
+export const USDT_ID = `arkade:bitcoin/asset:${"a".repeat(68)}`;
 export const USDT: AssetInfo = { id: USDT_ID, name: "Tether USD", ticker: "USDT", decimals: 6 };
 
 export function makeMarket(overrides: Partial<Market> = {}): Market {
   return {
-    pair: "BTC/USDT",
     base_asset: { ...BTC },
     quote_asset: { ...USDT },
     price_feed: "https://feed.example.com/btcusdt",
@@ -35,20 +34,24 @@ export function makeOneSidedMarket(solves: Side, overrides: Partial<Market> = {}
   return makeMarket({ ...disabled, ...overrides });
 }
 
+/** The corridor's chain namespace, keyed by its old pre-bundling name for test-call convenience. */
+const CORRIDOR_ID: Record<"lightning" | "onchain", string> = {
+  lightning: "bolt11:bitcoin/slip44:0",
+  onchain: "bitcoin:bitcoin/slip44:0",
+};
+
 /**
- * A same-asset corridor (RFQ) market: BTC on both sides, the quote side on
- * `corridor`, no feed fields — the price is identically 1 and fee_bps plus
- * fee_flat are the whole price.
+ * A same-asset corridor (RFQ) market: BTC on both sides, the quote side
+ * settling on `corridor`, no feed fields — the price is identically 1 and
+ * fee_bps plus fee_flat are the whole price.
  */
 export function makeCorridorMarket(
   corridor: "lightning" | "onchain",
   overrides: Partial<Market> = {},
 ): Market {
   return {
-    pair: `BTC/${corridor}:BTC`,
     base_asset: { ...BTC },
-    quote_asset: { ...BTC },
-    quote_corridor: corridor,
+    quote_asset: { ...BTC, id: CORRIDOR_ID[corridor] },
     fee_bps: 25,
     min_base_amount: "1000",
     max_base_amount: "5000000",

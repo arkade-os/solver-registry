@@ -3,15 +3,14 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "TEST/WRONG",
       "base_asset": {
-        "id": "btc",
-        "name": "Test Asset",
-        "ticker": "TEST",
+        "id": "arkade:bitcoin/slip44:0",
+        "name": "Bitcoin",
+        "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:mutinynet/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6

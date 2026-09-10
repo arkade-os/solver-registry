@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "name": "evm-solver",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
+  "markets": [
+    {
+      "base_asset": {
+        "id": "arkade:regtest/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "name": "USD Coin",
+        "ticker": "USDC",
+        "decimals": 6
+      },
+      "price_feed": "https://feed.example.com/evm-solver",
+      "price_feed_schema": {
+        "type": "json",
+        "price_path": "/price"
+      },
+      "price_decimals": 8,
+      "fee_bps": 25,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "1000000",
+      "max_quote_amount": "50000000000"
+    },
+    {
+      "base_asset": {
+        "id": "arkade:regtest/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "eip155:1/slip44:60",
+        "name": "Ether",
+        "ticker": "ETH",
+        "decimals": 18
+      },
+      "price_feed": "https://feed.example.com/evm-solver-eth",
+      "price_feed_schema": {
+        "type": "json",
+        "price_path": "/price"
+      },
+      "price_decimals": 8,
+      "fee_bps": 30,
+      "min_base_amount": "1000",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "10000000000000000",
+      "max_quote_amount": "5000000000000000000"
+    }
+  ],
+  "sig": "5fe7912f729837009cc49940232dcad576b2de0273ec461dbfbf4be4c624e127a441df23be3554d2478cc8c88b21303bc279ee24c734cfd6c58786b04c50ca46"
+}

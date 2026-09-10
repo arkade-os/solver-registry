@@ -4,20 +4,18 @@
   "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
   "markets": [
     {
-      "pair": "BTC/lightning:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "lightning",
       "fee_bps": 25,
       "min_base_amount": "1000",
       "max_base_amount": "5000000",
@@ -25,20 +23,18 @@
       "max_quote_amount": "5000000"
     },
     {
-      "pair": "BTC/onchain:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "onchain",
       "fee_bps": 40,
       "min_base_amount": "0",
       "max_base_amount": "0",
@@ -46,5 +42,5 @@
       "max_quote_amount": "1000000"
     }
   ],
-  "sig": "e2bb6ff59e544fba2965f802bb018c496df92c3e51aac74953910666e8e928d5e30b384fb953bf125bbeb8c41c4a257613497d5e6b13b1d7b65fe41144d08147"
+  "sig": "2cddd2f28d61b3e525930277705b6107424066df757156668aadbb90ed8a6d751bcbb6d2dc9aceb769e0d792d0edbb48439c8824f34915fe2e0def69a9c2d248"
 }

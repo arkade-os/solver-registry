@@ -3,7 +3,6 @@
   "name": "solver1",
   "markets": [
     {
-      "pair": "TEST/BTC",
       "base_asset": {
         "id": "deadbeef",
         "name": "Test Asset",

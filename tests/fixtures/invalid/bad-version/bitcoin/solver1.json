@@ -1,17 +1,16 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "solver1",
   "markets": [
     {
-      "pair": "BTC/USDT",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:bitcoin/slip44:0",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "arkade:bitcoin/asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "name": "Tether USD",
         "ticker": "USDT",
         "decimals": 6
