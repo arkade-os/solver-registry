@@ -17,8 +17,7 @@
     "reduce": "node --experimental-strip-types scripts/reduce.ts",
     "release:client": "node scripts/release-discovery-client.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts packages/discovery-client/test/*.test.ts",
-    "test:client": "node --experimental-strip-types --test packages/discovery-client/test/*.test.ts",
-    "check:urls": "node --experimental-strip-types scripts/check-index-urls.ts"
+    "test:client": "node --experimental-strip-types --test packages/discovery-client/test/*.test.ts"
   },
   "dependencies": {
     "@noble/curves": "^1.7.0",
