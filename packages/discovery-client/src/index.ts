@@ -4,13 +4,14 @@
 // `fetch` only); the optional ./react subpath imports React.
 //
 // Typical flow:
-//   const { markets } = await discover({ registries: [url] }); // defaults to bitcoin
+//   const { markets } = await discover({}); // this network's published index; [] opts out
 //   const market = bestMarket(markets, { baseId: "arkade:bitcoin/slip44:0", quoteId: DEPIX_ID, wantSide: "quote" });
 //   const plan   = await quoteOffer(market, { give: "base", giveAmount: "0.01" });
 //   // plan.receive.display is the human amount received; plan.receive.atomic the
 //   // wantAmount to request; then createOffer(...) as usual.
 
 export * from "./types.ts";
+export * from "./registries.ts";
 export * from "./validate.ts";
 export * from "./pricing.ts";
 export * from "./assets.ts";

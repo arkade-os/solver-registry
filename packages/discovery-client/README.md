@@ -26,9 +26,11 @@ npm install @arkade-os/solver-discovery
 import { discover, listMarkets, bestMarket, quoteOffer } from "@arkade-os/solver-discovery";
 
 // 1. Fetch + merge the registries you follow (plus any pinned local cards).
-const { markets, warnings } = await discover({
-  registries: ["https://arkade-os.github.io/solver-registry/bitcoin.json"],
-});
+//    With no `registries`, discover() follows the published index for `network`
+//    (default "bitcoin") — the default lives in this library, so its URLs can
+//    change in a release without you shipping a client-side table. Pass `[]` to
+//    opt out, or your own URLs to override the default rather than merge it.
+const { markets, warnings } = await discover({});
 if (warnings.length) console.warn(warnings);
 
 // 2. List pairs for UI selection, then pick the best market for one pair.
@@ -129,11 +131,17 @@ empty pointer `""`. The client does not scan unknown response shapes.
 ## Pin a local card
 
 Users can pin a solver card directly (a raw card, validated against the card
-schema), participating in the merge like any registry entry:
+schema), participating in the merge like any registry entry. Omit `registries`
+to also get the published index for the network, or pass `registries: []` to
+pin only and follow no registry at all:
 
 ```ts
 const { markets } = await discover({
-  registries: ["https://arkade-os.github.io/solver-registry/bitcoin.json"],
+  localCards: [{ card: pastedCardJson }],
+});
+
+const pinnedOnly = await discover({
+  registries: [],
   localCards: [{ card: pastedCardJson }],
 });
 ```
@@ -187,7 +195,8 @@ package entrypoint does not import React.
 
 | Export | Purpose |
 |---|---|
-| `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. Registry failures are isolated. |
+| `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. With no `registries`, follows that network's published index (an internal default); `registries: []` follows none; a non-empty list overrides the default. Registry failures are isolated. |
+| `defaultRegistryUrls(network)` / `registryIndexUrl(network)` / `REGISTRY_INDEX_URLS` | The published index URL(s) for a network — the default `discover()` reads, exported so callers can surface or override it instead of hand-copying it. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
 | `listMarkets(markets)` | List available id pairs, how many solver candidates each pair has, and how many can pay out each side (`solvable.base` / `solvable.quote`). |
 | `selectMarkets(markets, {baseId, quoteId, wantSide?, wantAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair — and optionally to markets that can pay out `wantSide`, sized by `wantAmount` on that side — keeping the ranking. `cursor: 1` selects the second-ranked market. |

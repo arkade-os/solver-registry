@@ -62,12 +62,24 @@ Human-readable overview: <https://arkade-os.github.io/solver-registry/>
 | Bitcoin   | <https://arkade-os.github.io/solver-registry/bitcoin.json>   |
 | Signet    | <https://arkade-os.github.io/solver-registry/signet.json>    |
 | Mutinynet | <https://arkade-os.github.io/solver-registry/mutinynet.json> |
+| Regtest   | <https://arkade-os.github.io/solver-registry/regtest.json>   |
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
 that network, stamped with `generated_at` and the source `commit`, matching
 [`schema/index.schema.json`](schema/index.schema.json). Fetch one URL per
 registry you follow, merge, filter by pair, price from the market's
 `price_feed`, and extract the scalar using `price_feed_schema`.
+
+Those URLs are also exported as `REGISTRY_INDEX_URLS` (and
+`registryIndexUrl(network)`) from `@arkade-os/solver-discovery`, typed against
+its `Network` union, so consumers stop hand-copying them. They are the
+default source: `discover()` with no `registries` follows the published index
+for the `network` the caller passes, so the URLs (or the mechanism) can change
+in a library release without any client-side table. The default is a policy a
+caller can still own — `registries: []` follows none, so a private deployment
+can refuse the public list, and a non-empty `registries` list overrides the
+default rather than merging with it. Absent and empty therefore stay
+meaningfully different, and opting out is deliberate.
 
 ### Client library
 

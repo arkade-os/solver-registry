@@ -20,6 +20,7 @@ import {
 import { validateCard, validateIndex } from "./validate.ts";
 import { sideLimits } from "./pricing.ts";
 import { fetchText, type FetchLike } from "./feed.ts";
+import { defaultRegistryUrls } from "./registries.ts";
 
 export type SourceType = "registry" | "local";
 
@@ -115,7 +116,9 @@ export interface LocalCardInput {
 }
 
 export interface DiscoverOptions extends FetchIndexOptions {
-  /** Registry URLs to follow, in priority order (used as the ranking tiebreak). */
+  /** Registry URLs to follow, in priority order (the ranking tiebreak). Omitted
+   *  follows the network's published index (internal, so it can move in a
+   *  release); `[]` follows none; a non-empty list overrides rather than merges. */
   registries?: string[];
   /** Locally pinned solver cards, validated against the card schema. */
   localCards?: LocalCardInput[];
@@ -130,12 +133,14 @@ export interface SourceReport {
   marketCount: number;
   error?: string;
   warnings: string[];
+  /** True when the URL is the network default (no `registries` passed), not caller-named. */
+  fromDefault?: boolean;
 }
 
 export interface DiscoverResult {
   /** Merged, deduped, ranked markets across all sources. */
   markets: DiscoveredMarket[];
-  /** Per-source outcome (which registries/cards loaded, failed, or warned). */
+  /** Per-source outcome; a registry `source` is the effective URL fetched, default included. */
   sources: SourceReport[];
   /** Flattened warnings across all sources (staleness, skipped cards, …). */
   warnings: string[];
@@ -157,6 +162,9 @@ function recordSource(sources: SourceReport[], warnings: string[], report: Sourc
  */
 export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   const network = opts.network ?? DEFAULT_NETWORK;
+  // Omitted means the network default; [] is the explicit opt-out.
+  const fromDefault = opts.registries === undefined;
+  const registries = opts.registries ?? defaultRegistryUrls(network);
   const sources: SourceReport[] = [];
   const warnings: string[] = [];
   // Entries accumulate in source order (registries first, then local cards);
@@ -165,17 +173,16 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   const tagged: Array<{ market: IndexMarket; source: string; sourceType: SourceType }> = [];
 
   const indexResults = await Promise.all(
-    (opts.registries ?? []).map((url) => fetchIndex(url, { ...opts, network })),
+    registries.map((url) => fetchIndex(url, { ...opts, network })),
   );
 
   for (const r of indexResults) {
-    if (!r.ok) {
-      recordSource(sources, warnings, { source: r.url, sourceType: "registry", ok: false, marketCount: 0, error: r.error, warnings: r.warnings });
-      continue;
-    }
-    const markets = r.index!.markets;
-    for (const m of markets) tagged.push({ market: m, source: r.url, sourceType: "registry" });
-    recordSource(sources, warnings, { source: r.url, sourceType: "registry", ok: true, marketCount: markets.length, warnings: r.warnings });
+    const report: SourceReport = { source: r.url, sourceType: "registry", ok: r.ok, marketCount: r.ok ? r.index!.markets.length : 0, warnings: r.warnings };
+    if (!r.ok) report.error = r.error;
+    if (fromDefault) report.fromDefault = true;
+    recordSource(sources, warnings, report);
+    if (!r.ok) continue;
+    for (const m of r.index!.markets) tagged.push({ market: m, source: r.url, sourceType: "registry" });
   }
 
   for (const local of opts.localCards ?? []) {

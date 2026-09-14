@@ -8,6 +8,9 @@ import {
   bestMarket,
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
+import { registryIndexUrl } from "../src/registries.ts";
+import { NETWORKS } from "../src/types.ts";
+import type { FetchLike } from "../src/feed.ts";
 import { BTC, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
@@ -17,8 +20,8 @@ function idxMarket(solver: string, fee: number) {
   return { ...makeMarket({ fee_bps: fee }), solver };
 }
 
-function index(commit: string, markets: unknown[]) {
-  return JSON.stringify({ version: 0, network: "bitcoin", generated_at: GENERATED_AT, commit, markets });
+function index(commit: string, markets: unknown[], network: string = "bitcoin") {
+  return JSON.stringify({ version: 0, network, generated_at: GENERATED_AT, commit, markets });
 }
 
 // Registry A: alice(30), bob(20). Registry B: alice(30) [dup], carol(25).
@@ -91,8 +94,58 @@ test("discover: merges registries + local card, dedupes, ranks; isolates failure
   assert.equal(res.sources.filter((s) => s.ok).length, 3);
 });
 
+test("discover: with registries omitted, follows each network's published index and tags it as the default", async () => {
+  for (const network of NETWORKS) {
+    const url = registryIndexUrl(network);
+    const res = await discover({
+      network,
+      fetchImpl: mockFetch({ [url]: { body: index("c".repeat(40), [idxMarket("alice", 30)], network) } }),
+      now: NOW,
+    });
+    assert.deepEqual(res.markets.map((m) => m.solver), ["alice"], `${network} should follow ${url}`);
+    assert.deepEqual(res.sources.map((s) => s.source), [url]);
+    assert.equal(res.sources[0].fromDefault, true);
+    assert.equal(res.sources[0].sourceType, "registry");
+  }
+});
+
+test("discover: registries: [] opts out — no registry fetch, no default markets", async () => {
+  let fetched = 0;
+  const fetchImpl: FetchLike = async (url) => {
+    fetched++;
+    return mockFetch(routes)(url);
+  };
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: daveCard() }],
+    fetchImpl,
+    now: NOW,
+  });
+  assert.equal(fetched, 0);
+  assert.equal(res.markets.length, 1); // the local card still merges
+  assert.equal(res.markets[0].solver, "dave");
+  assert.deepEqual(res.sources.map((s) => s.sourceType), ["local"]);
+});
+
+test("discover: an explicit list overrides the default rather than merging with it", async () => {
+  const res = await discover({ registries: [REG_A], fetchImpl: mockFetch(routes), now: NOW });
+  assert.deepEqual(res.sources.map((s) => s.source), [REG_A]);
+  assert.equal(res.sources[0].fromDefault, undefined);
+});
+
+test("discover: a failed default fetch is reported against its effective URL", async () => {
+  const url = registryIndexUrl("regtest");
+  const res = await discover({ network: "regtest", fetchImpl: mockFetch(routes), now: NOW });
+  assert.equal(res.markets.length, 0);
+  assert.equal(res.sources[0].source, url);
+  assert.equal(res.sources[0].ok, false);
+  assert.equal(res.sources[0].fromDefault, true);
+  assert.ok(res.warnings.some((w) => w.startsWith(`${url}:`)), res.warnings.join("\n"));
+});
+
 test("discover: skips an invalid local card with a warning", async () => {
   const res = await discover({
+    registries: [],
     localCards: [{ card: { version: 0, name: "Bad Name", markets: [] }, network: "bitcoin", label: "pinned" }],
     network: "bitcoin",
     fetchImpl: mockFetch(routes),
@@ -104,6 +157,7 @@ test("discover: skips an invalid local card with a warning", async () => {
 
 test("discover: skips a local card scoped to another network", async () => {
   const res = await discover({
+    registries: [],
     localCards: [{ card: daveCard(), network: "signet" }],
     network: "bitcoin",
     fetchImpl: mockFetch(routes),
@@ -115,6 +169,7 @@ test("discover: skips a local card scoped to another network", async () => {
 
 test("discover: local cards inherit the default bitcoin network", async () => {
   const res = await discover({
+    registries: [],
     localCards: [{ card: daveCard() }],
     fetchImpl: mockFetch(routes),
     now: NOW,
@@ -157,6 +212,7 @@ test("one-sided markets: selection and listing avoid a side no solver can pay ou
   const frank = { version: 0, name: "frank", markets: [makeOneSidedMarket("base", { fee_bps: 15 })] };
 
   const res = await discover({
+    registries: [],
     localCards: [{ card: erin }, { card: frank }],
     fetchImpl: mockFetch(routes),
     now: NOW,
@@ -190,7 +246,7 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
       makeMarket({ fee_bps: 30 }),
     ],
   };
-  const res = await discover({ localCards: [{ card: grace }], fetchImpl: mockFetch(routes), now: NOW });
+  const res = await discover({ registries: [], localCards: [{ card: grace }], fetchImpl: mockFetch(routes), now: NOW });
   assert.equal(res.markets.length, 3);
 
   const pairs = listMarkets(res.markets);
