@@ -1,0 +1,30 @@
+name: Index URLs
+
+# The published URLs are a contract — README advertises them and the client
+# exports them — but nothing checks they resolve. Kept out of validate.yml and
+# run on a schedule so a Pages hiccup cannot block an unrelated PR.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - packages/discovery-client/src/registries.ts
+      - scripts/check-index-urls.ts
+      - .github/workflows/index-urls.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No install step: the table and its imports have no dependencies.
+      - name: HEAD every published index URL
+        run: node --experimental-strip-types scripts/check-index-urls.ts

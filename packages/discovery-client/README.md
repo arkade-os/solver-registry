@@ -188,6 +188,7 @@ package entrypoint does not import React.
 | Export | Purpose |
 |---|---|
 | `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. Registry failures are isolated. |
+| `registryIndexUrl(network)` / `REGISTRY_INDEX_URLS` | The published index URL for each network, so callers stop hand-copying them. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
 | `listMarkets(markets)` | List available id pairs, how many solver candidates each pair has, and how many can pay out each side (`solvable.base` / `solvable.quote`). |
 | `selectMarkets(markets, {baseId, quoteId, wantSide?, wantAmount?})` / `bestMarket(..., {cursor?})` | Filter to one id pair — and optionally to markets that can pay out `wantSide`, sized by `wantAmount` on that side — keeping the ranking. `cursor: 1` selects the second-ranked market. |

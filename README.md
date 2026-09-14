@@ -69,6 +69,13 @@ that network, stamped with `generated_at` and the source `commit`, matching
 registry you follow, merge, filter by pair, price from the market's
 `price_feed`, and extract the scalar using `price_feed_schema`.
 
+Those URLs are also exported as `REGISTRY_INDEX_URLS` (and
+`registryIndexUrl(network)`) from `@arkade-os/solver-discovery`, typed against
+its `Network` union, so consumers stop hand-copying them. `discover()` still
+takes the registries to follow explicitly — which ones to trust, how to
+override them per environment, and whether to opt out are the consumer's
+policy, not the format's.
+
 ### Client library
 
 [![npm](https://img.shields.io/npm/v/%40arkade-os%2Fsolver-discovery)](https://www.npmjs.com/package/@arkade-os/solver-discovery)

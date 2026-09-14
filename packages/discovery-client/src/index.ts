@@ -11,6 +11,7 @@
 //   // wantAmount to request; then createOffer(...) as usual.
 
 export * from "./types.ts";
+export * from "./registries.ts";
 export * from "./validate.ts";
 export * from "./pricing.ts";
 export * from "./assets.ts";
