@@ -72,10 +72,14 @@ registry you follow, merge, filter by pair, price from the market's
 
 Those URLs are also exported as `REGISTRY_INDEX_URLS` (and
 `registryIndexUrl(network)`) from `@arkade-os/solver-discovery`, typed against
-its `Network` union, so consumers stop hand-copying them. `discover()` still
-takes the registries to follow explicitly — which ones to trust, how to
-override them per environment, and whether to opt out are the consumer's
-policy, not the format's.
+its `Network` union, so consumers stop hand-copying them. They are the
+default source: `discover()` with no `registries` follows the published index
+for the `network` the caller passes, so the URLs (or the mechanism) can change
+in a library release without any client-side table. The default is a policy a
+caller can still own — `registries: []` follows none, so a private deployment
+can refuse the public list, and a non-empty `registries` list overrides the
+default rather than merging with it. Absent and empty therefore stay
+meaningfully different, and opting out is deliberate.
 
 ### Client library
 

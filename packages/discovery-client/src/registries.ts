@@ -1,6 +1,5 @@
-// The index URLs this registry publishes on GitHub Pages. Data only:
-// `discover()` still takes the registries to follow — overrides and opt-out are
-// the caller's policy, not the format's.
+// The URLs this registry publishes on GitHub Pages — the source `discover()`
+// reads when no `registries` list is passed.
 import type { Network } from "./types.ts";
 
 export const REGISTRY_BASE_URL = "https://arkade-os.github.io/solver-registry";
@@ -14,4 +13,9 @@ export const REGISTRY_INDEX_URLS = {
 
 export function registryIndexUrl(network: Network): string {
   return REGISTRY_INDEX_URLS[network];
+}
+
+/** The network's published index — what `discover()` reads when `registries` is omitted. */
+export function defaultRegistryUrls(network: Network): string[] {
+  return [registryIndexUrl(network)];
 }
