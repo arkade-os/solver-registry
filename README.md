@@ -62,6 +62,7 @@ Human-readable overview: <https://arkade-os.github.io/solver-registry/>
 | Bitcoin   | <https://arkade-os.github.io/solver-registry/bitcoin.json>   |
 | Signet    | <https://arkade-os.github.io/solver-registry/signet.json>    |
 | Mutinynet | <https://arkade-os.github.io/solver-registry/mutinynet.json> |
+| Regtest   | <https://arkade-os.github.io/solver-registry/regtest.json>   |
 
 Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
 that network, stamped with `generated_at` and the source `commit`, matching
