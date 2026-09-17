@@ -149,9 +149,24 @@ test("planOffer: charges no carrier when the received asset is not on the arkade
   );
 });
 
+test("planOffer: returns the carrier the maker fronted, with no card field gating it", () => {
+  const feed = { feedValue: "377000", giveAmount: "1" };
+  const fronting = { market: arkadeMarket(), give: "quote" as const, ...feed };
+  assert.equal(
+    planOffer({ ...fronting, carrierSats: 330n }).receive.atomic - planOffer(fronting).receive.atomic,
+    330n,
+  );
+
+  const depositingBtc = { market: arkadeMarket(), give: "base" as const, ...feed };
+  assert.equal(
+    planOffer({ ...depositingBtc, carrierSats: 330n }).receive.atomic,
+    planOffer(depositingBtc).receive.atomic,
+  );
+});
+
 test("planOffer: wantAmount inverts giveAmount with deposit charges applied", () => {
   const market = arkadeMarket({
-    solver_fee: { flat: { base: "1000000", quote: "7000000" } },
+    solver_fee: { base: { flat: "1000000" }, quote: { flat: "7000000" } },
     charges_delivered_carrier: true,
   });
   for (const give of ["base", "quote"] as const) {
@@ -160,7 +175,8 @@ test("planOffer: wantAmount inverts giveAmount with deposit charges applied", ()
     const back = planOffer({ ...priced, wantAmount: forward.receive.atomic });
     // Never over-asks; any shortfall is floor/ceil quantisation, not the charges.
     assert.ok(back.deposit.atomic <= forward.deposit.atomic, `${give} inverse over-asked`);
-    const perReceivedUnit = forward.deposit.atomic / forward.receive.atomic + 1n;
+    const { num, den } = forward.price;
+    const perReceivedUnit = (give === "quote" ? num / den : den / num) + 1n;
     assert.ok(forward.deposit.atomic - back.deposit.atomic <= perReceivedUnit, `${give} drifted beyond rounding`);
   }
 });
@@ -175,30 +191,46 @@ test("planOffer: solver_fee supersedes fee_flat rather than adding to it", () =>
   );
 
   // The give-base double-count: a base flat fee beside fee_flat must not stack.
-  const only = arkadeMarket({ solver_fee: { flat: { base: "1000000" } } });
+  const only = arkadeMarket({ solver_fee: { base: { flat: "1000000" } } });
   assert.equal(
-    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: { flat: { base: "1000000" } } }), ...priced })
+    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: { base: { flat: "1000000" } } }), ...priced })
       .receive.atomic,
     planOffer({ market: only, ...priced }).receive.atomic,
   );
   assert.ok(planOffer({ market: only, ...priced }).receive.atomic < none);
 });
 
-test("planOffer: solver_fee.flat charges the deposited side and ignores the other", () => {
-  const both = { base: "1000000", quote: "7000000" };
+test("planOffer: solver_fee charges the deposited side and ignores the other", () => {
+  const both = { base: { flat: "1000000" }, quote: { flat: "7000000" } };
   for (const give of ["base", "quote"] as const) {
     const priced = { give, giveAmount: "1", feedValue: "377000" };
     const deposited = { [give]: both[give] };
     assert.equal(
-      planOffer({ market: arkadeMarket({ solver_fee: { flat: both } }), ...priced }).receive.atomic,
-      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic,
-      `only the ${give} flat may apply when depositing ${give}`,
+      planOffer({ market: arkadeMarket({ solver_fee: both }), ...priced }).receive.atomic,
+      planOffer({ market: arkadeMarket({ solver_fee: deposited }), ...priced }).receive.atomic,
+      `only the ${give} fee may apply when depositing ${give}`,
     );
     assert.ok(
-      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic <
+      planOffer({ market: arkadeMarket({ solver_fee: deposited }), ...priced }).receive.atomic <
         planOffer({ market: arkadeMarket(), ...priced }).receive.atomic,
     );
   }
+});
+
+test("planOffer: the spread itself can differ by direction", () => {
+  const market = arkadeMarket({ fee_bps: 900, solver_fee: { base: { bps: 10 }, quote: { bps: 900 } } });
+  const wide = arkadeMarket({ fee_bps: 900 });
+  const priced = { giveAmount: "1", feedValue: "377000" };
+  assert.ok(
+    planOffer({ market, give: "base", ...priced }).receive.atomic >
+      planOffer({ market: wide, give: "base", ...priced }).receive.atomic,
+    "a base deposit should get the narrow spread",
+  );
+  assert.equal(
+    planOffer({ market, give: "quote", ...priced }).receive.atomic,
+    planOffer({ market: wide, give: "quote", ...priced }).receive.atomic,
+    "a quote deposit should get the market-wide spread",
+  );
 });
 
 test("planOffer: names the field when a market's asset decimals are malformed", () => {

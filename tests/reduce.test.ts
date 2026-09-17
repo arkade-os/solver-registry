@@ -156,7 +156,7 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "tampered-sig", expect: "sig does not verify" },
   { case: "additional-properties", expect: "must NOT have additional properties" },
   { case: "missing-required", expect: "must have required property" },
-  { case: "solver-fee-bps-mismatch", expect: "solver_fee/bps must equal the market's fee_bps" },
+  { case: "solver-fee-bps-mismatch", expect: "fee_bps must equal the widest solver_fee spread" },
 ];
 
 for (const { case: caseName, expect } of REJECTION_CASES) {

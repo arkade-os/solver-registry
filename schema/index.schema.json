@@ -88,6 +88,27 @@
       "type": "string",
       "pattern": "^[1-9][0-9]{0,29}$",
       "description": "An amount that is strictly positive: the side it bounds is enabled."
+    },
+    "solverFeeSide": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "This direction's spread. OPTIONAL; absent falls back to fee_bps, which equals the widest spread declared here."
+        },
+        "flat": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/amount"
+            }
+          ],
+          "description": "The size-independent part, in atomic units of the side this sits under. OPTIONAL; absent means none."
+        }
+      },
+      "description": "One direction's whole fee, selected by the side the maker DEPOSITS."
     }
   },
   "properties": {
@@ -230,33 +251,14 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "bps": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 10000
+              "base": {
+                "$ref": "#/definitions/solverFeeSide"
               },
-              "flat": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "base": {
-                    "allOf": [
-                      {
-                        "$ref": "#/definitions/amount"
-                      }
-                    ]
-                  },
-                  "quote": {
-                    "allOf": [
-                      {
-                        "$ref": "#/definitions/amount"
-                      }
-                    ]
-                  }
-                }
+              "quote": {
+                "$ref": "#/definitions/solverFeeSide"
               }
             },
-            "description": "The solver's whole fee, keyed by the side the maker DEPOSITS. SUPERSEDES fee_flat where present and is never summed with it. OPTIONAL. Carried through from the solver's card unchanged."
+            "description": "The solver's whole fee, keyed by the side the maker DEPOSITS. Exactly one key applies per swap, and that key fixes the units for everything under it. SUPERSEDES fee_flat where present and is never summed with it. OPTIONAL. Carried through from the solver's card unchanged."
           },
           "charges_delivered_carrier": {
             "type": "boolean",

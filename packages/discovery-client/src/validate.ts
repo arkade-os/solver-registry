@@ -260,9 +260,16 @@ type LimitKey = (typeof LIMIT_SIDES)[number]["min" | "max"];
  * this the registry would list a card its own client then rejects. */
 export function marketSolverFeeErrors(market: { solver_fee?: unknown; fee_bps?: unknown }): string[] {
   const fee = market.solver_fee;
-  if (!isObject(fee) || fee.bps === undefined) return [];
-  if (fee.bps === market.fee_bps) return [];
-  return [`solver_fee/bps must equal the market's fee_bps`];
+  if (!isObject(fee)) return [];
+  const spreads: number[] = [];
+  for (const side of ["base", "quote"] as const) {
+    const leg = fee[side];
+    if (isObject(leg) && typeof leg.bps === "number") spreads.push(leg.bps);
+  }
+  if (spreads.length === 0) return [];
+  const widest = Math.max(...spreads);
+  if (market.fee_bps === widest) return [];
+  return [`fee_bps must equal the widest solver_fee spread (${widest}), for readers that predate solver_fee`];
 }
 
 /**
@@ -418,32 +425,34 @@ export function marketNetworkErrors(
   return errors;
 }
 
-const SOLVER_FEE_KEYS = new Set(["bps", "flat"]);
-const SOLVER_FLAT_KEYS = new Set(["base", "quote"]);
+const SOLVER_FEE_SIDES = new Set(["base", "quote"]);
+const SOLVER_FEE_SIDE_KEYS = new Set(["bps", "flat"]);
 
-/** Shape only; the cross-field `bps` rule lives in `marketSolverFeeErrors`, which the reducer shares. */
+/** Shape only; the cross-field `fee_bps` rule lives in `marketSolverFeeErrors`, which the reducer shares. */
 function checkSolverFee(errors: string[], path: string, v: unknown, strict: boolean): void {
   if (!isObject(v)) {
     add(errors, path, "must be an object");
     return;
   }
-  if (strict) checkAllowedKeys(errors, path, v, SOLVER_FEE_KEYS);
-  if (v.bps !== undefined) checkIntRange(errors, `${path}/bps`, v.bps, 0, 10000);
-  if (v.flat === undefined) return;
-  if (!isObject(v.flat)) {
-    add(errors, `${path}/flat`, "must be an object");
-    return;
-  }
-  if (strict) checkAllowedKeys(errors, `${path}/flat`, v.flat, SOLVER_FLAT_KEYS);
+  if (strict) checkAllowedKeys(errors, path, v, SOLVER_FEE_SIDES);
   for (const side of ["base", "quote"] as const) {
-    if (v.flat[side] === undefined) continue;
-    checkPattern(
-      errors,
-      `${path}/flat/${side}`,
-      v.flat[side],
-      AMOUNT_PATTERN,
-      `must be a decimal string of ${side}-asset atomic units`,
-    );
+    const leg = v[side];
+    if (leg === undefined) continue;
+    if (!isObject(leg)) {
+      add(errors, `${path}/${side}`, "must be an object");
+      continue;
+    }
+    if (strict) checkAllowedKeys(errors, `${path}/${side}`, leg, SOLVER_FEE_SIDE_KEYS);
+    if (leg.bps !== undefined) checkIntRange(errors, `${path}/${side}/bps`, leg.bps, 0, 10000);
+    if (leg.flat !== undefined) {
+      checkPattern(
+        errors,
+        `${path}/${side}/flat`,
+        leg.flat,
+        AMOUNT_PATTERN,
+        `must be a decimal string of ${side}-asset atomic units`,
+      );
+    }
   }
 }
 

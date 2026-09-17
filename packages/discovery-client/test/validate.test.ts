@@ -175,14 +175,14 @@ test("validateCard: accepts a market carrying fee_flat, and one omitting it", ()
 
 test("validateCard: accepts solver_fee, including alongside the fee_flat it supersedes", () => {
   const c = validCard();
-  c.markets[0].solver_fee = { bps: 30, flat: { base: "330", quote: "50" } };
+  c.markets[0].solver_fee = { base: { bps: 30, flat: "330" }, quote: { bps: 30, flat: "50" } };
   assert.equal(validateCard(c).ok, true, JSON.stringify(validateCard(c).errors));
 
   c.markets[0].fee_flat = "50";
   assert.equal(validateCard(c).ok, true, JSON.stringify(validateCard(c).errors));
 
   const partial = validCard();
-  partial.markets[0].solver_fee = { flat: { base: "330" } };
+  partial.markets[0].solver_fee = { base: { flat: "330" } };
   assert.equal(validateCard(partial).ok, true, JSON.stringify(validateCard(partial).errors));
   assert.equal(validateCard(validCard()).ok, true);
 });
@@ -482,17 +482,22 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   { name: "non-canonical fee_flat", mutate: (c) => (c.markets[0].fee_flat = "01"), expect: /fee_flat/ },
   {
     name: "non-canonical solver_fee flat",
-    mutate: (c) => (c.markets[0].solver_fee = { flat: { base: "01" } }),
-    expect: /solver_fee\/flat\/base/,
+    mutate: (c) => (c.markets[0].solver_fee = { base: { flat: "01" } }),
+    expect: /solver_fee\/base\/flat/,
   },
   {
-    name: "solver_fee bps disagreeing with fee_bps",
-    mutate: (c) => (c.markets[0].solver_fee = { bps: 31 }),
-    expect: /solver_fee\/bps/,
+    name: "market fee_bps wider than every solver_fee spread",
+    mutate: (c) => (c.markets[0].solver_fee = { base: { bps: 5 } }),
+    expect: /fee_bps must equal the widest/,
+  },
+  {
+    name: "solver_fee bps wider than the market fee_bps",
+    mutate: (c) => (c.markets[0].solver_fee = { base: { bps: 31 } }),
+    expect: /fee_bps must equal the widest/,
   },
   {
     name: "unknown solver_fee key",
-    mutate: (c) => (c.markets[0].solver_fee = { fixed: { base: "330" } }),
+    mutate: (c) => (c.markets[0].solver_fee = { fixed: { flat: "330" } }),
     expect: /solver_fee\/fixed/,
   },
   { name: "solver_fee not an object", mutate: (c) => (c.markets[0].solver_fee = "30"), expect: /solver_fee/ },

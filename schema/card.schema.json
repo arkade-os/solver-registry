@@ -140,6 +140,27 @@
       "type": "string",
       "pattern": "^[1-9][0-9]{0,29}$",
       "description": "An amount that is strictly positive: the side it bounds is enabled."
+    },
+    "solverFeeSide": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "This direction's spread. OPTIONAL; absent falls back to the market's fee_bps. fee_bps MUST equal the widest spread declared here, because a reader predating solver_fee applies it to both directions — understating one would have that reader compute a payout the solver refuses, after the offer is funded on chain."
+        },
+        "flat": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/amount"
+            }
+          ],
+          "description": "The part of the price that does not scale with size, in atomic units of the side this sits under. Needs no denominator of its own: the enclosing key already names it, and the solver charges it in the deposit's own units, so nothing is converted through the price. OPTIONAL; absent means none."
+        }
+      },
+      "description": "One direction's whole fee, selected by the side the maker DEPOSITS. Both terms are additive: the flat part comes off the deposit, then the spread applies to what is left."
     }
   },
   "properties": {
@@ -285,37 +306,16 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "bps": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 10000,
-                "description": "The spread. MUST equal this market's fee_bps when present. It does not replace fee_bps, which stays required for readers predating this field; two independently-writable copies of the spread would let one card price differently for old and new clients."
+              "base": {
+                "$ref": "#/definitions/solverFeeSide",
+                "description": "Applies when the maker DEPOSITS the base asset, i.e. sells base."
               },
-              "flat": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "base": {
-                    "allOf": [
-                      {
-                        "$ref": "#/definitions/amount"
-                      }
-                    ],
-                    "description": "Charged when the maker DEPOSITS the base asset, in base-asset atomic units."
-                  },
-                  "quote": {
-                    "allOf": [
-                      {
-                        "$ref": "#/definitions/amount"
-                      }
-                    ],
-                    "description": "Charged when the maker DEPOSITS the quote asset, in quote-asset atomic units."
-                  }
-                },
-                "description": "The part of the price that does not scale with size, keyed by the side the maker DEPOSITS. Exactly one key applies per swap — the solver selects by direction and denominates in the input — so the two are alternatives, never a sum, and neither needs converting through the price."
+              "quote": {
+                "$ref": "#/definitions/solverFeeSide",
+                "description": "Applies when the maker DEPOSITS the quote asset, i.e. buys base."
               }
             },
-            "description": "The solver's whole fee as one object: an additive spread plus a size-independent part, taken off the deposit before the spread. SUPERSEDES fee_flat where present and is never summed with it, so a card mid-migration may carry both and a reader predating this field still prices from fee_flat. OPTIONAL; absent means fee_bps/fee_flat alone."
+            "description": "The solver's whole fee, keyed by the side the maker DEPOSITS. Exactly one key applies per swap, so the two are alternatives and never a sum. That key also fixes the units for everything under it, which is why `flat` needs no denominator of its own and why the spread may differ by direction. SUPERSEDES fee_flat where present and is never summed with it, so a card mid-migration may carry both and a reader predating this field still prices from fee_flat. OPTIONAL; absent means fee_bps/fee_flat alone."
           },
           "charges_delivered_carrier": {
             "type": "boolean",

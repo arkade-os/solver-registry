@@ -27,9 +27,9 @@
       "min_quote_amount": "1000",
       "max_quote_amount": "2000000000000000000",
       "solver_fee": {
-        "bps": 11,
-        "flat": {
-          "base": "1000"
+        "base": {
+          "bps": 11,
+          "flat": "1000"
         }
       }
     }
