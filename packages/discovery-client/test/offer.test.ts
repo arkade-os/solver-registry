@@ -422,6 +422,18 @@ test("planOffer: rejects impossible wanted amounts", () => {
   );
 });
 
+test("quoteOffer: prices a carrier-charging market, which it could not reach at all", async () => {
+  const fetchImpl = mockFetch({
+    "https://feed.example.com/depix": { body: JSON.stringify({ symbol: "BTCBRL", price: "377000" }) },
+  });
+  const market = arkadeMarket({ charges_delivered_carrier: true });
+  const opts = { give: "base" as const, giveAmount: "0.01", safetyBps: 50, fetchImpl };
+  await assert.rejects(quoteOffer(market, opts), /carrierSats/);
+  const charged = await quoteOffer(market, { ...opts, carrierSats: 330n });
+  const plain = await quoteOffer(arkadeMarket(), { ...opts, carrierSats: 330n });
+  assert.ok(charged.receive.atomic < plain.receive.atomic);
+});
+
 test("quoteOffer: one call fetches the feed then plans (mock fetch)", async () => {
   const fetchImpl = mockFetch({
     "https://feed.example.com/depix": {

@@ -296,6 +296,8 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
 export type QuoteOfferOptions = FetchFeedOptions & {
   give: Side;
   safetyBps?: number;
+  /** Required on a market declaring `charges_delivered_carrier`, which `planOffer` refuses to price without. */
+  carrierSats?: bigint;
 } & OfferAmountInput;
 
 /**
@@ -316,6 +318,7 @@ export async function quoteOffer(market: Market, opts: QuoteOfferOptions): Promi
     return planOffer({
       market,
       give: opts.give,
+      carrierSats: opts.carrierSats,
       giveAmount: offerAmount.value,
       feedValue,
       safetyBps: opts.safetyBps,
@@ -324,6 +327,7 @@ export async function quoteOffer(market: Market, opts: QuoteOfferOptions): Promi
   return planOffer({
     market,
     give: opts.give,
+    carrierSats: opts.carrierSats,
     wantAmount: offerAmount.value,
     feedValue,
     safetyBps: opts.safetyBps,
