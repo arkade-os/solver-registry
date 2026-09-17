@@ -98,6 +98,21 @@ test("displayPrice: survives prices the string form truncates to zero", () => {
   assert.equal(Number(den) / Number(num), 1e9);
 });
 
+test("planOffer: charges a declared carrier only when we deliver the asset", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  const plain = planOffer({ market: arkadeMarket(), ...priced });
+  const charged = planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced });
+  assert.ok(charged.receive.atomic < plain.receive.atomic);
+
+  assert.equal(planOffer({ market: arkadeMarket(), ...priced }).receive.atomic, plain.receive.atomic);
+
+  const giving = { give: "quote" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.equal(
+    planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...giving }).receive.atomic,
+    planOffer({ market: arkadeMarket(), ...giving }).receive.atomic,
+  );
+});
+
 test("planOffer: names the field when a market's asset decimals are malformed", () => {
   const m = arkadeMarket() as any;
   delete m.quote_asset.decimals;

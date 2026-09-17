@@ -196,24 +196,8 @@ export interface Market {
   max_base_amount: string;
   min_quote_amount: string;
   max_quote_amount: string;
-  /** Absent is UNDECLARED, not none. An offer packet for an unserved market is funded ON CHAIN first. */
-  methods?: MarketMethods;
-}
-
-/** May be empty: PRESENCE declares the method served; bounds override the union. */
-export interface MarketMethod {
-  min_base_amount?: string;
-  max_base_amount?: string;
-  min_quote_amount?: string;
-  max_quote_amount?: string;
-  /** `offer` only; the amount is the Service's dust, so only the policy needs publishing. */
+  /** A pricing input: a client computing offline must net it out as the solver does. */
   charges_delivered_carrier?: boolean;
-}
-
-/** `rfq`: directed request at `discovery_pubkey`. `offer`: packets funded on chain. */
-export interface MarketMethods {
-  rfq?: MarketMethod;
-  offer?: MarketMethod;
 }
 
 /**

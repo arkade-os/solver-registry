@@ -83,7 +83,13 @@ export type PlanOfferInput = {
    */
   feedValue?: string | number;
   safetyBps?: number;
+  /** The Service's dust, needed only when the market declares a carrier charge. */
+  carrierSats?: bigint;
 } & OfferAmountInput;
+
+function isArkadeAsset(asset: AssetInfo): boolean {
+  return asset.id.includes("/asset:");
+}
 
 function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
   return {
@@ -118,6 +124,7 @@ function depositForWant(input: {
   feeBps: number;
   safetyBps: number;
   feeFlat: bigint;
+  depositCharges: bigint;
 }): bigint {
   // Wanting nothing costs nothing, whatever the fees are — and this must come
   // before the flat fee is added below, or asking for zero would quote the
@@ -134,10 +141,11 @@ function depositForWant(input: {
   // received-side units, via the shared conversion so the two cannot drift.
   const gross =
     input.wantAmount + flatInReceivedUnits(input.feeFlat, input.give, input.price);
+  // Off before the spread, so back on after the division, not inside `gross`.
   if (input.give === "base") {
-    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net);
+    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net) + input.depositCharges;
   }
-  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net);
+  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net) + input.depositCharges;
 }
 
 /**
@@ -172,8 +180,18 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     throw new Error("fee_flat must be a canonical decimal-string amount");
   }
   const feeFlat = market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
+  if (market.fee_flat_base !== undefined && !isAmount(market.fee_flat_base)) {
+    throw new Error("fee_flat_base must be a canonical decimal-string amount");
+  }
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
+  // Off the DEPOSIT before the spread; an asset on both legs cancels the carrier.
+  const carrierCharged =
+    market.charges_delivered_carrier === true && isArkadeAsset(receiveAsset) && !isArkadeAsset(depositAsset)
+      ? (input.carrierSats ?? 0n)
+      : 0n;
+  const feeFlatBase = give === "base" && market.fee_flat_base !== undefined ? BigInt(market.fee_flat_base) : 0n;
+  const depositCharges = feeFlatBase + carrierCharged;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   let price: Rational;
   if (isSameAssetMarket(market)) {
@@ -198,6 +216,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       feeBps: market.fee_bps,
       safetyBps,
       feeFlat,
+      depositCharges,
     });
   } else {
     receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
@@ -208,6 +227,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       feeBps: market.fee_bps,
       safetyBps,
       feeFlat,
+      depositCharges,
     });
   }
 
