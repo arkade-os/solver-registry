@@ -208,12 +208,16 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
   // Off the DEPOSIT before the spread; an asset on both legs cancels the carrier.
-  const carrierCharged =
+  const carrierDue =
     market.charges_delivered_carrier === true &&
     ridesOnCarrier(market, otherSide(give)) &&
-    !ridesOnCarrier(market, give)
-      ? (input.carrierSats ?? 0n)
-      : 0n;
+    !ridesOnCarrier(market, give);
+  // Defaulting to zero here would under-deposit and get the offer refused after
+  // it is funded on chain — the one failure this field exists to prevent.
+  if (carrierDue && input.carrierSats === undefined) {
+    throw new Error("this market charges for the delivered carrier: pass carrierSats (the Service's dust)");
+  }
+  const carrierCharged = carrierDue ? input.carrierSats! : 0n;
   const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   let price: Rational;

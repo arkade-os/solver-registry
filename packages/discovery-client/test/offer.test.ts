@@ -113,6 +113,19 @@ test("planOffer: charges a declared carrier only when we deliver the asset", () 
   );
 });
 
+test("planOffer: refuses to price a declared carrier without the Service's dust", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
+  assert.throws(
+    () => planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced }),
+    /carrierSats/,
+  );
+  assert.ok(planOffer({ market: arkadeMarket(), ...priced }).receive.atomic > 0n);
+  assert.ok(
+    planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced, carrierSats: 330n }).receive
+      .atomic > 0n,
+  );
+});
+
 test("planOffer: charges no carrier when the received asset is not on the arkade rail", () => {
   // A real market (the namespace halves are orthogonal), but it settles over Lightning.
   const overLightning = { id: `bolt11:bitcoin/asset:${"4".repeat(68)}`, name: "DePix", ticker: "DePix", decimals: 8 };
