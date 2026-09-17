@@ -486,6 +486,11 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
     expect: /solver_fee\/base\/flat/,
   },
   {
+    name: "market fee_bps wider than every solver_fee spread",
+    mutate: (c) => (c.markets[0].solver_fee = { base: { bps: 5 } }),
+    expect: /fee_bps must equal the widest/,
+  },
+  {
     name: "solver_fee bps wider than the market fee_bps",
     mutate: (c) => (c.markets[0].solver_fee = { base: { bps: 31 } }),
     expect: /fee_bps must equal the widest/,
