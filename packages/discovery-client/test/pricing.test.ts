@@ -97,6 +97,16 @@ test("computeWantAmount: giving base concedes fee + safety and floors", () => {
   assert.equal(want, expected);
 });
 
+test("computeWantAmount: deposit charges come off before the spread", () => {
+  const price = { num: 65000n, den: 1n };
+  const base = { give: "base" as const, price, feeBps: 20, safetyBps: 50 };
+  assert.equal(
+    computeWantAmount({ ...base, deposit: 100_000_000n, depositCharges: 330n }),
+    computeWantAmount({ ...base, deposit: 100_000_000n - 330n }),
+  );
+  assert.equal(computeWantAmount({ ...base, deposit: 330n, depositCharges: 330n }), 0n);
+});
+
 test("computeWantAmount: giving quote is symmetric with 1/P", () => {
   const price = { num: 65000n, den: 1n };
   const want = computeWantAmount({

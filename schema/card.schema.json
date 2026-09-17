@@ -281,6 +281,46 @@
             ],
             "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Quote-asset in both directions, matching min_quote_amount/max_quote_amount, so a client converts it through the price when the maker receives base. Note that fee_bps alone is therefore not a ranking key: a market with a lower spread and a flat fee can be dearer at small sizes and cheaper at large ones."
           },
+          "solver_fee": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bps": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000,
+                "description": "The spread. MUST equal this market's fee_bps when present. It does not replace fee_bps, which stays required for readers predating this field; two independently-writable copies of the spread would let one card price differently for old and new clients."
+              },
+              "flat": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "base": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ],
+                    "description": "Charged when the maker DEPOSITS the base asset, in base-asset atomic units."
+                  },
+                  "quote": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ],
+                    "description": "Charged when the maker DEPOSITS the quote asset, in quote-asset atomic units."
+                  }
+                },
+                "description": "The part of the price that does not scale with size, keyed by the side the maker DEPOSITS. Exactly one key applies per swap — the solver selects by direction and denominates in the input — so the two are alternatives, never a sum, and neither needs converting through the price."
+              }
+            },
+            "description": "The solver's whole fee as one object: an additive spread plus a size-independent part, taken off the deposit before the spread. SUPERSEDES fee_flat where present and is never summed with it, so a card mid-migration may carry both and a reader predating this field still prices from fee_flat. OPTIONAL; absent means fee_bps/fee_flat alone."
+          },
+          "charges_delivered_carrier": {
+            "type": "boolean",
+            "description": "Whether this solver charges the maker for the dust carrier it delivers when the maker RECEIVES an Arkade asset. A pricing input, not a fee: a client computing terms from this card must net it out of the deposit exactly as the solver does, or the offer it funds is refused. OPTIONAL; absent means it does not charge. The AMOUNT is deliberately not published — it is the Arkade Service's dust, and both parties to an Arkade-settled swap share that Service, so a client reads the live figure there rather than from a card that can be cached. Only the policy is unknowable elsewhere. Meaningless when neither side is an Arkade asset, since there is no carrier to deliver."
+          },
           "min_base_amount": {
             "allOf": [
               {

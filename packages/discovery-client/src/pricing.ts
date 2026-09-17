@@ -133,6 +133,8 @@ export interface WantAmountInput {
    * price; see the note in the body about which way that rounds.
    */
   feeFlat?: bigint | number | string;
+  /** In DEPOSITED units, netted by the caller. Off before the spread, matching the solver — unlike `feeFlat`. */
+  depositCharges?: bigint | number | string;
 }
 
 /**
@@ -152,6 +154,10 @@ export function computeWantAmount(input: WantAmountInput): bigint {
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   const deposit = toBigIntAmount(input.deposit, "deposit");
   const feeFlat = input.feeFlat === undefined ? 0n : toBigIntAmount(input.feeFlat, "feeFlat");
+  const charges =
+    input.depositCharges === undefined ? 0n : toBigIntAmount(input.depositCharges, "depositCharges");
+  if (charges >= deposit) return 0n;
+  const netDeposit = deposit - charges;
   const netBps = 10000 - feeBps - safetyBps;
   if (netBps <= 0) return 0n;
   const net = BigInt(netBps);
@@ -160,8 +166,8 @@ export function computeWantAmount(input: WantAmountInput): bigint {
   const flat = flatInReceivedUnits(feeFlat, give, price);
   const gross =
     give === "base"
-      ? (deposit * price.num * net) / (price.den * 10000n)
-      : (deposit * price.den * net) / (price.num * 10000n);
+      ? (netDeposit * price.num * net) / (price.den * 10000n)
+      : (netDeposit * price.den * net) / (price.num * 10000n);
   return gross > flat ? gross - flat : 0n;
 }
 

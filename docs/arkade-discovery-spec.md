@@ -196,6 +196,8 @@ PR validation runs the same schema checks, so a broken card can't merge. The per
 4. Fetch the chosen market's `price_feed`, parse the JSON response, read the scalar selected by `price_feed_schema.price_path`, then derive `P` in quote-units-per-base-unit via `price_decimals`. A same-asset corridor market skips this step entirely: `P = 1` exactly, and any pre-quote estimate is `fee_bps` (plus cushion) off 1:1.
 5. Spot market: compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension. Corridor market: send a request-for-quote to the market's `discovery_pubkey` over its `transports`, verify the quote's terms and locally-derived contract addresses, then fund — per the RFQ protocol (`arkade-os/lightning-swap-service` `docs/rfq-protocol.md`), whose directed traffic is nostr kind 24859. Funding is the acceptance; there is no separate accept step.
 
+Where a maker prices from the card rather than from a quote, the card is the whole pricing contract: it must carry every input the solver's own check applies, or the maker computes terms the solver then refuses. `solver_fee` is that contract as one object — an additive spread plus a size-independent part keyed by the side the maker **deposits**. That key is the point: the solver selects one flat fee by direction and denominates it in the input, which a single quote-denominated `fee_flat` cannot express, and a reader that applied both would charge twice in one direction. `solver_fee` therefore supersedes `fee_flat` rather than adding to it, so a card may carry both while migrating and a reader predating it still prices. `charges_delivered_carrier` says whether the solver funds the dust carrier an Arkade asset rides on out of the maker's deposit. Both `solver_fee.flat` and the carrier come off the DEPOSIT before the spread, matching the solver. The carrier's amount is not on the card: it is the Arkade Service's dust, both parties to an Arkade-settled swap share that Service, and a live figure beats a cached one.
+
 There is no liveness signal in v0 for spot markets: those solvers are not publicly reachable, so nothing can be probed before funding — `generated_at` and local fill history are the only heuristics, and the cost of funding into a dead solver is one cancel transaction. Corridor markets are probed by construction: the quote (or its absence) precedes any funding.
 
 ### Maker pricing
@@ -203,8 +205,11 @@ There is no liveness signal in v0 for spot markets: those solvers are not public
 For a deposit `D` in base units at price `P`:
 
 ```
-wantAmount = floor(D * P * (1 - (fee_bps + safety_bps) / 10000))
+charges    = solver_fee.flat[<side deposited>] + (charges_delivered_carrier ? carrier : 0)
+wantAmount = floor((D - charges) * P * (1 - (fee_bps + safety_bps) / 10000))
 ```
+
+Both charges come off the deposit **before** the spread, matching the solver. A card carrying only the superseded `fee_flat` is the exception: it is quote-denominated, so it comes off the RECEIVED side after the spread instead, and is never summed with `solver_fee`.
 
 with `safety_bps` chosen by the client (suggested default: 50). The cushion absorbs feed movement and observation divergence between funding and fill: maker and solver read the same URL at different moments, and the solver's fill-time check runs against its own reading. A larger cushion fills more reliably at a worse price; zero cushion means any divergence leaves the offer sitting. The reverse direction is symmetric with `1/P`. All arithmetic over scaled integers; no floats near amounts.
 

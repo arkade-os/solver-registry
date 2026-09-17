@@ -5,7 +5,17 @@
 // receive this much". `quoteOffer` only adds the price-feed fetch so the output
 // is ready for createOffer/funding code.
 
-import { isAmount, isSameAssetMarket, type AssetInfo, type Market, type Side } from "./types.ts";
+import {
+  DEFAULT_CORRIDOR,
+  assetIdOf,
+  isAmount,
+  isSameAssetMarket,
+  marketCorridor,
+  type AssetInfo,
+  type Market,
+  type Side,
+  type SolverFee,
+} from "./types.ts";
 import {
   DEFAULT_SAFETY_BPS,
   computeWantAmount,
@@ -83,7 +93,18 @@ export type PlanOfferInput = {
    */
   feedValue?: string | number;
   safetyBps?: number;
+  /** The Service's dust, needed only when the market declares a carrier charge. */
+  carrierSats?: bigint;
 } & OfferAmountInput;
+
+/** Only the ARKADE rail has a carrier: the namespace halves are orthogonal, so
+ * `bolt11:…/asset:…` is a real market and an asset id alone does not imply one. */
+function ridesOnCarrier(market: Market, side: Side): boolean {
+  // `assetIdOf`, not `.id`: a reduced index entry keeps the legacy v0 id there
+  // and the CAIP-19 one in `caip19_id`, which is what `marketCorridor` reads.
+  const id = assetIdOf(side === "base" ? market.base_asset : market.quote_asset) ?? "";
+  return marketCorridor(market, side) === DEFAULT_CORRIDOR && id.includes("/asset:");
+}
 
 function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
   return {
@@ -106,6 +127,13 @@ function resolveOfferAmount(input: { giveAmount?: AmountValue; wantAmount?: Amou
   throw new Error("pass exactly one of giveAmount or wantAmount");
 }
 
+function solverFlatDeposit(fee: SolverFee | undefined, give: Side): bigint {
+  const raw = fee?.flat?.[give];
+  if (raw === undefined) return 0n;
+  if (!isAmount(raw)) throw new Error(`solver_fee.flat.${give} must be a canonical decimal-string amount`);
+  return BigInt(raw);
+}
+
 function ceilDiv(num: bigint, den: bigint): bigint {
   if (den <= 0n) throw new Error("cannot divide by a non-positive denominator");
   return num === 0n ? 0n : (num + den - 1n) / den;
@@ -118,6 +146,7 @@ function depositForWant(input: {
   feeBps: number;
   safetyBps: number;
   feeFlat: bigint;
+  depositCharges: bigint;
 }): bigint {
   // Wanting nothing costs nothing, whatever the fees are — and this must come
   // before the flat fee is added below, or asking for zero would quote the
@@ -134,10 +163,11 @@ function depositForWant(input: {
   // received-side units, via the shared conversion so the two cannot drift.
   const gross =
     input.wantAmount + flatInReceivedUnits(input.feeFlat, input.give, input.price);
+  // Off before the spread, so back on after the division, not inside `gross`.
   if (input.give === "base") {
-    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net);
+    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net) + input.depositCharges;
   }
-  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net);
+  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net) + input.depositCharges;
 }
 
 /**
@@ -171,9 +201,23 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   if (market.fee_flat !== undefined && !isAmount(market.fee_flat)) {
     throw new Error("fee_flat must be a canonical decimal-string amount");
   }
-  const feeFlat = market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
+  // Superseded, never summed — see `Market.solver_fee`.
+  const feeFlat =
+    market.solver_fee !== undefined || market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
+  // Off the DEPOSIT before the spread; an asset on both legs cancels the carrier.
+  const carrierDue =
+    market.charges_delivered_carrier === true &&
+    ridesOnCarrier(market, otherSide(give)) &&
+    !ridesOnCarrier(market, give);
+  // Defaulting to zero here would under-deposit and get the offer refused after
+  // it is funded on chain — the one failure this field exists to prevent.
+  if (carrierDue && input.carrierSats === undefined) {
+    throw new Error("this market charges for the delivered carrier: pass carrierSats (the Service's dust)");
+  }
+  const carrierCharged = carrierDue ? input.carrierSats! : 0n;
+  const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   let price: Rational;
   if (isSameAssetMarket(market)) {
@@ -198,6 +242,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       feeBps: market.fee_bps,
       safetyBps,
       feeFlat,
+      depositCharges,
     });
   } else {
     receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
@@ -208,6 +253,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       feeBps: market.fee_bps,
       safetyBps,
       feeFlat,
+      depositCharges,
     });
   }
 

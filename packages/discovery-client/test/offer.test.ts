@@ -98,6 +98,109 @@ test("displayPrice: survives prices the string form truncates to zero", () => {
   assert.equal(Number(den) / Number(num), 1e9);
 });
 
+test("planOffer: charges a declared carrier only when we deliver the asset", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  const plain = planOffer({ market: arkadeMarket(), ...priced });
+  const charged = planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced });
+  assert.ok(charged.receive.atomic < plain.receive.atomic);
+
+  assert.equal(planOffer({ market: arkadeMarket(), ...priced }).receive.atomic, plain.receive.atomic);
+
+  const giving = { give: "quote" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.equal(
+    planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...giving }).receive.atomic,
+    planOffer({ market: arkadeMarket(), ...giving }).receive.atomic,
+  );
+});
+
+test("planOffer: refuses to price a declared carrier without the Service's dust", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
+  assert.throws(
+    () => planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced }),
+    /carrierSats/,
+  );
+  assert.ok(planOffer({ market: arkadeMarket(), ...priced }).receive.atomic > 0n);
+  assert.ok(
+    planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), ...priced, carrierSats: 330n }).receive
+      .atomic > 0n,
+  );
+});
+
+test("planOffer: charges the carrier on a reduced index entry, whose id is the legacy one", () => {
+  // The reducer puts the v0 id in `id`, so reading it never sees "/asset:".
+  const reduced = { id: "depix", caip19_id: DEPIX_ID, name: "DePix", ticker: "DePix", decimals: 8 };
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.ok(
+    planOffer({ market: arkadeMarket({ quote_asset: reduced, charges_delivered_carrier: true }), ...priced }).receive
+      .atomic < planOffer({ market: arkadeMarket({ quote_asset: reduced }), ...priced }).receive.atomic,
+  );
+});
+
+test("planOffer: charges no carrier when the received asset is not on the arkade rail", () => {
+  // A real market (the namespace halves are orthogonal), but it settles over Lightning.
+  const overLightning = { id: `bolt11:bitcoin/asset:${"4".repeat(68)}`, name: "DePix", ticker: "DePix", decimals: 8 };
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.equal(
+    planOffer({
+      market: arkadeMarket({ quote_asset: overLightning, charges_delivered_carrier: true }),
+      ...priced,
+    }).receive.atomic,
+    planOffer({ market: arkadeMarket({ quote_asset: overLightning }), ...priced }).receive.atomic,
+  );
+});
+
+test("planOffer: wantAmount inverts giveAmount with deposit charges applied", () => {
+  const market = arkadeMarket({
+    solver_fee: { flat: { base: "1000000", quote: "7000000" } },
+    charges_delivered_carrier: true,
+  });
+  for (const give of ["base", "quote"] as const) {
+    const priced = { market, give, feedValue: "377000", carrierSats: 330n };
+    const forward = planOffer({ ...priced, giveAmount: "1" });
+    const back = planOffer({ ...priced, wantAmount: forward.receive.atomic });
+    // Never over-asks; any shortfall is floor/ceil quantisation, not the charges.
+    assert.ok(back.deposit.atomic <= forward.deposit.atomic, `${give} inverse over-asked`);
+    const perReceivedUnit = forward.deposit.atomic / forward.receive.atomic + 1n;
+    assert.ok(forward.deposit.atomic - back.deposit.atomic <= perReceivedUnit, `${give} drifted beyond rounding`);
+  }
+});
+
+test("planOffer: solver_fee supersedes fee_flat rather than adding to it", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
+  const none = planOffer({ market: arkadeMarket(), ...priced }).receive.atomic;
+
+  assert.equal(
+    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: {} }), ...priced }).receive.atomic,
+    none,
+  );
+
+  // The give-base double-count: a base flat fee beside fee_flat must not stack.
+  const only = arkadeMarket({ solver_fee: { flat: { base: "1000000" } } });
+  assert.equal(
+    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: { flat: { base: "1000000" } } }), ...priced })
+      .receive.atomic,
+    planOffer({ market: only, ...priced }).receive.atomic,
+  );
+  assert.ok(planOffer({ market: only, ...priced }).receive.atomic < none);
+});
+
+test("planOffer: solver_fee.flat charges the deposited side and ignores the other", () => {
+  const both = { base: "1000000", quote: "7000000" };
+  for (const give of ["base", "quote"] as const) {
+    const priced = { give, giveAmount: "1", feedValue: "377000" };
+    const deposited = { [give]: both[give] };
+    assert.equal(
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: both } }), ...priced }).receive.atomic,
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic,
+      `only the ${give} flat may apply when depositing ${give}`,
+    );
+    assert.ok(
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic <
+        planOffer({ market: arkadeMarket(), ...priced }).receive.atomic,
+    );
+  }
+});
+
 test("planOffer: names the field when a market's asset decimals are malformed", () => {
   const m = arkadeMarket() as any;
   delete m.quote_asset.decimals;

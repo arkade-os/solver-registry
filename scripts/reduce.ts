@@ -16,6 +16,7 @@ import {
   marketCorridorErrors,
   marketLimitErrors,
   marketNetworkErrors,
+  marketSolverFeeErrors,
 } from "../packages/discovery-client/src/validate.ts";
 import {
   DEFAULT_CORRIDOR,
@@ -100,7 +101,7 @@ export function reduceNetwork(
     if (Array.isArray(card.markets)) {
       for (const [i, market] of card.markets.entries()) {
         const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network)]) {
+        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network), ...marketSolverFeeErrors(m)]) {
           if (message) messages.push(`markets[${i}]: ${message}`);
         }
       }
