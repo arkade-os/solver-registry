@@ -149,6 +149,21 @@ test("planOffer: charges no carrier when the received asset is not on the arkade
   );
 });
 
+test("planOffer: returns the carrier the maker fronted, with no card field gating it", () => {
+  const feed = { feedValue: "377000", giveAmount: "1" };
+  const fronting = { market: arkadeMarket(), give: "quote" as const, ...feed };
+  assert.equal(
+    planOffer({ ...fronting, carrierSats: 330n }).receive.atomic - planOffer(fronting).receive.atomic,
+    330n,
+  );
+
+  const depositingBtc = { market: arkadeMarket(), give: "base" as const, ...feed };
+  assert.equal(
+    planOffer({ ...depositingBtc, carrierSats: 330n }).receive.atomic,
+    planOffer(depositingBtc).receive.atomic,
+  );
+});
+
 test("planOffer: wantAmount inverts giveAmount with deposit charges applied", () => {
   const market = arkadeMarket({
     solver_fee: { base: { flat: "1000000" }, quote: { flat: "7000000" } },
@@ -160,7 +175,8 @@ test("planOffer: wantAmount inverts giveAmount with deposit charges applied", ()
     const back = planOffer({ ...priced, wantAmount: forward.receive.atomic });
     // Never over-asks; any shortfall is floor/ceil quantisation, not the charges.
     assert.ok(back.deposit.atomic <= forward.deposit.atomic, `${give} inverse over-asked`);
-    const perReceivedUnit = forward.deposit.atomic / forward.receive.atomic + 1n;
+    const { num, den } = forward.price;
+    const perReceivedUnit = (give === "quote" ? num / den : den / num) + 1n;
     assert.ok(forward.deposit.atomic - back.deposit.atomic <= perReceivedUnit, `${give} drifted beyond rounding`);
   }
 });

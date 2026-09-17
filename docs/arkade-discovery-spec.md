@@ -208,10 +208,11 @@ For a deposit `D` in base units at price `P`:
 side       = <the side deposited>
 charges    = solver_fee[side].flat + (charges_delivered_carrier ? carrier : 0)
 bps        = solver_fee[side].bps ?? fee_bps
-wantAmount = floor((D - charges) * P * (1 - (bps + safety_bps) / 10000))
+returned   = <deposited an Arkade asset, receiving BTC> ? carrier : 0
+wantAmount = floor((D - charges) * P * (1 - (bps + safety_bps) / 10000)) + returned
 ```
 
-Both charges come off the deposit **before** the spread, matching the solver, and the spread itself is the deposited side's. A card carrying only the superseded `fee_flat` is the exception: it is quote-denominated, so it comes off the RECEIVED side after the spread instead, and is never summed with `solver_fee`.
+Both charges come off the deposit **before** the spread, matching the solver, and the spread itself is the deposited side's. `returned` is the mirror image, and needs no card field: where the maker fronts the carrier and is paid out in BTC, the solver hands that dust back inside the payout unconditionally, so a client derives it from the two legs' asset ids. A card carrying only the superseded `fee_flat` is the exception: it is quote-denominated, so it comes off the RECEIVED side after the spread instead, and is never summed with `solver_fee`.
 
 with `safety_bps` chosen by the client (suggested default: 50). The cushion absorbs feed movement and observation divergence between funding and fill: maker and solver read the same URL at different moments, and the solver's fill-time check runs against its own reading. A larger cushion fills more reliably at a worse price; zero cushion means any divergence leaves the offer sitting. The reverse direction is symmetric with `1/P`. All arithmetic over scaled integers; no floats near amounts.
 

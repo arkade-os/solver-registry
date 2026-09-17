@@ -93,17 +93,19 @@ export type PlanOfferInput = {
    */
   feedValue?: string | number;
   safetyBps?: number;
-  /** The Service's dust, needed only when the market declares a carrier charge. */
+  /** The Service's dust. Required where a carrier charge is declared; omitting it otherwise under-asks. */
   carrierSats?: bigint;
 } & OfferAmountInput;
+
+function isAssetLeg(asset: AssetInfo | undefined): boolean {
+  return (assetIdOf(asset) ?? "").includes("/asset:");
+}
 
 /** Only the ARKADE rail has a carrier: the namespace halves are orthogonal, so
  * `bolt11:…/asset:…` is a real market and an asset id alone does not imply one. */
 function ridesOnCarrier(market: Market, side: Side): boolean {
-  // `assetIdOf`, not `.id`: a reduced index entry keeps the legacy v0 id there
-  // and the CAIP-19 one in `caip19_id`, which is what `marketCorridor` reads.
-  const id = assetIdOf(side === "base" ? market.base_asset : market.quote_asset) ?? "";
-  return marketCorridor(market, side) === DEFAULT_CORRIDOR && id.includes("/asset:");
+  const asset = side === "base" ? market.base_asset : market.quote_asset;
+  return marketCorridor(market, side) === DEFAULT_CORRIDOR && isAssetLeg(asset);
 }
 
 function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
@@ -223,6 +225,10 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   }
   const carrierCharged = carrierDue ? input.carrierSats! : 0n;
   const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
+  // Unconditional, and absent carrierSats only under-asks, which the solver
+  // accepts — so unlike the charge this does not throw.
+  const carrierReturned =
+    ridesOnCarrier(market, give) && !isAssetLeg(receiveAsset) ? (input.carrierSats ?? 0n) : 0n;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   let price: Rational;
   if (isSameAssetMarket(market)) {
@@ -240,19 +246,22 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
 
   if (offerAmount.kind === "give") {
     depositAtomic = inputAmount(offerAmount.value, depositAsset.decimals);
-    receiveAtomic = computeWantAmount({
-      deposit: depositAtomic,
-      give,
-      price,
-      feeBps: solverFeeBps(market, give),
-      safetyBps,
-      feeFlat,
-      depositCharges,
-    });
+    receiveAtomic =
+      computeWantAmount({
+        deposit: depositAtomic,
+        give,
+        price,
+        feeBps: solverFeeBps(market, give),
+        safetyBps,
+        feeFlat,
+        depositCharges,
+      }) + carrierReturned;
   } else {
     receiveAtomic = inputAmount(offerAmount.value, receiveAsset.decimals);
+    // Taken back off before inverting, since the forward direction added it last.
+    const priced = receiveAtomic > carrierReturned ? receiveAtomic - carrierReturned : 0n;
     depositAtomic = depositForWant({
-      wantAmount: receiveAtomic,
+      wantAmount: priced,
       give,
       price,
       feeBps: solverFeeBps(market, give),
