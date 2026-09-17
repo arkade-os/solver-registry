@@ -223,6 +223,11 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   if (carrierDue && input.carrierSats === undefined) {
     throw new Error("this market charges for the delivered carrier: pass carrierSats (the Service's dust)");
   }
+  // Negative would invert both uses — inflating the payout as a charge, shrinking
+  // it as a return. The solver refuses it outright; so does this.
+  if (input.carrierSats !== undefined && input.carrierSats < 0n) {
+    throw new Error(`carrierSats must not be negative, got ${input.carrierSats}`);
+  }
   const carrierCharged = carrierDue ? input.carrierSats! : 0n;
   const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
   // Unconditional, and absent carrierSats only under-asks, which the solver

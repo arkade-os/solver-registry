@@ -113,6 +113,15 @@ test("planOffer: charges a declared carrier only when we deliver the asset", () 
   );
 });
 
+test("planOffer: refuses a negative carrier, which would invert both of its uses", () => {
+  const priced = { give: "quote" as const, giveAmount: "1", feedValue: "377000", carrierSats: -330n };
+  assert.throws(() => planOffer({ market: arkadeMarket(), ...priced }), /carrierSats must not be negative/);
+  assert.throws(
+    () => planOffer({ market: arkadeMarket({ charges_delivered_carrier: true }), give: "base", giveAmount: "1", feedValue: "377000", carrierSats: -330n }),
+    /carrierSats must not be negative/,
+  );
+});
+
 test("planOffer: refuses to price a declared carrier without the Service's dust", () => {
   const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
   assert.throws(
