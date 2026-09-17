@@ -211,7 +211,6 @@ export interface Market {
   max_base_amount: string;
   min_quote_amount: string;
   max_quote_amount: string;
-  /** A pricing input: a client computing offline must net it out as the solver does. */
   charges_delivered_carrier?: boolean;
 }
 

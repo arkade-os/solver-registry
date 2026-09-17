@@ -156,6 +156,7 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "tampered-sig", expect: "sig does not verify" },
   { case: "additional-properties", expect: "must NOT have additional properties" },
   { case: "missing-required", expect: "must have required property" },
+  { case: "solver-fee-bps-mismatch", expect: "solver_fee/bps must equal the market's fee_bps" },
 ];
 
 for (const { case: caseName, expect } of REJECTION_CASES) {
@@ -219,9 +220,8 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
 });
 
 // The reducer copies a market with `...market`, so any field the card admits
-// reaches the index, where `additionalProperties: false` refuses it. Nothing
-// else catches that: goldens carry no optional field and reduce.ts compiles
-// only the card schema, so the skew surfaces at a third-party consumer.
+// reaches the index, where `additionalProperties: false` refuses it. Goldens
+// carry no optional field, so the skew would surface at a third-party consumer.
 test("every market field the card schema admits is carriable by the index schema", () => {
   const read = (n: string) => JSON.parse(readFileSync(join(here, "..", "schema", n), "utf8"));
   const cardProps = Object.keys(read("card.schema.json").properties.markets.items.properties);

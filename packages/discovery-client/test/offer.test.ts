@@ -113,6 +113,19 @@ test("planOffer: charges a declared carrier only when we deliver the asset", () 
   );
 });
 
+test("planOffer: charges no carrier when the received asset is not on the arkade rail", () => {
+  // A real market (the namespace halves are orthogonal), but it settles over Lightning.
+  const overLightning = { id: `bolt11:bitcoin/asset:${"4".repeat(68)}`, name: "DePix", ticker: "DePix", decimals: 8 };
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.equal(
+    planOffer({
+      market: arkadeMarket({ quote_asset: overLightning, charges_delivered_carrier: true }),
+      ...priced,
+    }).receive.atomic,
+    planOffer({ market: arkadeMarket({ quote_asset: overLightning }), ...priced }).receive.atomic,
+  );
+});
+
 test("planOffer: wantAmount inverts giveAmount with deposit charges applied", () => {
   const market = arkadeMarket({
     solver_fee: { flat: { base: "1000000", quote: "7000000" } },

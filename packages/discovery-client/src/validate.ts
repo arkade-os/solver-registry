@@ -256,6 +256,15 @@ const LIMIT_SIDES = [LIMIT_KEYS.base, LIMIT_KEYS.quote] as const;
 
 type LimitKey = (typeof LIMIT_SIDES)[number]["min" | "max"];
 
+/** Shared with the reducer: JSON Schema cannot compare sibling fields, so without
+ * this the registry would list a card its own client then rejects. */
+export function marketSolverFeeErrors(market: { solver_fee?: unknown; fee_bps?: unknown }): string[] {
+  const fee = market.solver_fee;
+  if (!isObject(fee) || fee.bps === undefined) return [];
+  if (fee.bps === market.fee_bps) return [];
+  return [`solver_fee/bps must equal the market's fee_bps`];
+}
+
 /**
  * Cross-field size-limit rules, shared with the reducer (`scripts/reduce.ts`
  * imports this) so CI and clients reject the same cards with the same words:
@@ -412,21 +421,14 @@ export function marketNetworkErrors(
 const SOLVER_FEE_KEYS = new Set(["bps", "flat"]);
 const SOLVER_FLAT_KEYS = new Set(["base", "quote"]);
 
-/**
- * `bps` must equal `fee_bps` rather than replace it: `fee_bps` stays mandatory
- * for readers predating this field, and two independently-writable copies of
- * the spread would price one way for old clients and another for new.
- */
-function checkSolverFee(errors: string[], path: string, v: unknown, feeBps: unknown, strict: boolean): void {
+/** Shape only; the cross-field `bps` rule lives in `marketSolverFeeErrors`, which the reducer shares. */
+function checkSolverFee(errors: string[], path: string, v: unknown, strict: boolean): void {
   if (!isObject(v)) {
     add(errors, path, "must be an object");
     return;
   }
   if (strict) checkAllowedKeys(errors, path, v, SOLVER_FEE_KEYS);
-  if (v.bps !== undefined) {
-    checkIntRange(errors, `${path}/bps`, v.bps, 0, 10000);
-    if (v.bps !== feeBps) add(errors, `${path}/bps`, "must equal the market's fee_bps");
-  }
+  if (v.bps !== undefined) checkIntRange(errors, `${path}/bps`, v.bps, 0, 10000);
   if (v.flat === undefined) return;
   if (!isObject(v.flat)) {
     add(errors, `${path}/flat`, "must be an object");
@@ -501,11 +503,12 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
       "must be a decimal string of quote-asset atomic units",
     );
   }
-  if (v.solver_fee !== undefined) checkSolverFee(errors, `${path}/solver_fee`, v.solver_fee, v.fee_bps, strict);
+  if (v.solver_fee !== undefined) checkSolverFee(errors, `${path}/solver_fee`, v.solver_fee, strict);
   if (v.charges_delivered_carrier !== undefined && typeof v.charges_delivered_carrier !== "boolean") {
     add(errors, `${path}/charges_delivered_carrier`, "must be a boolean");
   }
   for (const message of marketCorridorErrors(v)) add(errors, path, message);
+  for (const message of marketSolverFeeErrors(v)) add(errors, path, message);
 
   // Per-side size bounds, always present as canonical decimal strings; the
   // cross-field rules (min <= max, min >= 1 when enabled, one side enabled)

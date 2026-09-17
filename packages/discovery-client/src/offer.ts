@@ -6,8 +6,10 @@
 // is ready for createOffer/funding code.
 
 import {
+  DEFAULT_CORRIDOR,
   isAmount,
   isSameAssetMarket,
+  marketCorridor,
   type AssetInfo,
   type Market,
   type Side,
@@ -94,8 +96,15 @@ export type PlanOfferInput = {
   carrierSats?: bigint;
 } & OfferAmountInput;
 
-function isArkadeAsset(asset: AssetInfo): boolean {
-  return asset.id.includes("/asset:");
+/**
+ * Does this side ride on a dust carrier? Only on the ARKADE rail.
+ *
+ * The two namespace halves are orthogonal — `bolt11:…/asset:…` is a real
+ * market (see ASSET_ID_FORMS) — so an asset id alone does not imply a carrier.
+ */
+function ridesOnCarrier(market: Market, side: Side): boolean {
+  const asset = side === "base" ? market.base_asset : market.quote_asset;
+  return marketCorridor(market, side) === DEFAULT_CORRIDOR && (asset?.id ?? "").includes("/asset:");
 }
 
 function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
@@ -200,7 +209,9 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   const receiveAsset = give === "base" ? quote : base;
   // Off the DEPOSIT before the spread; an asset on both legs cancels the carrier.
   const carrierCharged =
-    market.charges_delivered_carrier === true && isArkadeAsset(receiveAsset) && !isArkadeAsset(depositAsset)
+    market.charges_delivered_carrier === true &&
+    ridesOnCarrier(market, otherSide(give)) &&
+    !ridesOnCarrier(market, give)
       ? (input.carrierSats ?? 0n)
       : 0n;
   const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
