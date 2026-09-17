@@ -15,6 +15,18 @@ function usage() {
   console.error("Usage: npm run release:client -- <patch|minor|major>");
 }
 
+// `npm` on Windows is a `.cmd` shim, which spawnSync cannot resolve without a
+// shell — it fails ENOENT with a null status. NOT applied to `git`, which is a
+// real executable and whose commit message would be split on its spaces.
+const needsShell = (command) => command === "npm" && process.platform === "win32";
+
+/** Exits loudly on a command that never started, which a bare status check reads as a plain failure. */
+function failIfUnstarted(command, result) {
+  if (!result.error) return;
+  console.error(`\n${command} failed to start: ${result.error.message}`);
+  process.exit(1);
+}
+
 function run(command, args, cwd = rootDir) {
   const where = relative(rootDir, cwd) || ".";
   console.log(`\n$ (${where}) ${command} ${args.join(" ")}`);
@@ -22,7 +34,9 @@ function run(command, args, cwd = rootDir) {
     cwd,
     env: process.env,
     stdio: "inherit",
+    shell: needsShell(command),
   });
+  failIfUnstarted(command, result);
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -32,9 +46,11 @@ function capture(command, args, cwd = rootDir) {
     env: process.env,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    shell: needsShell(command),
   });
+  failIfUnstarted(command, result);
   if (result.status !== 0) {
-    process.stderr.write(result.stderr);
+    process.stderr.write(result.stderr ?? "");
     process.exit(result.status ?? 1);
   }
   return result.stdout.trim();
