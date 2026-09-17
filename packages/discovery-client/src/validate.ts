@@ -237,6 +237,8 @@ const MARKET_KEYS = new Set([
   "price_decimals",
   "fee_bps",
   "fee_flat",
+  "fee_flat_base",
+  "methods",
   "min_base_amount",
   "max_base_amount",
   "min_quote_amount",
@@ -249,6 +251,48 @@ const LEGACY_MARKET_KEYS = new Set([
   "base_corridor",
   "quote_corridor",
 ]);
+
+const METHOD_NAMES = ["rfq", "offer"] as const;
+const METHOD_KEYS = new Set<string>([
+  "min_base_amount",
+  "max_base_amount",
+  "min_quote_amount",
+  "max_quote_amount",
+  "charges_delivered_carrier",
+]);
+
+/** Absent is UNDECLARED, never none: cards predating the field omit it. */
+function checkMarketMethods(errors: string[], path: string, v: unknown, strict: boolean): void {
+  if (!isObject(v)) {
+    add(errors, path, "must be an object");
+    return;
+  }
+  if (strict) checkAllowedKeys(errors, path, v, new Set<string>(METHOD_NAMES));
+  if (Object.keys(v).length === 0) add(errors, path, "must declare at least one method");
+  for (const name of METHOD_NAMES) {
+    const method = v[name];
+    if (method === undefined) continue;
+    const here = `${path}/${name}`;
+    if (!isObject(method)) {
+      add(errors, here, "must be an object");
+      continue;
+    }
+    if (strict) checkAllowedKeys(errors, here, method, METHOD_KEYS);
+    for (const side of LIMIT_SIDES) {
+      for (const key of [side.min, side.max] as const) {
+        if (method[key] === undefined) continue;
+        checkPattern(errors, `${here}/${key}`, method[key], AMOUNT_PATTERN, "must be a canonical decimal amount");
+      }
+    }
+    if (method.charges_delivered_carrier !== undefined) {
+      if (typeof method.charges_delivered_carrier !== "boolean") {
+        add(errors, `${here}/charges_delivered_carrier`, "must be a boolean");
+      }
+      // An RFQ quote carries the carrier itself; a second source could disagree.
+      if (name === "rfq") add(errors, `${here}/charges_delivered_carrier`, "is meaningful only on offer");
+    }
+  }
+}
 
 const LIMIT_SIDES = [LIMIT_KEYS.base, LIMIT_KEYS.quote] as const;
 
@@ -463,6 +507,16 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
       "must be a decimal string of quote-asset atomic units",
     );
   }
+  if (v.fee_flat_base !== undefined) {
+    checkPattern(
+      errors,
+      `${path}/fee_flat_base`,
+      v.fee_flat_base,
+      AMOUNT_PATTERN,
+      "must be a decimal string of base-asset atomic units",
+    );
+  }
+  if (v.methods !== undefined) checkMarketMethods(errors, `${path}/methods`, v.methods, strict);
   for (const message of marketCorridorErrors(v)) add(errors, path, message);
 
   // Per-side size bounds, always present as canonical decimal strings; the

@@ -140,6 +140,49 @@
       "type": "string",
       "pattern": "^[1-9][0-9]{0,29}$",
       "description": "An amount that is strictly positive: the side it bounds is enabled."
+    },
+    "marketMethod": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How one negotiation method serves a market. The object may be empty: its PRESENCE is what declares the method served, and the per-method bounds are optional. State them only where this method's bounds differ from the market-level ones, so a client can size an order without discovering the difference by being refused.",
+      "properties": {
+            "min_base_amount": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/amount"
+                }
+              ],
+              "description": "This method's own lower bound for the base side, in base-asset atomic units. Overrides the market-level bound for this method only; absent means the market-level bound applies. The same rules hold: an enabled side has 1 <= min <= max, and a max of \"0\" disables the side for this method."
+            },
+            "max_base_amount": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/amount"
+                }
+              ],
+              "description": "This method's own upper bound for the base side, in base-asset atomic units. Overrides the market-level bound for this method only; absent means the market-level bound applies. The same rules hold: an enabled side has 1 <= min <= max, and a max of \"0\" disables the side for this method."
+            },
+            "min_quote_amount": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/amount"
+                }
+              ],
+              "description": "This method's own lower bound for the quote side, in quote-asset atomic units. Overrides the market-level bound for this method only; absent means the market-level bound applies. The same rules hold: an enabled side has 1 <= min <= max, and a max of \"0\" disables the side for this method."
+            },
+            "max_quote_amount": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/amount"
+                }
+              ],
+              "description": "This method's own upper bound for the quote side, in quote-asset atomic units. Overrides the market-level bound for this method only; absent means the market-level bound applies. The same rules hold: an enabled side has 1 <= min <= max, and a max of \"0\" disables the side for this method."
+            },
+            "charges_delivered_carrier": {
+              "type": "boolean",
+              "description": "Whether this solver charges the maker for the dust carrier it delivers when the maker receives an Arkade asset. Meaningful only under \"offer\" and MUST be absent under \"rfq\", where the quote states the carrier in its own carrier_sats field. The AMOUNT is deliberately not published: it is the Arkade Service's dust, and an offer's covenant binds both parties to the same Service, so a maker reads the live figure from that Service rather than from a card that can be cached. What a maker cannot learn anywhere else is whether THIS solver charges it — and being charged undeclared means an offer priced off this card is refused after it has already been funded on chain."
+            }
+      }
     }
   },
   "properties": {
@@ -280,6 +323,28 @@
               }
             ],
             "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Quote-asset in both directions, matching min_quote_amount/max_quote_amount, so a client converts it through the price when the maker receives base. Note that fee_bps alone is therefore not a ranking key: a market with a lower spread and a flat fee can be dearer at small sizes and cheaper at large ones."
+          },
+          "methods": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "description": "Which negotiation methods serve this market. OPTIONAL; absent means UNDECLARED rather than none, so a client must probe — the behaviour of every card written before this field existed. A key's presence declares that method served: \"rfq\" that the solver answers a directed rfq_request at the card's discovery_pubkey over its transports, \"offer\" that it fills offer packets funded on chain without prior negotiation. Declaring matters because the two fail differently: an rfq_request for an unserved market is refused in one round trip, while an offer packet for one is funded ON CHAIN first and then ignored, leaving the maker to cancel a deposit no solver will take.",
+            "properties": {
+              "rfq": {
+                "$ref": "#/definitions/marketMethod"
+              },
+              "offer": {
+                "$ref": "#/definitions/marketMethod"
+              }
+            }
+          },
+          "fee_flat_base": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/amount"
+              }
+            ],
+            "description": "The part of the price that does not scale with size, in BASE-asset atomic units, charged when the maker's input is the base side. OPTIONAL; absent means none. Complements fee_flat rather than replacing it: fee_flat is quote-denominated in both directions, so a naturally base-denominated charge can only be published there by converting it through the price — and that conversion is stale the moment the price moves. A solver with a base-input flat fee therefore has no way to advertise it at all today."
           },
           "min_base_amount": {
             "allOf": [

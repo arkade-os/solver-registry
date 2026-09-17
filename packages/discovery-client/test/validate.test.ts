@@ -173,6 +173,40 @@ test("validateCard: accepts a market carrying fee_flat, and one omitting it", ()
   assert.equal(validateCard(validCard()).ok, true);
 });
 
+test("validateCard: accepts a market carrying fee_flat_base, and one omitting it", () => {
+  // fee_flat is quote-denominated both ways, so a base-input charge has nowhere else to go.
+  const c = validCard();
+  c.markets[0].fee_flat_base = "330";
+  assert.equal(validateCard(c).ok, true, JSON.stringify(validateCard(c).errors));
+  assert.equal(validateCard(validCard()).ok, true);
+});
+
+test("validateCard: methods declares which negotiation methods serve a market", () => {
+  // Absent is UNDECLARED: absence must stay valid or the whole directory fails.
+  assert.equal(validateCard(validCard()).ok, true);
+
+  const both = validCard();
+  both.markets[0].methods = { rfq: {}, offer: {} };
+  assert.equal(validateCard(both).ok, true, JSON.stringify(validateCard(both).errors));
+
+  // Market-level bounds are the union, so a method may narrow them.
+  const narrowed = validCard();
+  narrowed.markets[0].methods = { offer: { min_base_amount: "5000", max_base_amount: "10000" } };
+  assert.equal(validateCard(narrowed).ok, true, JSON.stringify(validateCard(narrowed).errors));
+});
+
+test("validateCard: charges_delivered_carrier belongs to offer, not rfq", () => {
+  const offered = validCard();
+  offered.markets[0].methods = { offer: { charges_delivered_carrier: true } };
+  assert.equal(validateCard(offered).ok, true, JSON.stringify(validateCard(offered).errors));
+
+  const onRfq = validCard();
+  onRfq.markets[0].methods = { rfq: { charges_delivered_carrier: true } };
+  const r = validateCard(onRfq);
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(" "), /charges_delivered_carrier/);
+});
+
 test("validateCard: accepts an optionally signed card", () => {
   const c = validCard();
   c.discovery_pubkey = "d".repeat(64);
@@ -459,6 +493,10 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },
   { name: "missing required", mutate: (c) => delete c.markets[0].fee_bps, expect: /fee_bps/ },
   { name: "non-canonical fee_flat", mutate: (c) => (c.markets[0].fee_flat = "01"), expect: /fee_flat/ },
+  { name: "non-canonical fee_flat_base", mutate: (c) => (c.markets[0].fee_flat_base = "01"), expect: /fee_flat_base/ },
+  { name: "empty methods", mutate: (c) => (c.markets[0].methods = {}), expect: /methods/ },
+  { name: "unknown method name", mutate: (c) => (c.markets[0].methods = { swap: {} }), expect: /methods/ },
+  { name: "non-boolean carrier charge", mutate: (c) => (c.markets[0].methods = { offer: { charges_delivered_carrier: "yes" } }), expect: /charges_delivered_carrier/ },
   { name: "negative fee_flat", mutate: (c) => (c.markets[0].fee_flat = "-1"), expect: /fee_flat/ },
 ];
 

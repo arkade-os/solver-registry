@@ -183,6 +183,8 @@ export interface Market {
    * existing card.
    */
   fee_flat?: string;
+  /** Flat fee in BASE atomic units. `fee_flat` is quote-denominated both ways, so it cannot carry this. */
+  fee_flat_base?: string;
   /**
    * Per-side trade-size bounds as decimal strings of that side's atomic units
    * (see {@link AMOUNT_PATTERN}), always present. `max = "0"` disables the
@@ -194,6 +196,24 @@ export interface Market {
   max_base_amount: string;
   min_quote_amount: string;
   max_quote_amount: string;
+  /** Absent is UNDECLARED, not none. An offer packet for an unserved market is funded ON CHAIN first. */
+  methods?: MarketMethods;
+}
+
+/** May be empty: PRESENCE declares the method served; bounds override the union. */
+export interface MarketMethod {
+  min_base_amount?: string;
+  max_base_amount?: string;
+  min_quote_amount?: string;
+  max_quote_amount?: string;
+  /** `offer` only; the amount is the Service's dust, so only the policy needs publishing. */
+  charges_delivered_carrier?: boolean;
+}
+
+/** `rfq`: directed request at `discovery_pubkey`. `offer`: packets funded on chain. */
+export interface MarketMethods {
+  rfq?: MarketMethod;
+  offer?: MarketMethod;
 }
 
 /**
