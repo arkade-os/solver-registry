@@ -173,11 +173,17 @@ test("validateCard: accepts a market carrying fee_flat, and one omitting it", ()
   assert.equal(validateCard(validCard()).ok, true);
 });
 
-test("validateCard: accepts a market carrying fee_flat_base, and one omitting it", () => {
-  // fee_flat is quote-denominated both ways, so a base-input charge has nowhere else to go.
+test("validateCard: accepts solver_fee, including alongside the fee_flat it supersedes", () => {
   const c = validCard();
-  c.markets[0].fee_flat_base = "330";
+  c.markets[0].solver_fee = { bps: 30, flat: { base: "330", quote: "50" } };
   assert.equal(validateCard(c).ok, true, JSON.stringify(validateCard(c).errors));
+
+  c.markets[0].fee_flat = "50";
+  assert.equal(validateCard(c).ok, true, JSON.stringify(validateCard(c).errors));
+
+  const partial = validCard();
+  partial.markets[0].solver_fee = { flat: { base: "330" } };
+  assert.equal(validateCard(partial).ok, true, JSON.stringify(validateCard(partial).errors));
   assert.equal(validateCard(validCard()).ok, true);
 });
 
@@ -474,7 +480,22 @@ const CARD_REJECTIONS: Array<{ name: string; mutate: (c: any) => void; expect: R
   { name: "empty markets", mutate: (c) => (c.markets = []), expect: /markets/ },
   { name: "missing required", mutate: (c) => delete c.markets[0].fee_bps, expect: /fee_bps/ },
   { name: "non-canonical fee_flat", mutate: (c) => (c.markets[0].fee_flat = "01"), expect: /fee_flat/ },
-  { name: "non-canonical fee_flat_base", mutate: (c) => (c.markets[0].fee_flat_base = "01"), expect: /fee_flat_base/ },
+  {
+    name: "non-canonical solver_fee flat",
+    mutate: (c) => (c.markets[0].solver_fee = { flat: { base: "01" } }),
+    expect: /solver_fee\/flat\/base/,
+  },
+  {
+    name: "solver_fee bps disagreeing with fee_bps",
+    mutate: (c) => (c.markets[0].solver_fee = { bps: 31 }),
+    expect: /solver_fee\/bps/,
+  },
+  {
+    name: "unknown solver_fee key",
+    mutate: (c) => (c.markets[0].solver_fee = { fixed: { base: "330" } }),
+    expect: /solver_fee\/fixed/,
+  },
+  { name: "solver_fee not an object", mutate: (c) => (c.markets[0].solver_fee = "30"), expect: /solver_fee/ },
   {
     name: "non-boolean carrier charge",
     mutate: (c) => (c.markets[0].charges_delivered_carrier = "yes"),

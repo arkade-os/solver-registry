@@ -133,8 +133,7 @@ export interface WantAmountInput {
    * price; see the note in the body about which way that rounds.
    */
   feeFlat?: bigint | number | string;
-  /** `fee_flat_base` plus any charged carrier, in DEPOSITED units, netted by the
-   * caller. Off before the spread, matching the solver — unlike `feeFlat`. */
+  /** In DEPOSITED units, netted by the caller. Off before the spread, matching the solver — unlike `feeFlat`. */
   depositCharges?: bigint | number | string;
 }
 

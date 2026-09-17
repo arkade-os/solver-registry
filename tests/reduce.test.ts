@@ -218,6 +218,19 @@ test("the schemas' asset definitions match the client's ASSET_KEYS and decimals 
   assert.equal(card.definitions.legacyAsset.properties.id.pattern, LEGACY_ASSET_ID.source);
 });
 
+// The reducer copies a market with `...market`, so any field the card admits
+// reaches the index, where `additionalProperties: false` refuses it. Nothing
+// else catches that: goldens carry no optional field and reduce.ts compiles
+// only the card schema, so the skew surfaces at a third-party consumer.
+test("every market field the card schema admits is carriable by the index schema", () => {
+  const read = (n: string) => JSON.parse(readFileSync(join(here, "..", "schema", n), "utf8"));
+  const cardProps = Object.keys(read("card.schema.json").properties.markets.items.properties);
+  const indexItems = read("index.schema.json").properties.markets.items;
+  assert.equal(indexItems.additionalProperties, false, "guard assumes the index closes its market object");
+  const missing = cardProps.filter((k) => !(k in indexItems.properties));
+  assert.deepEqual(missing, [], `card market fields the index schema would reject: ${missing.join(", ")}`);
+});
+
 test("card schema accepts both complete market shapes but rejects a hybrid", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   addFormats(ajv);

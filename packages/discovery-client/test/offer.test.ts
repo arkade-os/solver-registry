@@ -113,6 +113,42 @@ test("planOffer: charges a declared carrier only when we deliver the asset", () 
   );
 });
 
+test("planOffer: solver_fee supersedes fee_flat rather than adding to it", () => {
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
+  const none = planOffer({ market: arkadeMarket(), ...priced }).receive.atomic;
+
+  assert.equal(
+    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: {} }), ...priced }).receive.atomic,
+    none,
+  );
+
+  // The give-base double-count: a base flat fee beside fee_flat must not stack.
+  const only = arkadeMarket({ solver_fee: { flat: { base: "1000000" } } });
+  assert.equal(
+    planOffer({ market: arkadeMarket({ fee_flat: "5000", solver_fee: { flat: { base: "1000000" } } }), ...priced })
+      .receive.atomic,
+    planOffer({ market: only, ...priced }).receive.atomic,
+  );
+  assert.ok(planOffer({ market: only, ...priced }).receive.atomic < none);
+});
+
+test("planOffer: solver_fee.flat charges the deposited side and ignores the other", () => {
+  const both = { base: "1000000", quote: "7000000" };
+  for (const give of ["base", "quote"] as const) {
+    const priced = { give, giveAmount: "1", feedValue: "377000" };
+    const deposited = { [give]: both[give] };
+    assert.equal(
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: both } }), ...priced }).receive.atomic,
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic,
+      `only the ${give} flat may apply when depositing ${give}`,
+    );
+    assert.ok(
+      planOffer({ market: arkadeMarket({ solver_fee: { flat: deposited } }), ...priced }).receive.atomic <
+        planOffer({ market: arkadeMarket(), ...priced }).receive.atomic,
+    );
+  }
+});
+
 test("planOffer: names the field when a market's asset decimals are malformed", () => {
   const m = arkadeMarket() as any;
   delete m.quote_asset.decimals;

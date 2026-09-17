@@ -5,7 +5,14 @@
 // receive this much". `quoteOffer` only adds the price-feed fetch so the output
 // is ready for createOffer/funding code.
 
-import { isAmount, isSameAssetMarket, type AssetInfo, type Market, type Side } from "./types.ts";
+import {
+  isAmount,
+  isSameAssetMarket,
+  type AssetInfo,
+  type Market,
+  type Side,
+  type SolverFee,
+} from "./types.ts";
 import {
   DEFAULT_SAFETY_BPS,
   computeWantAmount,
@@ -112,6 +119,13 @@ function resolveOfferAmount(input: { giveAmount?: AmountValue; wantAmount?: Amou
   throw new Error("pass exactly one of giveAmount or wantAmount");
 }
 
+function solverFlatDeposit(fee: SolverFee | undefined, give: Side): bigint {
+  const raw = fee?.flat?.[give];
+  if (raw === undefined) return 0n;
+  if (!isAmount(raw)) throw new Error(`solver_fee.flat.${give} must be a canonical decimal-string amount`);
+  return BigInt(raw);
+}
+
 function ceilDiv(num: bigint, den: bigint): bigint {
   if (den <= 0n) throw new Error("cannot divide by a non-positive denominator");
   return num === 0n ? 0n : (num + den - 1n) / den;
@@ -179,10 +193,9 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
   if (market.fee_flat !== undefined && !isAmount(market.fee_flat)) {
     throw new Error("fee_flat must be a canonical decimal-string amount");
   }
-  const feeFlat = market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
-  if (market.fee_flat_base !== undefined && !isAmount(market.fee_flat_base)) {
-    throw new Error("fee_flat_base must be a canonical decimal-string amount");
-  }
+  // Superseded, never summed — see `Market.solver_fee`.
+  const feeFlat =
+    market.solver_fee !== undefined || market.fee_flat === undefined ? 0n : BigInt(market.fee_flat);
   const depositAsset = give === "base" ? base : quote;
   const receiveAsset = give === "base" ? quote : base;
   // Off the DEPOSIT before the spread; an asset on both legs cancels the carrier.
@@ -190,8 +203,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
     market.charges_delivered_carrier === true && isArkadeAsset(receiveAsset) && !isArkadeAsset(depositAsset)
       ? (input.carrierSats ?? 0n)
       : 0n;
-  const feeFlatBase = give === "base" && market.fee_flat_base !== undefined ? BigInt(market.fee_flat_base) : 0n;
-  const depositCharges = feeFlatBase + carrierCharged;
+  const depositCharges = solverFlatDeposit(market.solver_fee, give) + carrierCharged;
   const safetyBps = input.safetyBps ?? DEFAULT_SAFETY_BPS;
   let price: Rational;
   if (isSameAssetMarket(market)) {

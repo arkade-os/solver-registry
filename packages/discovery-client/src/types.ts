@@ -141,6 +141,21 @@ export const LIMIT_KEYS = {
   quote: { min: "min_quote_amount", max: "max_quote_amount" },
 } as const;
 
+export interface SolverFee {
+  /** MUST equal the market's `fee_bps` when present, so the two cannot drift. */
+  bps?: number;
+  flat?: SolverFlatFee;
+}
+
+/**
+ * Keyed by the side the maker DEPOSITS, in that side's atomic units. Exactly one
+ * applies per swap — the selection a quote-denominated `fee_flat` cannot express.
+ */
+export interface SolverFlatFee {
+  base?: string;
+  quote?: string;
+}
+
 /** A single market as advertised by a solver. */
 export interface Market {
   /** @deprecated Legacy v0 display label; canonical cards derive it from the two asset ids. */
@@ -183,8 +198,8 @@ export interface Market {
    * existing card.
    */
   fee_flat?: string;
-  /** Flat fee in BASE atomic units. `fee_flat` is quote-denominated both ways, so it cannot carry this. */
-  fee_flat_base?: string;
+  /** SUPERSEDES `fee_flat`, never sums with it — so a card mid-migration may carry both. */
+  solver_fee?: SolverFee;
   /**
    * Per-side trade-size bounds as decimal strings of that side's atomic units
    * (see {@link AMOUNT_PATTERN}), always present. `max = "0"` disables the

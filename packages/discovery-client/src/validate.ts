@@ -237,7 +237,7 @@ const MARKET_KEYS = new Set([
   "price_decimals",
   "fee_bps",
   "fee_flat",
-  "fee_flat_base",
+  "solver_fee",
   "charges_delivered_carrier",
   "min_base_amount",
   "max_base_amount",
@@ -409,6 +409,42 @@ export function marketNetworkErrors(
   return errors;
 }
 
+const SOLVER_FEE_KEYS = new Set(["bps", "flat"]);
+const SOLVER_FLAT_KEYS = new Set(["base", "quote"]);
+
+/**
+ * `bps` must equal `fee_bps` rather than replace it: `fee_bps` stays mandatory
+ * for readers predating this field, and two independently-writable copies of
+ * the spread would price one way for old clients and another for new.
+ */
+function checkSolverFee(errors: string[], path: string, v: unknown, feeBps: unknown, strict: boolean): void {
+  if (!isObject(v)) {
+    add(errors, path, "must be an object");
+    return;
+  }
+  if (strict) checkAllowedKeys(errors, path, v, SOLVER_FEE_KEYS);
+  if (v.bps !== undefined) {
+    checkIntRange(errors, `${path}/bps`, v.bps, 0, 10000);
+    if (v.bps !== feeBps) add(errors, `${path}/bps`, "must equal the market's fee_bps");
+  }
+  if (v.flat === undefined) return;
+  if (!isObject(v.flat)) {
+    add(errors, `${path}/flat`, "must be an object");
+    return;
+  }
+  if (strict) checkAllowedKeys(errors, `${path}/flat`, v.flat, SOLVER_FLAT_KEYS);
+  for (const side of ["base", "quote"] as const) {
+    if (v.flat[side] === undefined) continue;
+    checkPattern(
+      errors,
+      `${path}/flat/${side}`,
+      v.flat[side],
+      AMOUNT_PATTERN,
+      `must be a decimal string of ${side}-asset atomic units`,
+    );
+  }
+}
+
 /**
  * Validate the market fields common to cards and index entries. Unknown keys
  * are rejected only when `strict` is set (cards); index consumers stay
@@ -465,15 +501,7 @@ function checkMarket(errors: string[], path: string, v: unknown, strict: boolean
       "must be a decimal string of quote-asset atomic units",
     );
   }
-  if (v.fee_flat_base !== undefined) {
-    checkPattern(
-      errors,
-      `${path}/fee_flat_base`,
-      v.fee_flat_base,
-      AMOUNT_PATTERN,
-      "must be a decimal string of base-asset atomic units",
-    );
-  }
+  if (v.solver_fee !== undefined) checkSolverFee(errors, `${path}/solver_fee`, v.solver_fee, v.fee_bps, strict);
   if (v.charges_delivered_carrier !== undefined && typeof v.charges_delivered_carrier !== "boolean") {
     add(errors, `${path}/charges_delivered_carrier`, "must be a boolean");
   }

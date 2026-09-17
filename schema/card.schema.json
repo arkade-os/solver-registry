@@ -281,13 +281,41 @@
             ],
             "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Quote-asset in both directions, matching min_quote_amount/max_quote_amount, so a client converts it through the price when the maker receives base. Note that fee_bps alone is therefore not a ranking key: a market with a lower spread and a flat fee can be dearer at small sizes and cheaper at large ones."
           },
-          "fee_flat_base": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/amount"
+          "solver_fee": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bps": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000,
+                "description": "The spread. MUST equal this market's fee_bps when present. It does not replace fee_bps, which stays required for readers predating this field; two independently-writable copies of the spread would let one card price differently for old and new clients."
+              },
+              "flat": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "base": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ],
+                    "description": "Charged when the maker DEPOSITS the base asset, in base-asset atomic units."
+                  },
+                  "quote": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ],
+                    "description": "Charged when the maker DEPOSITS the quote asset, in quote-asset atomic units."
+                  }
+                },
+                "description": "The part of the price that does not scale with size, keyed by the side the maker DEPOSITS. Exactly one key applies per swap — the solver selects by direction and denominates in the input — so the two are alternatives, never a sum, and neither needs converting through the price."
               }
-            ],
-            "description": "The part of the price that does not scale with size, in BASE-asset atomic units, charged when the maker's input is the base side. OPTIONAL; absent means none. Complements fee_flat rather than replacing it: fee_flat is quote-denominated in both directions, so a naturally base-denominated charge can only be published there by converting it through the price — and that conversion is stale the moment the price moves. A solver with a base-input flat fee therefore has no way to advertise it at all today."
+            },
+            "description": "The solver's whole fee as one object: an additive spread plus a size-independent part, taken off the deposit before the spread. SUPERSEDES fee_flat where present and is never summed with it, so a card mid-migration may carry both and a reader predating this field still prices from fee_flat. OPTIONAL; absent means fee_bps/fee_flat alone."
           },
           "charges_delivered_carrier": {
             "type": "boolean",

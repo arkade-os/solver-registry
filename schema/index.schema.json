@@ -226,6 +226,42 @@
             ],
             "description": "The part of the price that does not scale with size, in quote-asset atomic units. OPTIONAL; absent means none. Carried through from the solver's card unchanged."
           },
+          "solver_fee": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bps": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              "flat": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "base": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ]
+                  },
+                  "quote": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/amount"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "description": "The solver's whole fee, keyed by the side the maker DEPOSITS. SUPERSEDES fee_flat where present and is never summed with it. OPTIONAL. Carried through from the solver's card unchanged."
+          },
+          "charges_delivered_carrier": {
+            "type": "boolean",
+            "description": "Whether the solver charges the maker for the dust carrier it delivers when the maker RECEIVES an Arkade asset. A pricing input, not a fee. OPTIONAL; absent means it does not charge. Carried through from the solver's card unchanged."
+          },
           "min_base_amount": {
             "allOf": [
               {
