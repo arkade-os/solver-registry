@@ -205,8 +205,11 @@ There is no liveness signal in v0 for spot markets: those solvers are not public
 For a deposit `D` in base units at price `P`:
 
 ```
-wantAmount = floor(D * P * (1 - (fee_bps + safety_bps) / 10000))
+charges    = solver_fee.flat[<side deposited>] + (charges_delivered_carrier ? carrier : 0)
+wantAmount = floor((D - charges) * P * (1 - (fee_bps + safety_bps) / 10000))
 ```
+
+Both charges come off the deposit **before** the spread, matching the solver. A card carrying only the superseded `fee_flat` is the exception: it is quote-denominated, so it comes off the RECEIVED side after the spread instead, and is never summed with `solver_fee`.
 
 with `safety_bps` chosen by the client (suggested default: 50). The cushion absorbs feed movement and observation divergence between funding and fill: maker and solver read the same URL at different moments, and the solver's fill-time check runs against its own reading. A larger cushion fills more reliably at a worse price; zero cushion means any divergence leaves the offer sitting. The reverse direction is symmetric with `1/P`. All arithmetic over scaled integers; no floats near amounts.
 

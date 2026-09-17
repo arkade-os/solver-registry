@@ -126,6 +126,16 @@ test("planOffer: refuses to price a declared carrier without the Service's dust"
   );
 });
 
+test("planOffer: charges the carrier on a reduced index entry, whose id is the legacy one", () => {
+  // The reducer puts the v0 id in `id`, so reading it never sees "/asset:".
+  const reduced = { id: "depix", caip19_id: DEPIX_ID, name: "DePix", ticker: "DePix", decimals: 8 };
+  const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000", carrierSats: 330n };
+  assert.ok(
+    planOffer({ market: arkadeMarket({ quote_asset: reduced, charges_delivered_carrier: true }), ...priced }).receive
+      .atomic < planOffer({ market: arkadeMarket({ quote_asset: reduced }), ...priced }).receive.atomic,
+  );
+});
+
 test("planOffer: charges no carrier when the received asset is not on the arkade rail", () => {
   // A real market (the namespace halves are orthogonal), but it settles over Lightning.
   const overLightning = { id: `bolt11:bitcoin/asset:${"4".repeat(68)}`, name: "DePix", ticker: "DePix", decimals: 8 };

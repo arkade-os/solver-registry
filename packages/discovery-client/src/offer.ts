@@ -7,6 +7,7 @@
 
 import {
   DEFAULT_CORRIDOR,
+  assetIdOf,
   isAmount,
   isSameAssetMarket,
   marketCorridor,
@@ -96,15 +97,13 @@ export type PlanOfferInput = {
   carrierSats?: bigint;
 } & OfferAmountInput;
 
-/**
- * Does this side ride on a dust carrier? Only on the ARKADE rail.
- *
- * The two namespace halves are orthogonal — `bolt11:…/asset:…` is a real
- * market (see ASSET_ID_FORMS) — so an asset id alone does not imply a carrier.
- */
+/** Only the ARKADE rail has a carrier: the namespace halves are orthogonal, so
+ * `bolt11:…/asset:…` is a real market and an asset id alone does not imply one. */
 function ridesOnCarrier(market: Market, side: Side): boolean {
-  const asset = side === "base" ? market.base_asset : market.quote_asset;
-  return marketCorridor(market, side) === DEFAULT_CORRIDOR && (asset?.id ?? "").includes("/asset:");
+  // `assetIdOf`, not `.id`: a reduced index entry keeps the legacy v0 id there
+  // and the CAIP-19 one in `caip19_id`, which is what `marketCorridor` reads.
+  const id = assetIdOf(side === "base" ? market.base_asset : market.quote_asset) ?? "";
+  return marketCorridor(market, side) === DEFAULT_CORRIDOR && id.includes("/asset:");
 }
 
 function amount(asset: AssetInfo, atomic: bigint): OfferAmount {
