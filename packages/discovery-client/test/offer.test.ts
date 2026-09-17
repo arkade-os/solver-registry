@@ -113,6 +113,22 @@ test("planOffer: charges a declared carrier only when we deliver the asset", () 
   );
 });
 
+test("planOffer: wantAmount inverts giveAmount with deposit charges applied", () => {
+  const market = arkadeMarket({
+    solver_fee: { flat: { base: "1000000", quote: "7000000" } },
+    charges_delivered_carrier: true,
+  });
+  for (const give of ["base", "quote"] as const) {
+    const priced = { market, give, feedValue: "377000", carrierSats: 330n };
+    const forward = planOffer({ ...priced, giveAmount: "1" });
+    const back = planOffer({ ...priced, wantAmount: forward.receive.atomic });
+    // Never over-asks; any shortfall is floor/ceil quantisation, not the charges.
+    assert.ok(back.deposit.atomic <= forward.deposit.atomic, `${give} inverse over-asked`);
+    const perReceivedUnit = forward.deposit.atomic / forward.receive.atomic + 1n;
+    assert.ok(forward.deposit.atomic - back.deposit.atomic <= perReceivedUnit, `${give} drifted beyond rounding`);
+  }
+});
+
 test("planOffer: solver_fee supersedes fee_flat rather than adding to it", () => {
   const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
   const none = planOffer({ market: arkadeMarket(), ...priced }).receive.atomic;
