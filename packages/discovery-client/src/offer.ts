@@ -128,10 +128,15 @@ function resolveOfferAmount(input: { giveAmount?: AmountValue; wantAmount?: Amou
 }
 
 function solverFlatDeposit(fee: SolverFee | undefined, give: Side): bigint {
-  const raw = fee?.flat?.[give];
+  const raw = fee?.[give]?.flat;
   if (raw === undefined) return 0n;
-  if (!isAmount(raw)) throw new Error(`solver_fee.flat.${give} must be a canonical decimal-string amount`);
+  if (!isAmount(raw)) throw new Error(`solver_fee.${give}.flat must be a canonical decimal-string amount`);
   return BigInt(raw);
+}
+
+function solverFeeBps(market: Market, give: Side): number {
+  const bps = market.solver_fee?.[give]?.bps;
+  return typeof bps === "number" ? bps : market.fee_bps;
 }
 
 function ceilDiv(num: bigint, den: bigint): bigint {
@@ -239,7 +244,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       deposit: depositAtomic,
       give,
       price,
-      feeBps: market.fee_bps,
+      feeBps: solverFeeBps(market, give),
       safetyBps,
       feeFlat,
       depositCharges,
@@ -250,7 +255,7 @@ export function planOffer(input: PlanOfferInput): OfferPlan {
       wantAmount: receiveAtomic,
       give,
       price,
-      feeBps: market.fee_bps,
+      feeBps: solverFeeBps(market, give),
       safetyBps,
       feeFlat,
       depositCharges,

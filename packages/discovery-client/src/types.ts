@@ -141,19 +141,17 @@ export const LIMIT_KEYS = {
   quote: { min: "min_quote_amount", max: "max_quote_amount" },
 } as const;
 
+/** Keyed by the side the maker DEPOSITS, which fixes the units for everything
+ * under it — so `flat` needs no denominator and the spread may differ by direction. */
 export interface SolverFee {
-  /** MUST equal the market's `fee_bps` when present, so the two cannot drift. */
-  bps?: number;
-  flat?: SolverFlatFee;
+  base?: SolverFeeSide;
+  quote?: SolverFeeSide;
 }
 
-/**
- * Keyed by the side the maker DEPOSITS, in that side's atomic units. Exactly one
- * applies per swap — the selection a quote-denominated `fee_flat` cannot express.
- */
-export interface SolverFlatFee {
-  base?: string;
-  quote?: string;
+export interface SolverFeeSide {
+  /** Absent falls back to the market's `fee_bps`. */
+  bps?: number;
+  flat?: string;
 }
 
 /** A single market as advertised by a solver. */
@@ -185,6 +183,10 @@ export interface Market {
    * lower spread and a flat fee can be dearer than a higher-spread one at
    * small sizes and cheaper at large. Rank by the total fee at the size
    * actually being traded.
+   *
+   * What a reader predating `solver_fee` uses, so it MUST be the WIDEST of that
+   * object's spreads: under-stating one has such a reader compute a payout the
+   * solver refuses, after the offer is funded on chain.
    */
   fee_bps: number;
   /**
