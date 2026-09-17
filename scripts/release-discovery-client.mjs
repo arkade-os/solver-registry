@@ -106,7 +106,10 @@ const versionFiles = [
 
 run("git", ["add", ...versionFiles], rootDir);
 run("git", ["commit", "-m", `Release solver discovery v${version}`], rootDir);
-run("git", ["tag", tag], rootDir);
+// Annotated with an explicit message, matching v0.2.3 onwards. A bare
+// `git tag <name>` stalls on an editor wherever `tag.gpgsign` is set, since
+// signing implies annotation — and by then the package is already published.
+run("git", ["tag", "-m", `solver-discovery v${version}`, tag], rootDir);
 run("git", ["push", "origin", "master"], rootDir);
 run("git", ["push", "origin", tag], rootDir);
 
