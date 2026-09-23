@@ -156,14 +156,11 @@ function recordSource(sources: SourceReport[], warnings: string[], report: Sourc
 
 /**
  * Discover markets across the followed registries plus any pinned local cards.
- * Registry failures are isolated; local cards are schema-validated and those
- * that fail (or target another network) are skipped with a warning. A pinned
- * card's markets are down-projected the same way the reducer projects a
- * published index; a market whose ids name another network, or that has no v0
- * asset id, is skipped on its own. Registry index markets are left alone —
- * they are already projected, or they are fixtures. The result is deduped
- * (byte-identical entries collapsed) and ranked per corridor-qualified leg pair by
- * `fee_bps`, with source order as the tiebreak.
+ * Registry failures are isolated; local cards are schema-validated, down-projected
+ * like the index, and skipped with a warning when they fail, target another
+ * network, or have no projectable market. Registry index markets are left alone.
+ * The result is deduped (byte-identical entries collapsed) and ranked per
+ * corridor-qualified leg pair by `fee_bps`, with source order as the tiebreak.
  */
 export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   const network = opts.network ?? DEFAULT_NETWORK;
@@ -209,8 +206,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     const marketWarnings: string[] = [];
     let indexed = 0;
     for (const m of card.markets) {
-      // The reducer rejects the whole card when a market names another
-      // network. A pin is the user's own file, so only that market is skipped.
+      // A pin skips the bad market. The reducer still rejects the whole card.
       const networkErrors = marketNetworkErrors(m, localNetwork);
       if (networkErrors.length > 0) {
         marketWarnings.push(...networkErrors);
