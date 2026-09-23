@@ -419,6 +419,25 @@ export function isSameAssetMarket(market: MarketLike): boolean {
 }
 
 /**
+ * Whether quoting this market goes through the RFQ round trip.
+ *
+ * A corridor market (a side leaves arkade) does. A same-asset market that
+ * stays on arkade does not. A cross-asset spot market does only when the
+ * entry carries a complete rendezvous: a non-empty `discovery_pubkey` and at
+ * least one nostr relay. A pubkey without relays is not RFQ, so a feed-only
+ * card — including what solverd publishes today — stays a spot quote.
+ * {@link isRfqMarket} stays "a side leaves arkade"; both-arkade markets are
+ * not corridor markets.
+ */
+export function quotesOverRfq(market: MarketLike & { discovery_pubkey?: unknown; transports?: unknown }): boolean {
+  if (isRfqMarket(market)) return true;
+  if (isSameAssetMarket(market)) return false;
+  if (typeof market.discovery_pubkey !== "string" || market.discovery_pubkey.length === 0) return false;
+  const relays = (market.transports as { nostr?: { relays?: unknown } } | null | undefined)?.nostr?.relays;
+  return Array.isArray(relays) && relays.length > 0;
+}
+
+/**
  * One side's canonical leg identity. A CAIP-19 side is already complete;
  * during the compatibility window a legacy short id is qualified with its
  * separate corridor so distinct rails never collapse into one key.

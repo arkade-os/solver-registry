@@ -17,7 +17,8 @@ import {
   type NetworkIndex,
   type Side,
 } from "./types.ts";
-import { validateCard, validateIndex } from "./validate.ts";
+import { marketNetworkErrors, validateCard, validateIndex } from "./validate.ts";
+import { indexMarketFromCard } from "./project.ts";
 import { sideLimits } from "./pricing.ts";
 import { fetchText, type FetchLike } from "./feed.ts";
 import { defaultRegistryUrls } from "./registries.ts";
@@ -156,8 +157,12 @@ function recordSource(sources: SourceReport[], warnings: string[], report: Sourc
 /**
  * Discover markets across the followed registries plus any pinned local cards.
  * Registry failures are isolated; local cards are schema-validated and those
- * that fail (or target another network) are skipped with a warning. The result
- * is deduped (byte-identical entries collapsed) and ranked per corridor-qualified leg pair by
+ * that fail (or target another network) are skipped with a warning. A pinned
+ * card's markets are down-projected the same way the reducer projects a
+ * published index; a market whose ids name another network, or that has no v0
+ * asset id, is skipped on its own. Registry index markets are left alone —
+ * they are already projected, or they are fixtures. The result is deduped
+ * (byte-identical entries collapsed) and ranked per corridor-qualified leg pair by
  * `fee_bps`, with source order as the tiebreak.
  */
 export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
@@ -201,13 +206,36 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
       recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
       continue;
     }
+    const marketWarnings: string[] = [];
+    let indexed = 0;
     for (const m of card.markets) {
-      const entry: IndexMarket = { ...m, solver: card.name };
-      if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-      if (card.transports) entry.transports = card.transports;
-      tagged.push({ market: entry, source, sourceType: "local" });
+      // The reducer rejects the whole card when a market names another
+      // network. A pin is the user's own file, so only that market is skipped.
+      const networkErrors = marketNetworkErrors(m, localNetwork);
+      if (networkErrors.length > 0) {
+        marketWarnings.push(...networkErrors);
+        continue;
+      }
+      const projected = indexMarketFromCard(card, m);
+      if (!projected.ok) {
+        marketWarnings.push(projected.excluded);
+        continue;
+      }
+      tagged.push({ market: projected.market, source, sourceType: "local" });
+      indexed++;
     }
-    recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
+    if (indexed === 0 && marketWarnings.length > 0) {
+      recordSource(sources, warnings, {
+        source,
+        sourceType: "local",
+        ok: false,
+        marketCount: 0,
+        error: marketWarnings.join("; "),
+        warnings: [],
+      });
+      continue;
+    }
+    recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: indexed, warnings: marketWarnings });
   }
 
   // Drop byte-identical duplicates (same solver listed in two registries),

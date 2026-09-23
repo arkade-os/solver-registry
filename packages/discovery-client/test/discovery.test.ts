@@ -9,7 +9,7 @@ import {
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
 import { registryIndexUrl } from "../src/registries.ts";
-import { NETWORKS } from "../src/types.ts";
+import { NETWORKS, isRfqMarket, quotesOverRfq } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
 import { BTC, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
@@ -155,6 +155,78 @@ test("discover: skips an invalid local card with a warning", async () => {
   assert.match(res.warnings.join("\n"), /pinned: invalid card/);
 });
 
+test("discover: projects a pinned canonical card onto short ids", async () => {
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: daveCard(), network: "bitcoin" }],
+    network: "bitcoin",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
+  const market = res.markets[0];
+  assert.equal(market.base_asset.id, "btc");
+  assert.equal(market.base_asset.caip19_id, BTC.id);
+  assert.equal(market.quote_asset.id, "a".repeat(68));
+  assert.equal(market.quote_asset.caip19_id, USDT);
+  assert.equal(market.pair, "BTC/USDT");
+  assert.equal(market.quote_corridor, undefined);
+  assert.equal(quotesOverRfq(market), false);
+});
+
+test("discover: a legacy card with a pair is copied and not re-projected", async () => {
+  const quoteId = "b".repeat(68);
+  const card = {
+    version: 0,
+    name: "legacy",
+    markets: [
+      {
+        pair: "BTC/USDT",
+        base_asset: { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 },
+        quote_asset: { id: quoteId, name: "Tether USD", ticker: "USDT", decimals: 6 },
+        price_feed: FEED,
+        price_feed_schema: { type: "json", price_path: "/price" },
+        price_decimals: 0,
+        fee_bps: 10,
+        min_base_amount: "1000",
+        max_base_amount: "5000000",
+        min_quote_amount: "1000000",
+        max_quote_amount: "1000000000000000",
+      },
+    ],
+  };
+  const res = await discover({
+    registries: [],
+    localCards: [{ card, network: "bitcoin" }],
+    network: "bitcoin",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
+  const market = res.markets[0];
+  assert.equal(market.base_asset.id, "btc");
+  assert.equal(market.quote_asset.id, quoteId);
+  assert.equal(market.base_asset.caip19_id, undefined);
+  assert.equal(market.quote_asset.caip19_id, undefined);
+  assert.equal(market.pair, "BTC/USDT");
+  assert.equal("base_corridor" in market, false);
+  assert.equal("quote_corridor" in market, false);
+});
+
+test("discover: a pinned card whose assets name another network skips those markets", async () => {
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: daveCard(), network: "mutinynet" }],
+    network: "mutinynet",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(res.markets.length, 0);
+  assert.equal(res.sources[0].ok, false);
+  assert.match(res.warnings.join("\n"), /bitcoin/);
+  assert.doesNotMatch(res.warnings.join("\n"), /targets/);
+});
+
 test("discover: skips a local card scoped to another network", async () => {
   const res = await discover({
     registries: [],
@@ -268,6 +340,39 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
   assert.equal(lightning.fee_bps, 25);
   assert.deepEqual(lightning.transports, { nostr: { relays: ["wss://relay.example.com"] } });
   assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: "bitcoin:bitcoin/slip44:0" })!.fee_bps, 40);
+});
+
+test("quotesOverRfq: a cross-asset spot market needs a pubkey and at least one relay", async () => {
+  const pubkey = "d".repeat(64);
+  const withRendezvous = {
+    version: 0,
+    name: "dave",
+    discovery_pubkey: pubkey,
+    transports: { nostr: { relays: ["wss://relay.example.com"] } },
+    markets: [makeMarket({ fee_bps: 10 })],
+  };
+  const pubkeyOnly = {
+    version: 0,
+    name: "dave",
+    discovery_pubkey: pubkey,
+    markets: [makeMarket({ fee_bps: 10 })],
+  };
+  const quoted = await discover({
+    registries: [],
+    localCards: [{ card: withRendezvous }],
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(quotesOverRfq(quoted.markets[0]), true);
+  assert.equal(isRfqMarket(quoted.markets[0]), false);
+  const feedOnly = await discover({
+    registries: [],
+    localCards: [{ card: pubkeyOnly }],
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(quotesOverRfq(feedOnly.markets[0]), false);
+  assert.equal(quotesOverRfq(makeCorridorMarket("lightning")), true);
 });
 
 test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {
