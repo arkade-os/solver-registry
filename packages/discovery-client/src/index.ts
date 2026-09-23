@@ -18,3 +18,4 @@ export * from "./assets.ts";
 export * from "./offer.ts";
 export * from "./feed.ts";
 export * from "./discovery.ts";
+export * from "./project.ts";

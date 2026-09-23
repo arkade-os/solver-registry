@@ -17,7 +17,8 @@ import {
   type NetworkIndex,
   type Side,
 } from "./types.ts";
-import { validateCard, validateIndex } from "./validate.ts";
+import { marketNetworkErrors, validateCard, validateIndex } from "./validate.ts";
+import { indexMarketFromCard } from "./project.ts";
 import { sideLimits } from "./pricing.ts";
 import { fetchText, type FetchLike } from "./feed.ts";
 import { defaultRegistryUrls } from "./registries.ts";
@@ -201,13 +202,29 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
       recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
       continue;
     }
+    const marketWarnings: string[] = [];
+    let indexed = 0;
     for (const m of card.markets) {
-      const entry: IndexMarket = { ...m, solver: card.name };
-      if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-      if (card.transports) entry.transports = card.transports;
-      tagged.push({ market: entry, source, sourceType: "local" });
+      const networkErrors = marketNetworkErrors(m, localNetwork);
+      if (networkErrors.length > 0) {
+        marketWarnings.push(...networkErrors);
+        continue;
+      }
+      const projected = indexMarketFromCard(card, m);
+      if (!projected.ok) {
+        marketWarnings.push(projected.excluded);
+        continue;
+      }
+      tagged.push({ market: projected.market, source, sourceType: "local" });
+      indexed++;
     }
-    recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
+    const report: SourceReport = { source, sourceType: "local", ok: true, marketCount: indexed, warnings: marketWarnings };
+    if (indexed === 0 && marketWarnings.length > 0) {
+      report.ok = false;
+      report.error = marketWarnings.join("; ");
+      report.warnings = [];
+    }
+    recordSource(sources, warnings, report);
   }
 
   // Drop byte-identical duplicates (same solver listed in two registries),
