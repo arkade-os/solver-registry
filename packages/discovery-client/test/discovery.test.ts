@@ -176,24 +176,16 @@ test("discover: projects a pinned canonical card onto short ids", async () => {
 
 test("discover: a legacy card with a pair is copied and not re-projected", async () => {
   const quoteId = "b".repeat(68);
+  const spot = makeMarket({ fee_bps: 10 });
   const card = {
     version: 0,
     name: "legacy",
-    markets: [
-      {
-        pair: "BTC/USDT",
-        base_asset: { id: "btc", name: "Bitcoin", ticker: "BTC", decimals: 8 },
-        quote_asset: { id: quoteId, name: "Tether USD", ticker: "USDT", decimals: 6 },
-        price_feed: FEED,
-        price_feed_schema: { type: "json", price_path: "/price" },
-        price_decimals: 0,
-        fee_bps: 10,
-        min_base_amount: "1000",
-        max_base_amount: "5000000",
-        min_quote_amount: "1000000",
-        max_quote_amount: "1000000000000000",
-      },
-    ],
+    markets: [{
+      ...spot,
+      pair: "BTC/USDT",
+      base_asset: { ...spot.base_asset, id: "btc" },
+      quote_asset: { ...spot.quote_asset, id: quoteId },
+    }],
   };
   const res = await discover({
     registries: [],
@@ -202,15 +194,12 @@ test("discover: a legacy card with a pair is copied and not re-projected", async
     fetchImpl: mockFetch(routes),
     now: NOW,
   });
-  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
   const market = res.markets[0];
+  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
   assert.equal(market.base_asset.id, "btc");
   assert.equal(market.quote_asset.id, quoteId);
-  assert.equal(market.base_asset.caip19_id, undefined);
-  assert.equal(market.quote_asset.caip19_id, undefined);
   assert.equal(market.pair, "BTC/USDT");
-  assert.equal("base_corridor" in market, false);
-  assert.equal("quote_corridor" in market, false);
+  assert.equal(market.base_asset.caip19_id ?? market.quote_asset.caip19_id ?? market.base_corridor ?? market.quote_corridor, undefined);
 });
 
 test("discover: a pinned card whose assets name another network skips those markets", async () => {
@@ -344,34 +333,20 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
 
 test("quotesOverRfq: a cross-asset spot market needs a pubkey and at least one relay", async () => {
   const pubkey = "d".repeat(64);
-  const withRendezvous = {
-    version: 0,
-    name: "dave",
-    discovery_pubkey: pubkey,
-    transports: { nostr: { relays: ["wss://relay.example.com"] } },
-    markets: [makeMarket({ fee_bps: 10 })],
-  };
-  const pubkeyOnly = {
-    version: 0,
-    name: "dave",
-    discovery_pubkey: pubkey,
-    markets: [makeMarket({ fee_bps: 10 })],
-  };
-  const quoted = await discover({
+  const spot = () => ({ version: 0, markets: [makeMarket({ fee_bps: 10 })] });
+  const res = await discover({
     registries: [],
-    localCards: [{ card: withRendezvous }],
+    localCards: [
+      { label: "quoted", card: { ...spot(), name: "quoted", discovery_pubkey: pubkey, transports: { nostr: { relays: ["wss://relay.example.com"] } } } },
+      { label: "feed", card: { ...spot(), name: "feed", discovery_pubkey: pubkey } },
+    ],
     fetchImpl: mockFetch(routes),
     now: NOW,
   });
-  assert.equal(quotesOverRfq(quoted.markets[0]), true);
-  assert.equal(isRfqMarket(quoted.markets[0]), false);
-  const feedOnly = await discover({
-    registries: [],
-    localCards: [{ card: pubkeyOnly }],
-    fetchImpl: mockFetch(routes),
-    now: NOW,
-  });
-  assert.equal(quotesOverRfq(feedOnly.markets[0]), false);
+  const quoted = res.markets.find((m) => m.source === "quoted")!;
+  assert.equal(quotesOverRfq(quoted), true);
+  assert.equal(isRfqMarket(quoted), false);
+  assert.equal(quotesOverRfq(res.markets.find((m) => m.source === "feed")!), false);
   assert.equal(quotesOverRfq(makeCorridorMarket("lightning")), true);
 });
 

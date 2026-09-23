@@ -418,8 +418,7 @@ export function isSameAssetMarket(market: MarketLike): boolean {
   return reference !== undefined && reference === chainReferenceOf(quoteId);
 }
 
-/** Corridor markets always. Cross-asset spot only with a non-empty pubkey and at least one nostr relay. */
-export function quotesOverRfq(market: MarketLike & { discovery_pubkey?: unknown; transports?: { nostr?: { relays?: unknown } } }): boolean {
+export function quotesOverRfq(market: MarketLike & Pick<IndexMarket, "discovery_pubkey" | "transports">): boolean {
   if (isRfqMarket(market)) return true;
   if (isSameAssetMarket(market)) return false;
   const relays = market.transports?.nostr?.relays;

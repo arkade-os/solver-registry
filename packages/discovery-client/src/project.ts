@@ -1,5 +1,4 @@
-// Down-project one validated card market into the non-strict v0 index shape.
-// Do not run the result through validateCard: the card schema rejects caip19_id.
+// ponytail: index shape is non-strict. validateCard rejects caip19_id, so the projection is not re-checked.
 
 import {
   DEFAULT_CORRIDOR,
@@ -17,31 +16,23 @@ function stamp(entry: IndexMarket, card: Card): IndexMarket {
   return entry;
 }
 
-/** Legacy (`pair` set) is copied. Canonical is rewritten to short id + caip19_id, or excluded when a side has no v0 name. */
 export function indexMarketFromCard(
   card: Card,
   market: Market,
 ): { ok: true; market: IndexMarket } | { ok: false; excluded: string } {
-  // An already-signed legacy card is already in the v0 index shape. Keep
-  // its bytes semantically intact instead of trying to down-project the
-  // short ids a second time.
-  if (market.pair !== undefined) {
-    return { ok: true, market: stamp({ ...market, solver: card.name }, card) };
-  }
+  // ponytail: a set pair is already v0. legacyAssetId("btc") is undefined and would drop the market.
+  if (market.pair !== undefined) return { ok: true, market: stamp({ ...market, solver: card.name }, card) };
   const baseCorridor = legacyMarketCorridor(market, "base");
   const quoteCorridor = legacyMarketCorridor(market, "quote");
-  // No v0 id would fail the whole document for v0 clients: held out, named.
-  const legacy = {
-    base: legacyAssetId(market.base_asset.id),
-    quote: legacyAssetId(market.quote_asset.id),
-  };
-  if (legacy.base === undefined || legacy.quote === undefined) {
+  const base = legacyAssetId(market.base_asset.id);
+  const quote = legacyAssetId(market.quote_asset.id);
+  if (base === undefined || quote === undefined) {
     return { ok: false, excluded: `${card.name}: ${market.base_asset.id} -> ${market.quote_asset.id}` };
   }
   const entry: IndexMarket = {
     ...market,
-    base_asset: { ...market.base_asset, id: legacy.base, caip19_id: market.base_asset.id },
-    quote_asset: { ...market.quote_asset, id: legacy.quote, caip19_id: market.quote_asset.id },
+    base_asset: { ...market.base_asset, id: base, caip19_id: market.base_asset.id },
+    quote_asset: { ...market.quote_asset, id: quote, caip19_id: market.quote_asset.id },
     solver: card.name,
     pair: `${pairSideLabel(baseCorridor, market.base_asset.ticker)}/${pairSideLabel(quoteCorridor, market.quote_asset.ticker)}`,
   };
