@@ -16,6 +16,9 @@ on:
       - packages/discovery-client/src/**
       - index.html
       - .github/workflows/publish.yml
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
