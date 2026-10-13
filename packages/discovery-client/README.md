@@ -165,8 +165,8 @@ const { markets } = await discover({
 ```
 
 A card counts only from a listed key, under the listing's name, passing every
-registry rule, with a valid `sig` (`verifyCardSig`), and at most
-`MAX_CARD_AGE_SECONDS` old. It then replaces that solver's listed markets, which
+registry rule, with a valid `sig` (`verifyCardSig`), and dated within
+`MAX_CARD_AGE_SECONDS` of now either way. It then replaces that solver's listed markets, which
 keep the listing's `source`. Anything else is a warning, never a throw.
 
 ## Expo / React Native

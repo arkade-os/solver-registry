@@ -337,6 +337,7 @@ const REJECTED: Array<[string, TransportCard, RegExp]> = [
   ["a card naming another key", delivered(signed(liveCard("carol", 5, PAT.pk), PAT.sk)), /does not match the listing/],
   ["a bad sig", delivered({ ...signed(liveCard("carol", 5)), markets: [makeMarket({ fee_bps: 1 })] }), /sig does not verify/],
   ["a stale card", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW - MAX_CARD_AGE_SECONDS - 1), /stale/],
+  ["a card dated too far ahead", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW + MAX_CARD_AGE_SECONDS + 1), /in the future/],
   ["an invalid card", delivered(signed({ ...liveCard("carol", 5), markets: [makeMarket({ fee_bps: 20_000 })] })), /fee_bps/],
   [
     "another network's ids",

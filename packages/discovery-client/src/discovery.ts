@@ -196,6 +196,8 @@ function transportCardRejection(delivered: TransportCard, solver: IndexSolver, n
   if (!verifyCardSig(card)) return "sig does not verify against discovery_pubkey";
   const age = now - delivered.createdAt;
   if (!(age <= MAX_CARD_AGE_SECONDS)) return `stale: published ${age}s ago, max ${MAX_CARD_AGE_SECONDS}s`;
+  // Symmetric so a skewed wallet clock still accepts live cards, while a far-future date cannot keep a dead solver listed.
+  if (!(-age <= MAX_CARD_AGE_SECONDS)) return `dated ${-age}s in the future, max ${MAX_CARD_AGE_SECONDS}s`;
   return undefined;
 }
 
