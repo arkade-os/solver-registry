@@ -1,7 +1,7 @@
 // @arkade-os/solver-discovery — a portable ESM client for discovering solver price
 // feeds from Arkade solver registries. Runs in browsers, Node, and Expo /
-// React Native. The root entrypoint has zero runtime dependencies (global
-// `fetch` only); the optional ./react subpath imports React.
+// React Native. The root entrypoint depends only on pure-JS @noble crypto and
+// global `fetch`; the optional ./react subpath imports React.
 //
 // Typical flow:
 //   const { markets } = await discover({}); // this network's published index; [] opts out
@@ -18,3 +18,4 @@ export * from "./assets.ts";
 export * from "./offer.ts";
 export * from "./feed.ts";
 export * from "./discovery.ts";
+export { verifyCardSig } from "./canonical.ts";

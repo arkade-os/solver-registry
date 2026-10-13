@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import cardSchema from "../schema/card.schema.json" with { type: "json" };
-import { verifyCardSig } from "./canonical.ts";
+import { verifyCardSig } from "../packages/discovery-client/src/canonical.ts";
 import {
   cardHasRfqMarket,
   cardRfqErrors,

@@ -1,7 +1,21 @@
 // Shared test fixtures. The Market shape mirrors the schemas; keeping one
 // canonical fixture means a schema change is a one-file edit for the suite.
+import { schnorr } from "@noble/curves/secp256k1.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { cardDigest } from "../src/canonical.ts";
 import type { AssetInfo, Market, Side } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
+
+/** BIP340 test-vector secret keys #1, #0 and #2, with their x-only pubkeys. */
+export const KEYS = [
+  "b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef",
+  "0000000000000000000000000000000000000000000000000000000000000003",
+  "c90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b14e5c9",
+].map((sk) => ({ sk, pk: bytesToHex(schnorr.getPublicKey(hexToBytes(sk))) }));
+
+export function signed<T extends object>(card: T, sk = KEYS[0].sk): T & { sig: string } {
+  return { ...card, sig: bytesToHex(schnorr.sign(cardDigest(card as Record<string, unknown>), hexToBytes(sk))) };
+}
 
 export const BTC: AssetInfo = { id: "arkade:bitcoin/slip44:0", name: "Bitcoin", ticker: "BTC", decimals: 8 };
 
