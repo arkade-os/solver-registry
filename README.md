@@ -53,6 +53,13 @@ market must carry `discovery_pubkey`, `transports`, and a valid `sig`: the
 pubkey and transports are the RFQ rendezvous makers will actually contact, so
 they must be self-authenticating. See the spec for why.
 
+A signed card may instead be a **pointer** — `version`, `name`,
+`discovery_pubkey`, `transports`, `sig`, and no `markets` — for a solver that
+publishes its signed card on its transports (nostr kind 38859, `d` = the
+network). Clients that resolve those cards pick up market changes without a
+PR. Keep the full card here until the wallets you serve do: an older client
+reads only the index.
+
 ## Consume the index
 
 Human-readable overview: <https://arkade-os.github.io/solver-registry/>
@@ -68,7 +75,9 @@ Each index is a flat, pre-sorted (best `fee_bps` first) list of markets for
 that network, stamped with `generated_at` and the source `commit`, matching
 [`schema/index.schema.json`](schema/index.schema.json). Fetch one URL per
 registry you follow, merge, filter by pair, price from the market's
-`price_feed`, and extract the scalar using `price_feed_schema`.
+`price_feed`, and extract the scalar using `price_feed_schema`. The root
+`solvers` array lists every solver with a `discovery_pubkey` (pointers
+included), whose signed cards a client may fetch from their transports.
 
 Those URLs are also exported as `REGISTRY_INDEX_URLS` (and
 `registryIndexUrl(network)`) from `@arkade-os/solver-discovery`, typed against
@@ -107,7 +116,7 @@ schema/card.schema.json    what a solver PRs
 schema/index.schema.json   what CI publishes
 index.html                 landing page served at the Pages base URL
 scripts/reduce.ts          the reducer: pnpm reduce
-scripts/canonical.ts       canonical JSON + BIP340 helpers
+scripts/canonical.ts       fixture signing (verification lives in the client)
 tests/                     golden index, rejection cases, sort/determinism
 packages/discovery-client/ @arkade-os/solver-discovery: the maker-flow client lib
 ```

@@ -12,7 +12,7 @@ Every market side names its **corridor** — the rail it settles on — `arkade`
 
 Anyone can run a registry: it's a repo layout and a workflow, not an instance. Clients follow a *set* of registries and can additionally pin solver cards directly, so no repo owner is a gatekeeper or single point of failure — a solver rejected or dropped by every registry is still reachable by any client that adds its card by hand (the token-list pattern). The reference registry's per-network index is the default set: a client given no registries follows it for the wallet's network, while an explicitly empty list follows none. Keeping that default internal (rather than a table in each client) is what lets the URLs, or the fetch mechanism, move without a client change.
 
-Trust anchors to each registry repo and its PR review, not to keys. A live-quote layer with signed events is specced as **v1, dormant** — see the appendix. For spot cards, keys stay optional until that layer activates; corridor cards already carry `discovery_pubkey`, `transports`, and `sig` today, because their rendezvous is live data a maker will actually contact (see Corridor markets).
+Trust anchors to each registry repo and its PR review, not to keys: a registry lists who is trusted, and a listed solver may publish its own signed markets over its transports (see *Transport-delivered cards*). A live-quote layer with signed events is specced as **v1, dormant** — see the appendix. For spot cards, keys stay optional until that layer activates; corridor cards already carry `discovery_pubkey`, `transports`, and `sig` today, because their rendezvous is live data a maker will actually contact (see Corridor markets).
 
 ## Solver card
 
@@ -75,6 +75,22 @@ The market's identity and grouping key is `<base_asset.id>/<quote_asset.id>` —
 
 Keys and signatures are future-proofing for spot cards, not a requirement: requiring signing tooling just to list a spot market is friction without a payoff, so a bare spot card with neither field is fully valid and the PR is the authentication. Solvers that set them up now get continuity — the same key later signs v1 quotes, and card updates become verifiable independent of who opens the PR. (Corridor cards are the exception: there the key is load-bearing today, see below.) No `updated_at`: hand-maintained timestamps rot; freshness is stamped programmatically in the index. No URLs pointing at solver or Arkade infrastructure (`price_feed` and `transports` excepted — the former is the pricing oracle, the latter commodity relay endpoints).
 
+### Pointer cards
+
+A card with no `markets` is a **pointer**: it lists an identity whose markets the solver publishes itself, signed, over its own transports (see *Transport-delivered cards*).
+
+```json
+{
+  "version": 0,
+  "name": "ln-solver-mutinynet",
+  "discovery_pubkey": "<64-hex x-only>",
+  "transports": { "nostr": { "relays": ["wss://nostr.arkade.sh"] } },
+  "sig": "<128-hex schnorr>"
+}
+```
+
+A pointer MUST carry `discovery_pubkey`, `transports`, and `sig`, and CI verifies `sig` over the pointer's canonical JSON exactly as for a card — proof that the key holder asked to be listed. A card carrying `markets` is a full card under every rule above, so `"markets": []` is invalid, not a pointer. There is no flag: absence of `markets` is the pointer, and the `transports` map is where a future carrier would go. Keep a full card in the registry until the clients it serves resolve transport-delivered cards; an older client reads only the index.
+
 ## Corridor markets
 
 A corridor market has at least one side whose asset id names a non-arkade corridor — typically an Arkade balance trading against a Lightning payment (`bolt11`) or an L1 output (`bitcoin`), though both sides may be off-rail (e.g. a `bolt11:bitcoin/slip44:0` / `bitcoin:bitcoin/slip44:0` submarine-swap market). Everything in this section — the rendezvous requirements, the feed rules, leg-pair grouping — keys off "has a non-arkade side" and applies to rail-to-rail markets identically. Discovery works identically — the card advertises the two asset ids, `fee_bps`, and per-side limits, and the reducer ranks it in the same index — but three things differ structurally from a spot market:
@@ -89,15 +105,15 @@ The RFQ message family is specified separately, in `arkade-os/lightning-swap-ser
 | --- | --- | --- |
 | `24859` | directed RFQ traffic | **ephemeral**; NIP-44-sealed, `p`-tagged to the recipient; carries the whole request/quote/refusal/status family |
 | `24860` | open-RFQ broadcast | **ephemeral**; plaintext, `t`-tagged with the canonical market key (`<base-asset-id>/<quote-asset-id>`) |
-| `38859` | solver advertisement | **addressable** — one current version per solver; `d` tag `"rfq1"`, unencrypted and **indicative only** — never binding, and never a substitute for a registry card (see the trust note below) |
+| `38859` | solver card | **addressable** — one current card per solver per network; `d` tag is the network name, content is the signed card (see *Transport-delivered cards*) |
 
-The two negotiation kinds moved out of NIP-01's regular range into the ephemeral one (20000–29999): `4859`/`4860` before, `24859`/`24860` now. The reason bears directly on this document's own kind choices — an `rfq_open` is plaintext by design, so while it sat in a retained range every broadcast was a permanent public record of trade intent, pair and size. A conforming relay retains neither negotiation kind now. The advertisement stays addressable, which is already the right semantics for it: the relay keeps the current version and discards the rest.
+The two negotiation kinds moved out of NIP-01's regular range into the ephemeral one (20000–29999): `4859`/`4860` before, `24859`/`24860` now. The reason bears directly on this document's own kind choices — an `rfq_open` is plaintext by design, so while it sat in a retained range every broadcast was a permanent public record of trade intent, pair and size. A conforming relay retains neither negotiation kind now. The solver card stays addressable, which is already the right semantics for it: the relay keeps the current version and discards the rest.
 
 The `t` tag on kind 24860 is the *same* canonical leg-pair key this document defines for the v1 appendix's `d` tag — the two full asset ids, corridor and all, base leg first — and for the same reason: both sides must derive it identically or the subscription silently matches nothing. One derivation, two layers; if either changes, both change.
 
-The kind-38859 ad does not compete with a card. The RFQ protocol defers to the registry for trust precisely because a card is git-reviewed and BIP340-signed while an ad is self-asserted, so an ad MAY advertise liveness but MUST NOT be the basis for deciding whom to trade with.
+**Trust rule.** A card delivered over a transport counts only if its `discovery_pubkey` is listed in a registry the client follows — as a full card or a pointer — or in a card the user pinned; a card from any other key is ignored. Review of a listed solver covers its identity once; its markets — fees, bounds, `price_feed` — are then the solver's own signed statement.
 
-**The rendezvous must be self-authenticating.** For a spot card a wrong `discovery_pubkey` is inert. For a corridor card it decides whom makers talk to, so `discovery_pubkey`, `sig`, and `transports` are all REQUIRED on any card with a corridor market, and CI verifies the signature. A wrong rendezvous cannot lose funds — the maker derives and verifies every contract locally before funding, exactly as with spot offers — but it can misdirect makers into silence, which is why it must carry the solver's own signature rather than just the PR author's word. This pulls the v1 appendix's key material forward for corridor cards; the live-quote layer itself stays dormant. (The signature requirement gates *listing*: a user-pinned local corridor card needs only `discovery_pubkey` and `transports` — pinning is the user's own trust decision, and clients carry no signature-verification code.)
+**The rendezvous must be self-authenticating.** For a spot card a wrong `discovery_pubkey` is inert. For a corridor card it decides whom makers talk to, so `discovery_pubkey`, `sig`, and `transports` are all REQUIRED on any card with a corridor market, and CI verifies the signature. A wrong rendezvous cannot lose funds — the maker derives and verifies every contract locally before funding, exactly as with spot offers — but it can misdirect makers into silence, which is why it must carry the solver's own signature rather than just the PR author's word. This pulls the v1 appendix's key material forward for corridor cards; the live-quote layer itself stays dormant. (The signature requirement gates *listing*: a user-pinned local corridor card needs only `discovery_pubkey` and `transports` — pinning is the user's own trust decision.)
 
 Directionality maps onto the existing per-side bounds with no new fields. The bound still applies to the side the solver pays out: a solver quoting Arkade BTC against Lightning BTC with the quote side enabled pays out Lightning — it serves makers sending an Arkade balance out over Lightning. Enabling the base side serves the opposite direction (maker receives the Arkade side); `max = "0"` disables a direction, as ever.
 
@@ -155,8 +171,8 @@ The **rollout sequencing** rule above applies unchanged, for the same reason it 
 
 On every merge to the default branch, CI, independently per network directory:
 
-1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed asset ids, per-side `min > max`, a zero `min` on an enabled side, both sides disabled, unknown `version`, identical legs, a non-base arkade side when only one side is arkade, feed fields on a same-asset market, a cross-asset market missing them, and a corridor market on a card lacking `discovery_pubkey`/`sig`/`transports`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
-2. Flattens the network's cards into one market list, each entry carrying its solver's `name` (and `discovery_pubkey`/`transports` when present; `sig` stays in the card, it is not propagated).
+1. Validates every card against the JSON schema (schema lives in the repo); rejects duplicate `name`s, malformed asset ids, per-side `min > max`, a zero `min` on an enabled side, both sides disabled, unknown `version`, identical legs, a non-base arkade side when only one side is arkade, feed fields on a same-asset market, a cross-asset market missing them, and a corridor market or a pointer on a card lacking `discovery_pubkey`/`sig`/`transports`. Where a card carries `sig`, verifies it against `discovery_pubkey` and rejects on failure.
+2. Flattens the network's cards into one market list, each entry carrying its solver's `name` (and `discovery_pubkey`/`transports` when present; `sig` stays in the card, it is not propagated). Every card carrying a `discovery_pubkey` — a pointer always — is also listed as `{ name, discovery_pubkey, transports }` in a root `solvers` array sorted by name; a pointer contributes no markets.
 3. Groups by the leg pair (`base_asset.id`, `quote_asset.id`) — never by the ticker; within a group, sorts ascending by `fee_bps` (best expected execution first).
 4. Emits one index per network — `bitcoin.json`, `signet.json`, `mutinynet.json`, `regtest.json` — each stamped with its `network`, `generated_at` (unix seconds, set by CI, never by hand), and the source commit hash.
 5. Publishes via GitHub Pages / raw URL. A broken card in one network must not block publishing the others.
@@ -182,6 +198,9 @@ On every merge to the default branch, CI, independently per network directory:
       "min_quote_amount": "1000000",
       "max_quote_amount": "5000000000"
     }
+  ],
+  "solvers": [
+    { "name": "arklabs-solver", "discovery_pubkey": "<64-hex>", "transports": { "nostr": { "relays": ["wss://..."] } } }
   ]
 }
 ```
@@ -191,7 +210,7 @@ PR validation runs the same schema checks, so a broken card can't merge. The per
 ## Maker flow
 
 1. For each followed registry, fetch the index for the wallet's network — `<base-url>/<network>.json` (TTL-cache ~10 min). A client given no registry list follows the reference registry's published index for that network by default — an internal default, so no client-side table is needed and the URLs may change across releases; an explicitly empty list means follow no registry, which a private deployment uses to refuse the public list, and a non-empty list replaces the default rather than merging with it. Network names follow `arkade-os/ts-sdk`; `bitcoin` is the default main Bitcoin network. Reject unknown `version` or a `network` mismatch; treat an old `generated_at` (suggested: > 7 days) as a staleness warning. Registry failures are isolated: one unreachable or invalid registry never blocks pricing from the others or from locally pinned cards.
-2. Merge: union of all markets across followed registries plus local cards, tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per leg pair (`base_asset.id`/`quote_asset.id`) ascending by `fee_bps`, source order as tiebreak; a side's ticker is display only and never a grouping key — grouping by ticker, or by an asset id with its corridor stripped, would collapse markets on different rails. Filter by leg pair, by receive-side solvability (only markets whose receive side is enabled — `max > 0` — qualify; if no market in the merged set solves that side, the direction MUST NOT be offered), and by size against the receive side's bounds. The ranking is a static proxy — the actual execution price still comes from the feed (spot) or the solver's quote (corridor).
+2. Merge: union of all markets across followed registries plus local cards — after transport-delivered cards replace their listings' markets (below) — tagged with their source. Drop byte-identical duplicates (the same solver listed in two registries); otherwise entries are distinct per source — `name` is only unique within a registry. Re-rank the merged set per leg pair (`base_asset.id`/`quote_asset.id`) ascending by `fee_bps`, source order as tiebreak; a side's ticker is display only and never a grouping key — grouping by ticker, or by an asset id with its corridor stripped, would collapse markets on different rails. Filter by leg pair, by receive-side solvability (only markets whose receive side is enabled — `max > 0` — qualify; if no market in the merged set solves that side, the direction MUST NOT be offered), and by size against the receive side's bounds. The ranking is a static proxy — the actual execution price still comes from the feed (spot) or the solver's quote (corridor).
 3. Local cards: a client MUST let its user add solver cards directly (a URL to a raw card, or pasted JSON), validated against the same card schema, scoped to a network by the user. Local cards participate in the merge like any registry entry, marked as user-added in any UI.
 4. Fetch the chosen market's `price_feed`, parse the JSON response, read the scalar selected by `price_feed_schema.price_path`, then derive `P` in quote-units-per-base-unit via `price_decimals`. A same-asset corridor market skips this step entirely: `P = 1` exactly, and any pre-quote estimate is `fee_bps` (plus cushion) off 1:1.
 5. Spot market: compute `wantAmount` (below), then the existing flow: `createOffer` → fund the address with the TLV extension. Corridor market: send a request-for-quote to the market's `discovery_pubkey` over its `transports`, verify the quote's terms and locally-derived contract addresses, then fund — per the RFQ protocol (`arkade-os/lightning-swap-service` `docs/rfq-protocol.md`), whose directed traffic is nostr kind 24859. Funding is the acceptance; there is no separate accept step.
@@ -212,6 +231,14 @@ A market declaring `solver_fee.base.flat` therefore CANNOT be priced by a reader
 `charges_delivered_carrier` says whether the solver funds the dust carrier an Arkade asset rides on out of the maker's deposit. Both `solver_fee.flat` and the carrier come off the DEPOSIT before the spread, matching the solver. The carrier's amount is not on the card: it is the Arkade Service's dust, both parties to an Arkade-settled swap share that Service, and a live figure beats a cached one.
 
 There is no liveness signal in v0 for spot markets: those solvers are not publicly reachable, so nothing can be probed before funding — `generated_at` and local fill history are the only heuristics, and the cost of funding into a dead solver is one cancel transaction. Corridor markets are probed by construction: the quote (or its absence) precedes any funding.
+
+### Transport-delivered cards
+
+A solver keeps its markets current without a PR by publishing its signed card — the same document it would PR — as nostr kind `38859` with `d` = the network name, authored by its `discovery_pubkey`, to the relays in its `transports`, republishing on change and on a heartbeat. A client resolves these after fetching its indexes, under the trust rule in *Corridor markets*:
+
+1. The identities are every fetched index's `solvers` plus every pinned card carrying `discovery_pubkey` and a nostr transport. The client fetches the latest card per key for its network in one request.
+2. A delivered card counts only if its event author, its `discovery_pubkey`, and the listing's key are the same key and its `name` is the listing's; it meets every rule CI applies to a card for that network and carries `markets` (a pointer delivered this way resolves nothing); its `sig` verifies; and it was published at most 7200 s ago — four of the reference solver's 1800 s heartbeats.
+3. A card that counts replaces that listing's markets, projected into index shape (short `id` plus `caip19_id`) and attributed to the listing's source, so source-based policy still applies. Any failure is a warning on that source and leaves the listing's own markets — none, for a pointer — in place.
 
 ### Maker pricing
 
@@ -273,13 +300,13 @@ Three things static-registry pricing cannot provide:
 
 **Liveness.** v0 has no liveness signal for spot markets: solvers sit behind NAT with no public endpoint, so nothing can be probed before funding. A fresh signed quote proves the solver is awake and quoting *now*, and it works structurally under this constraint — the solver publishes outbound to relays, needing no inbound reachability.
 
-This was the strongest single argument for activating v1, and corridor markets have since taken it off the table for themselves — twice over. Their quote *is* the liveness probe (a dead solver costs a timeout, not a cancel tx), and the RFQ family's kind-38859 ad already broadcasts indicative liveness outbound to relays, which is structurally the mechanism proposed here. What remains unserved is the case this layer was actually designed for: **spot** markets, which are funded blind and have neither. Activating v1 is now a spot-market decision, not a general one.
+This was the strongest single argument for activating v1, and corridor markets have since taken it off the table for themselves — twice over. Their quote *is* the liveness probe (a dead solver costs a timeout, not a cancel tx), and the solver card on kind 38859 is already republished outbound to relays on a heartbeat, which is structurally the mechanism proposed here. What remains unserved is the case this layer was actually designed for: **spot** markets, which are funded blind and have neither. Activating v1 is now a spot-market decision, not a general one.
 
 **Spread.** Maker and solver observe the feed at different times, so the maker leaves `safety_bps` on the table every trade. A quote signed by the solver — "price Z, valid until T" — removes the ambiguity and lets the cushion shrink toward zero. Matters when solvers compete fees down toward ~10bps; at wide spreads it buys little.
 
 **Accountability.** A signed quote is evidence. Registry-only, a maker cannot prove what the price was when it funded. With signed quotes, a maker holding quote + funding txid + no fill can publish a verifiable report; anyone can check the offer was inside the quote's envelope during its validity.
 
-This is also where keys and signatures enter the protocol for spot markets — as the thing that makes quotes attributable — and why v0 makes them optional there: the identity becomes meaningful only when there is a live statement to sign. Corridor markets already pulled `discovery_pubkey`, `sig`, and `transports` forward (their rendezvous is a live commitment today, exercised by deployed RFQ traffic); activating this layer changes nothing for them structurally — the same key that anchors the RFQ rendezvous, and signs its kind-38859 ad, would sign the quote events. Why nostr specifically: addressable events give latest-quote-per-(solver, pair) retention for free, NIP-40 expiration gives the validity window, relays already exist, and `discovery_pubkey` is nostr-compatible. No infrastructure to run, ~200 lines per side.
+This is also where keys and signatures enter the protocol for spot markets — as the thing that makes quotes attributable — and why v0 makes them optional there: the identity becomes meaningful only when there is a live statement to sign. Corridor markets already pulled `discovery_pubkey`, `sig`, and `transports` forward (their rendezvous is a live commitment today, exercised by deployed RFQ traffic); activating this layer changes nothing for them structurally — the same key that anchors the RFQ rendezvous, and signs its kind-38859 card, would sign the quote events. Why nostr specifically: addressable events give latest-quote-per-(solver, pair) retention for free, NIP-40 expiration gives the validity window, relays already exist, and `discovery_pubkey` is nostr-compatible. No infrastructure to run, ~200 lines per side.
 
 ### Quote event
 
