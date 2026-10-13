@@ -15,3 +15,10 @@ test("verifyCardSig: the signer's card verifies in any key order; tampered or ma
   assert.equal(verifyCardSig({ ...card, sig: undefined }), false);
   assert.equal(verifyCardSig({ ...card, discovery_pubkey: 7 as never }), false);
 });
+
+test("verifyCardSig: a parsed __proto__ key is signed content, not a prototype to skip", () => {
+  const card = signed({ version: 0, name: "alice", discovery_pubkey: KEYS[0].pk, transports: { nostr: { relays: ["wss://r.example"] } }, markets: [makeMarket()] });
+  const tampered = JSON.parse(JSON.stringify(card).replace('"relays":', '"__proto__":{"x":1},"relays":'));
+  assert.ok(Object.hasOwn(tampered.transports.nostr, "__proto__"));
+  assert.equal(verifyCardSig(tampered), false);
+});

@@ -7,7 +7,8 @@ import { hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
+    // Null prototype: on `{}` a parsed "__proto__" key would set the prototype and drop out of the digest.
+    const out: Record<string, unknown> = Object.create(null);
     for (const key of Object.keys(value).sort()) out[key] = canonicalize((value as Record<string, unknown>)[key]);
     return out;
   }
