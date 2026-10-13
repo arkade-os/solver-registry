@@ -157,6 +157,11 @@ const REJECTION_CASES: Array<{ case: string; expect: string }> = [
   { case: "additional-properties", expect: "must NOT have additional properties" },
   { case: "missing-required", expect: "must have required property" },
   { case: "solver-fee-bps-mismatch", expect: "fee_bps must equal the widest solver_fee spread" },
+  { case: "pointer-missing-sig", expect: "must have required property 'sig'" },
+  { case: "pointer-bad-sig", expect: "sig does not verify" },
+  { case: "pointer-extra-field", expect: "must NOT have additional properties" },
+  // Present markets mean a full card, so [] is not a pointer.
+  { case: "pointer-empty-markets", expect: "must NOT have fewer than 1 items" },
 ];
 
 for (const { case: caseName, expect } of REJECTION_CASES) {
@@ -167,6 +172,27 @@ for (const { case: caseName, expect } of REJECTION_CASES) {
     assert.match(allMessages, new RegExp(expect.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 }
+
+test("index solvers: every card with a discovery_pubkey, pointers included, sorted by name", () => {
+  const mutinynet = reduceNetwork(fixture("valid", "solvers"), "mutinynet", FIXED_META);
+  assert.equal(mutinynet.ok, true, JSON.stringify(mutinynet.errors));
+  assert.deepEqual(mutinynet.index!.markets, []);
+  // pointer.json is read after pointer-solver.json ("-" < "."), so this order is the sort's.
+  assert.deepEqual(mutinynet.index!.solvers, [
+    {
+      name: "pointer",
+      discovery_pubkey: "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+      transports: { nostr: { relays: ["wss://relay2.example.com"] } },
+    },
+    {
+      name: "pointer-solver",
+      discovery_pubkey: "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+      transports: { nostr: { relays: ["wss://relay.example.com"] } },
+    },
+  ]);
+  const bitcoin = reduceNetwork(fixture("valid", "solvers"), "bitcoin", FIXED_META);
+  assert.deepEqual(bitcoin.index!.solvers!.map((s) => s.name), ["corridor-solver"], "keyless spot cards have nothing to resolve");
+});
 
 test("a card placed outside a known network directory is flagged", () => {
   const unknown = findUnknownNetworkDirs(fixture("unknown-network"));
@@ -354,6 +380,7 @@ test("selecting by CAIP-19 id works against a down-projected index", () => {
 test("a migrated index still validates under the frozen discovery-client 0.2.3", () => {
   for (const result of reduceAll(fixture("valid", "solvers"), FIXED_META)) {
     assert.equal(result.ok, true);
+    assert.ok(Array.isArray(result.index!.solvers), "the root key 0.2.3 has never seen must be present");
     const r = validateIndexV023(result.index!, result.network);
     assert.equal(r.ok, true, `${result.network} is rejected by 0.2.3: ${r.errors.join("; ")}`);
   }

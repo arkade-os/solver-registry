@@ -138,10 +138,7 @@ const PUBKEY = /^[0-9a-f]{64}$/;
 // malformed relay ever survives to a maker.
 const RELAY_PROTOCOL = /^[a-z0-9-]+$/;
 const RELAY = /^wss?:\/\/[^\s]+$/;
-// ponytail: format-only — this client never verifies a signature (the
-// dependency-free constraint again; the reducer verifies at CI, local pins
-// are the user's own trust decision). Add verification only if the client
-// ever grows a crypto dependency for other reasons.
+// Format only: signatures are verified at CI and on transport cards, never on a local pin.
 const SIG = /^[0-9a-f]{128}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
@@ -548,8 +545,7 @@ export function cardHasRfqMarket(card: { markets?: unknown }): boolean {
  * stay optional — the PR is the authentication and there is nothing to
  * contact.) The registry additionally requires `sig` on such cards — that
  * check lives in the reducer, not here: the signature authenticates the
- * listing, while a user-pinned local card is the user's own trust decision
- * and this dependency-free client carries no verification code.
+ * listing, while a user-pinned local card is the user's own trust decision.
  */
 export function cardRfqErrors(card: {
   discovery_pubkey?: unknown;
@@ -667,8 +663,7 @@ const CARD_KEYS = new Set(["version", "name", "discovery_pubkey", "sig", "transp
  * Registry listing requires strictly more than this: the reducer additionally
  * demands a valid `sig` on any card with a corridor market. This validator
  * deliberately omits that check — pinning a local card is the user's own
- * trust decision, and this dependency-free client carries no verification
- * code — so a corridor card can be `ok: true` here and still be rejected by
+ * trust decision — so a corridor card can be `ok: true` here and still be rejected by
  * registry CI until it is signed.
  */
 export function validateCard(input: unknown): ValidationResult<Card> {
@@ -693,7 +688,11 @@ export function validateCard(input: unknown): ValidationResult<Card> {
     }
   }
   checkTransports(errors, "/transports", input.transports);
-  if (!Array.isArray(input.markets) || input.markets.length < 1) {
+  if (input.markets === undefined) {
+    for (const key of ["discovery_pubkey", "transports", "sig"] as const) {
+      if (input[key] === undefined) add(errors, "/", `${key} is required when markets is absent (a pointer card)`);
+    }
+  } else if (!Array.isArray(input.markets) || input.markets.length < 1) {
     add(errors, "/markets", "must be a non-empty array");
   } else {
     input.markets.forEach((m, i) => checkMarket(errors, `/markets/${i}`, m, true));
@@ -701,6 +700,31 @@ export function validateCard(input: unknown): ValidationResult<Card> {
   for (const message of cardRfqErrors(input)) add(errors, "/", message);
 
   return errors.length === 0 ? { ok: true, errors: [], value: input as unknown as Card } : { ok: false, errors };
+}
+
+/** Every listing rule bar filename, duplicate-name and signature: one function for CI and transport cards. */
+export function cardErrors(card: unknown, network: string): string[] {
+  const { errors } = validateCard(card);
+  if (!isObject(card)) return errors;
+  if (Array.isArray(card.markets)) {
+    card.markets.forEach((m, i) => {
+      for (const message of marketNetworkErrors(isObject(m) ? m : {}, network)) add(errors, `/markets/${i}`, message);
+    });
+  }
+  if (cardHasRfqMarket(card) && card.sig === undefined) {
+    add(errors, "/", "sig is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)");
+  }
+  return errors;
+}
+
+function checkIndexSolver(errors: string[], path: string, v: unknown): void {
+  if (!isObject(v)) {
+    add(errors, path, "must be an object");
+    return;
+  }
+  checkPattern(errors, `${path}/name`, v.name, NAME, 'must match "^[a-z0-9-]+$"');
+  checkPattern(errors, `${path}/discovery_pubkey`, v.discovery_pubkey, PUBKEY, "must be 64 lowercase hex chars");
+  checkTransports(errors, `${path}/transports`, v.transports);
 }
 
 /**
@@ -727,6 +751,10 @@ export function validateIndex(input: unknown, expectedNetwork?: string): Validat
     add(errors, "/markets", "must be an array");
   } else {
     input.markets.forEach((m, i) => checkIndexMarket(errors, `/markets/${i}`, m));
+  }
+  if (input.solvers !== undefined) {
+    if (!Array.isArray(input.solvers)) add(errors, "/solvers", "must be an array");
+    else input.solvers.forEach((s, i) => checkIndexSolver(errors, `/solvers/${i}`, s));
   }
 
   return errors.length === 0

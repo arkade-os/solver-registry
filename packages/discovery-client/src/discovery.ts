@@ -11,13 +11,17 @@ import {
   marketPairKey,
   stableStringify,
   type AssetInfo,
+  type Card,
   type Corridor,
   type IndexMarket,
+  type IndexSolver,
   type Network,
   type NetworkIndex,
   type Side,
 } from "./types.ts";
-import { validateCard, validateIndex } from "./validate.ts";
+import { cardErrors, validateCard, validateIndex } from "./validate.ts";
+import { verifyCardSig } from "./canonical.ts";
+import { indexMarketFromCard } from "./project.ts";
 import { sideLimits } from "./pricing.ts";
 import { fetchText, type FetchLike } from "./feed.ts";
 import { defaultRegistryUrls } from "./registries.ts";
@@ -115,7 +119,25 @@ export interface LocalCardInput {
   label?: string;
 }
 
-export interface DiscoverOptions extends FetchIndexOptions {
+/** Nostr kind of the event carrying a solver's signed card; its `d` tag is the network. */
+export const SOLVER_CARD_KIND = 38859;
+export const MAX_CARD_AGE_SECONDS = 7200; // four solver heartbeats of 1800 s
+
+export interface TransportCard {
+  pubkey: string;
+  /** Event `created_at`, unix seconds. */
+  createdAt: number;
+  /** `JSON.parse(event.content)`; validated by the client, not the fetcher. */
+  card: unknown;
+}
+
+export interface TransportCardFetcher {
+  /** Latest event per author for this network. The fetcher authenticates DELIVERY (event signature);
+   *  the client authenticates CONTENT (card signature + rules). Rejecting is allowed; resolving [] is allowed. */
+  fetch(solvers: readonly IndexSolver[], network: Network): Promise<TransportCard[]>;
+}
+
+export interface DiscoverOptions extends Omit<FetchIndexOptions, "now"> {
   /** Registry URLs to follow, in priority order (the ranking tiebreak). Omitted
    *  follows the network's published index (internal, so it can move in a
    *  release); `[]` follows none; a non-empty list overrides rather than merges. */
@@ -124,6 +146,10 @@ export interface DiscoverOptions extends FetchIndexOptions {
   localCards?: LocalCardInput[];
   /** Expected network. Defaults to "bitcoin", matching ts-sdk's DEFAULT_NETWORK_NAME. */
   network?: Network;
+  /** Fetches listed solvers' signed cards; one passing every check replaces its listing's markets. */
+  transportCards?: TransportCardFetcher;
+  /** Unix seconds, for index staleness and card age. A plain number is still accepted. */
+  now?: number | (() => number);
 }
 
 export interface SourceReport {
@@ -153,6 +179,73 @@ function recordSource(sources: SourceReport[], warnings: string[], report: Sourc
   for (const w of report.warnings) warnings.push(`${report.source}: ${w}`);
 }
 
+interface Listing {
+  report: SourceReport;
+  markets: IndexMarket[];
+  solvers: IndexSolver[];
+}
+
+function transportCardRejection(delivered: TransportCard, solver: IndexSolver, network: Network, now: number): string | undefined {
+  const card = delivered.card as Partial<Card> | null;
+  if (typeof card !== "object" || card === null || card.discovery_pubkey !== solver.discovery_pubkey || card.name !== solver.name) {
+    return "name or discovery_pubkey does not match the listing";
+  }
+  if (card.markets === undefined) return "a pointer carries no markets";
+  const errors = cardErrors(card, network);
+  if (errors.length > 0) return `invalid card: ${errors.join("; ")}`;
+  if (!verifyCardSig(card)) return "sig does not verify against discovery_pubkey";
+  const age = now - delivered.createdAt;
+  if (!(age <= MAX_CARD_AGE_SECONDS)) return `stale: published ${age}s ago, max ${MAX_CARD_AGE_SECONDS}s`;
+  return undefined;
+}
+
+/** Replaces each listing's markets with its solver's delivered card where that card passes; returns a failed fetch's one warning. */
+async function resolveTransportCards(
+  listings: Listing[],
+  fetcher: TransportCardFetcher,
+  network: Network,
+  now: DiscoverOptions["now"],
+): Promise<string | undefined> {
+  const identities = new Map<string, IndexSolver>();
+  for (const { solvers } of listings) for (const solver of solvers) identities.set(stableStringify(solver), solver);
+  if (identities.size === 0) return undefined;
+  let delivered: TransportCard[];
+  try {
+    delivered = await fetcher.fetch([...identities.values()], network);
+    if (!Array.isArray(delivered)) throw new Error("fetch did not return an array");
+  } catch (e) {
+    return `transport cards: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  const latest = new Map<string, TransportCard>();
+  for (const entry of delivered) {
+    if (typeof entry?.pubkey !== "string") continue;
+    const held = latest.get(entry.pubkey);
+    if (!held || entry.createdAt > held.createdAt) latest.set(entry.pubkey, entry);
+  }
+  const at = typeof now === "function" ? now() : (now ?? Math.floor(Date.now() / 1000));
+  for (const listing of listings) {
+    for (const solver of listing.solvers) {
+      const found = latest.get(solver.discovery_pubkey);
+      if (!found) continue;
+      const rejection = transportCardRejection(found, solver, network, at);
+      if (rejection) {
+        listing.report.warnings.push(`transport card for ${solver.name} ignored: ${rejection}`);
+        continue;
+      }
+      const card = found.card as Card;
+      const markets: IndexMarket[] = [];
+      for (const market of card.markets ?? []) {
+        const projected = indexMarketFromCard(card, market);
+        if (projected.ok) markets.push(projected.market);
+        else listing.report.warnings.push(`transport card for ${solver.name}: held out, no v0 asset id: ${projected.excluded}`);
+      }
+      listing.markets = listing.markets.filter((m) => m.solver !== solver.name).concat(markets);
+      listing.report.marketCount = listing.markets.length;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Discover markets across the followed registries plus any pinned local cards.
  * Registry failures are isolated; local cards are schema-validated and those
@@ -165,24 +258,21 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   // Omitted means the network default; [] is the explicit opt-out.
   const fromDefault = opts.registries === undefined;
   const registries = opts.registries ?? defaultRegistryUrls(network);
-  const sources: SourceReport[] = [];
-  const warnings: string[] = [];
+  const indexNow = typeof opts.now === "function" ? opts.now() : opts.now;
   // Entries accumulate in source order (registries first, then local cards);
   // the stable sort below preserves that order within equal (pair, fee) keys,
   // which realizes the spec's "source order as tiebreak" without bookkeeping.
-  const tagged: Array<{ market: IndexMarket; source: string; sourceType: SourceType }> = [];
+  const listings: Listing[] = [];
 
   const indexResults = await Promise.all(
-    registries.map((url) => fetchIndex(url, { ...opts, network })),
+    registries.map((url) => fetchIndex(url, { ...opts, network, now: indexNow })),
   );
 
   for (const r of indexResults) {
     const report: SourceReport = { source: r.url, sourceType: "registry", ok: r.ok, marketCount: r.ok ? r.index!.markets.length : 0, warnings: r.warnings };
     if (!r.ok) report.error = r.error;
     if (fromDefault) report.fromDefault = true;
-    recordSource(sources, warnings, report);
-    if (!r.ok) continue;
-    for (const m of r.index!.markets) tagged.push({ market: m, source: r.url, sourceType: "registry" });
+    listings.push({ report, markets: r.index?.markets ?? [], solvers: r.index?.solvers ?? [] });
   }
 
   for (const local of opts.localCards ?? []) {
@@ -190,7 +280,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     if (!result.ok) {
       const source = local.label ?? "local:<invalid>";
       const error = `invalid card: ${result.errors.join("; ")}`;
-      recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
+      listings.push({ report: { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] }, markets: [], solvers: [] });
       continue;
     }
     const card = result.value!;
@@ -198,17 +288,30 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     const localNetwork = local.network ?? network;
     if (localNetwork !== network) {
       const error = `card targets ${localNetwork}, not ${network}; skipped`;
-      recordSource(sources, warnings, { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] });
+      listings.push({ report: { source, sourceType: "local", ok: false, marketCount: 0, error, warnings: [] }, markets: [], solvers: [] });
       continue;
     }
-    for (const m of card.markets) {
+    const markets = (card.markets ?? []).map((m) => {
       const entry: IndexMarket = { ...m, solver: card.name };
       if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
       if (card.transports) entry.transports = card.transports;
-      tagged.push({ market: entry, source, sourceType: "local" });
-    }
-    recordSource(sources, warnings, { source, sourceType: "local", ok: true, marketCount: card.markets.length, warnings: [] });
+      return entry;
+    });
+    const solvers: IndexSolver[] =
+      card.discovery_pubkey && card.transports?.nostr
+        ? [{ name: card.name, discovery_pubkey: card.discovery_pubkey, transports: card.transports }]
+        : [];
+    listings.push({ report: { source, sourceType: "local", ok: true, marketCount: markets.length, warnings: [] }, markets, solvers });
   }
+
+  const fetchFailure = opts.transportCards ? await resolveTransportCards(listings, opts.transportCards, network, opts.now) : undefined;
+  const sources: SourceReport[] = [];
+  const warnings: string[] = [];
+  for (const { report } of listings) recordSource(sources, warnings, report);
+  if (fetchFailure) warnings.push(fetchFailure);
+  const tagged = listings.flatMap(({ report, markets }) =>
+    markets.map((market) => ({ market, source: report.source, sourceType: report.sourceType })),
+  );
 
   // Drop byte-identical duplicates (same solver listed in two registries),
   // keeping the earliest source.

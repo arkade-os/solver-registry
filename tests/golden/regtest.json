@@ -3,5 +3,18 @@
   "network": "regtest",
   "generated_at": 1700000000,
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "markets": []
+  "markets": [],
+  "solvers": [
+    {
+      "name": "evm-solver",
+      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+      "transports": {
+        "nostr": {
+          "relays": [
+            "wss://relay.example.com"
+          ]
+        }
+      }
+    }
+  ]
 }

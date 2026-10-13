@@ -9,29 +9,17 @@ import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import cardSchema from "../schema/card.schema.json" with { type: "json" };
 import { verifyCardSig } from "../packages/discovery-client/src/canonical.ts";
-import {
-  cardHasRfqMarket,
-  cardRfqErrors,
-  cardVersionErrors,
-  marketCorridorErrors,
-  marketLimitErrors,
-  marketNetworkErrors,
-  marketSolverFeeErrors,
-} from "../packages/discovery-client/src/validate.ts";
-import {
-  DEFAULT_CORRIDOR,
-  legacyAssetId,
-  legacyMarketCorridor,
-  marketPairKey,
-  pairSideLabel,
-} from "../packages/discovery-client/src/types.ts";
+import { cardErrors } from "../packages/discovery-client/src/validate.ts";
+import { indexMarketFromCard } from "../packages/discovery-client/src/project.ts";
 // The wire types live with the portable client; the reducer imports them so a
 // schema change is a one-place edit. (The client never imports from scripts/ —
-// this direction keeps it dependency-free.)
+// this direction keeps it portable.)
 import {
   NETWORKS,
+  marketPairKey,
   type Card,
   type IndexMarket,
+  type IndexSolver,
   type Network,
   type NetworkIndex,
 } from "../packages/discovery-client/src/types.ts";
@@ -95,28 +83,10 @@ export function reduceNetwork(
     const expectedName = basename(file, ".json");
 
     // Cross-field rules shared with the client validator run even when the
-    // schema already failed: both helpers are shape-defensive, so a solver
+    // schema already failed: they are shape-defensive, so a solver
     // whose card breaks a structural rule still sees the human message (e.g.
     // "must enable size limits for at least one side") next to Ajv's output.
-    if (Array.isArray(card.markets)) {
-      for (const [i, market] of card.markets.entries()) {
-        const m = market ?? {};
-        for (const message of [...marketLimitErrors(m), ...marketCorridorErrors(m), ...marketNetworkErrors(m, network), ...marketSolverFeeErrors(m)]) {
-          if (message) messages.push(`markets[${i}]: ${message}`);
-        }
-      }
-      for (const message of cardRfqErrors(card)) messages.push(message);
-      // Same words as the client's own validator, for the same reason the RFQ
-      // rules are shared: a card rejected by CI must be rejected by a consumer
-      // that pinned it locally, and vice versa.
-      for (const message of cardVersionErrors(card)) messages.push(message);
-      // The registry's listing gate is stricter than a local pin: the
-      // rendezvous must carry the solver's own signature, not just the PR
-      // author's word (see cardRfqErrors for the split's rationale).
-      if (cardHasRfqMarket(card) && card.sig === undefined) {
-        messages.push("sig is required when any market has a non-arkade corridor (the RFQ rendezvous must be self-authenticating)");
-      }
-    }
+    messages.push(...cardErrors(parsed, network));
 
     // Name and duplicate checks only need a name, not a schema-clean card —
     // reporting them alongside any other errors saves the solver a CI
@@ -157,44 +127,23 @@ export function reduceNetwork(
   }
 
   const markets: IndexMarket[] = [];
+  const solvers: IndexSolver[] = [];
   const excluded: string[] = [];
   for (const { card } of cards) {
-    for (const market of card.markets) {
-      // An already-signed legacy card is already in the v0 index shape. Keep
-      // its bytes semantically intact instead of trying to down-project the
-      // short ids a second time.
-      if (market.pair !== undefined) {
-        const entry: IndexMarket = { ...market, solver: card.name };
-        if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-        if (card.transports) entry.transports = card.transports;
-        markets.push(entry);
+    if (card.discovery_pubkey) {
+      solvers.push({ name: card.name, discovery_pubkey: card.discovery_pubkey, ...(card.transports && { transports: card.transports }) });
+    }
+    for (const market of card.markets ?? []) {
+      const projected = indexMarketFromCard(card, market);
+      if (!projected.ok) {
+        excluded.push(projected.excluded);
         continue;
       }
-      const baseCorridor = legacyMarketCorridor(market, "base");
-      const quoteCorridor = legacyMarketCorridor(market, "quote");
-      // No v0 id would fail the whole document for v0 clients: held out, named.
-      const legacy = {
-        base: legacyAssetId(market.base_asset.id),
-        quote: legacyAssetId(market.quote_asset.id),
-      };
-      if (legacy.base === undefined || legacy.quote === undefined) {
-        excluded.push(`${card.name}: ${market.base_asset.id} -> ${market.quote_asset.id}`);
-        continue;
-      }
-      const entry: IndexMarket = {
-        ...market,
-        base_asset: { ...market.base_asset, id: legacy.base, caip19_id: market.base_asset.id },
-        quote_asset: { ...market.quote_asset, id: legacy.quote, caip19_id: market.quote_asset.id },
-        solver: card.name,
-        pair: `${pairSideLabel(baseCorridor, market.base_asset.ticker)}/${pairSideLabel(quoteCorridor, market.quote_asset.ticker)}`,
-      };
-      if (baseCorridor !== DEFAULT_CORRIDOR) entry.base_corridor = baseCorridor;
-      if (quoteCorridor !== DEFAULT_CORRIDOR) entry.quote_corridor = quoteCorridor;
-      if (card.discovery_pubkey) entry.discovery_pubkey = card.discovery_pubkey;
-      if (card.transports) entry.transports = card.transports;
-      markets.push(entry);
+      markets.push(projected.market);
     }
   }
+  // Not the read order: "a-b.json" sorts before "a.json".
+  solvers.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   // Group by the corridor-qualified leg pair (tickers are display-only and
   // not unique; bare asset ids collapse different corridors), then by spread
@@ -222,6 +171,7 @@ export function reduceNetwork(
       generated_at: meta.generatedAt,
       commit: meta.commit,
       markets,
+      solvers,
     },
   };
 }

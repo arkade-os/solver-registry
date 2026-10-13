@@ -1,0 +1,13 @@
+{
+  "version": 0,
+  "name": "pointer-solver",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay.example.com"
+      ]
+    }
+  },
+  "sig": "305d70d36e1cee49bfdb6f04e411bebbcee18978cb25cbb0fb4b88a790f69abf4f9c09420009da21a1af7ca7b39ff7d78f90978373a10969ea5fd3b2b4a0554c"
+}
