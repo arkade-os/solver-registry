@@ -191,9 +191,9 @@ function transportCardRejection(delivered: TransportCard, solver: IndexSolver, n
     return "name or discovery_pubkey does not match the listing";
   }
   if (card.markets === undefined) return "a pointer carries no markets";
+  if (!verifyCardSig(card)) return "sig does not verify against discovery_pubkey";
   const errors = cardErrors(card, network);
   if (errors.length > 0) return `invalid card: ${errors.join("; ")}`;
-  if (!verifyCardSig(card)) return "sig does not verify against discovery_pubkey";
   const age = now - delivered.createdAt;
   if (!(age <= MAX_CARD_AGE_SECONDS)) return `stale: published ${age}s ago, max ${MAX_CARD_AGE_SECONDS}s`;
   // Symmetric so a skewed wallet clock still accepts live cards, while a far-future date cannot keep a dead solver listed.
@@ -206,7 +206,7 @@ async function resolveTransportCards(
   listings: Listing[],
   fetcher: TransportCardFetcher,
   network: Network,
-  now: DiscoverOptions["now"],
+  now: number,
 ): Promise<string | undefined> {
   const identities = new Map<string, IndexSolver>();
   for (const { solvers } of listings) for (const solver of solvers) identities.set(stableStringify(solver), solver);
@@ -220,16 +220,16 @@ async function resolveTransportCards(
   }
   const latest = new Map<string, TransportCard>();
   for (const entry of delivered) {
-    if (typeof entry?.pubkey !== "string") continue;
+    // A non-number would lose every comparison, so it could shadow a real card that arrived after it.
+    if (typeof entry?.pubkey !== "string" || !Number.isFinite(entry.createdAt)) continue;
     const held = latest.get(entry.pubkey);
     if (!held || entry.createdAt > held.createdAt) latest.set(entry.pubkey, entry);
   }
-  const at = typeof now === "function" ? now() : (now ?? Math.floor(Date.now() / 1000));
   for (const listing of listings) {
     for (const solver of listing.solvers) {
       const found = latest.get(solver.discovery_pubkey);
       if (!found) continue;
-      const rejection = transportCardRejection(found, solver, network, at);
+      const rejection = transportCardRejection(found, solver, network, now);
       if (rejection) {
         listing.report.warnings.push(`transport card for ${solver.name} ignored: ${rejection}`);
         continue;
@@ -260,14 +260,15 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   // Omitted means the network default; [] is the explicit opt-out.
   const fromDefault = opts.registries === undefined;
   const registries = opts.registries ?? defaultRegistryUrls(network);
-  const indexNow = typeof opts.now === "function" ? opts.now() : opts.now;
+  // One reading for the index and the cards alike, taken before any fetch.
+  const now = typeof opts.now === "function" ? opts.now() : (opts.now ?? Math.floor(Date.now() / 1000));
   // Entries accumulate in source order (registries first, then local cards);
   // the stable sort below preserves that order within equal (pair, fee) keys,
   // which realizes the spec's "source order as tiebreak" without bookkeeping.
   const listings: Listing[] = [];
 
   const indexResults = await Promise.all(
-    registries.map((url) => fetchIndex(url, { ...opts, network, now: indexNow })),
+    registries.map((url) => fetchIndex(url, { ...opts, network, now })),
   );
 
   for (const r of indexResults) {
@@ -306,7 +307,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     listings.push({ report: { source, sourceType: "local", ok: true, marketCount: markets.length, warnings: [] }, markets, solvers });
   }
 
-  const fetchFailure = opts.transportCards ? await resolveTransportCards(listings, opts.transportCards, network, opts.now) : undefined;
+  const fetchFailure = opts.transportCards ? await resolveTransportCards(listings, opts.transportCards, network, now) : undefined;
   const sources: SourceReport[] = [];
   const warnings: string[] = [];
   for (const { report } of listings) recordSource(sources, warnings, report);

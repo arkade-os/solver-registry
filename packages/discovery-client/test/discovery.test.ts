@@ -325,6 +325,19 @@ test("transport cards: a passing card replaces its listing's markets, projected,
   assert.equal(res.sources[0].marketCount, 2);
 });
 
+test("transport cards: an entry with a non-numeric createdAt cannot shadow the solver's real card", async () => {
+  const { fetcher } = stub([delivered(signed(liveCard("carol", 9)), CAROL.pk, "soon" as never), delivered(signed(liveCard("carol", 5)))]);
+  const res = await discoverT(fetcher);
+  assert.deepEqual(res.warnings, []);
+  assert.deepEqual(marketsOf(res), [["carol", 5, REG_T, "registry"]]);
+});
+
+test("transport cards: a live clock is read once per discover(), for the index and the cards alike", async () => {
+  let reads = 0;
+  await discover({ registries: [REG_T], fetchImpl: mockFetch(tRoutes), now: () => (reads++, NOW), transportCards: stub([]).fetcher });
+  assert.equal(reads, 1);
+});
+
 test("transport cards: without a fetcher, or with nothing delivered, the index stands and a pointer lists nothing", async () => {
   const res = await discoverT();
   assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
@@ -336,6 +349,7 @@ const REJECTED: Array<[string, TransportCard, RegExp]> = [
   ["a name mismatch", delivered(signed(liveCard("mallory", 5))), /does not match the listing/],
   ["a card naming another key", delivered(signed(liveCard("carol", 5, PAT.pk), PAT.sk)), /does not match the listing/],
   ["a bad sig", delivered({ ...signed(liveCard("carol", 5)), markets: [makeMarket({ fee_bps: 1 })] }), /sig does not verify/],
+  ["an unsigned card, before its markets are read", delivered({ ...liveCard("carol", 5), markets: [makeMarket({ fee_bps: 20_000 })] }), /sig does not verify/],
   ["a stale card", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW - MAX_CARD_AGE_SECONDS - 1), /stale/],
   ["a card dated too far ahead", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW + MAX_CARD_AGE_SECONDS + 1), /in the future/],
   ["an invalid card", delivered(signed({ ...liveCard("carol", 5), markets: [makeMarket({ fee_bps: 20_000 })] })), /fee_bps/],
