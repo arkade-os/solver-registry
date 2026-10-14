@@ -186,6 +186,8 @@ interface Listing {
   markets: IndexMarket[];
   solvers: IndexSolver[];
   stale?: boolean;
+  /** Past STALE_LISTING_TRUST_FACTOR max-ages: its solvers were dropped too. */
+  expired?: boolean;
   /** Solvers whose markets now come from their own transport card. */
   delivered?: Set<string>;
 }
@@ -260,8 +262,11 @@ function holdOutStaleSnapshots(listing: Listing): void {
   if (!listing.stale) return;
   const kept = listing.markets.filter((m) => listing.delivered?.has(m.solver));
   if (kept.length === listing.markets.length) return;
+  const held = listing.markets.length - kept.length;
   listing.report.warnings.push(
-    `${listing.markets.length - kept.length} market(s) held out while the index is stale; listed solvers' fresh transport cards still count`,
+    listing.expired
+      ? `${held} market(s) held out; the index is too old to vouch for anyone`
+      : `${held} market(s) held out while the index is stale; listed solvers' fresh transport cards still count`,
   );
   listing.markets = kept;
   listing.report.marketCount = kept.length;
@@ -298,7 +303,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     const stale = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds });
     const expired = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds: maxAgeSeconds * STALE_LISTING_TRUST_FACTOR });
     if (expired) report.warnings.push(`index too stale to vouch for its solvers: older than ${STALE_LISTING_TRUST_FACTOR}x the ${maxAgeSeconds}s max age`);
-    listings.push({ report, markets: r.index?.markets ?? [], solvers: expired ? [] : (r.index?.solvers ?? []), stale });
+    listings.push({ report, markets: r.index?.markets ?? [], solvers: expired ? [] : (r.index?.solvers ?? []), stale, expired });
   }
 
   for (const local of opts.localCards ?? []) {

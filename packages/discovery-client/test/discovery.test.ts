@@ -349,6 +349,8 @@ test("stale index: past four max-ages it vouches for no one, so a delisted solve
   assert.deepEqual(marketsOf(res), []);
   assert.equal(calls.length, 0);
   assert.match(res.warnings.join("\n"), /too stale to vouch/);
+  assert.match(res.warnings.join("\n"), /1 market\(s\) held out/);
+  assert.doesNotMatch(res.warnings.join("\n"), /still count/);
 });
 
 test("stale index: its own markets are held out, while local pins stand", async () => {
