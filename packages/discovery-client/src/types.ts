@@ -418,6 +418,13 @@ export function isSameAssetMarket(market: MarketLike): boolean {
   return reference !== undefined && reference === chainReferenceOf(quoteId);
 }
 
+export function quotesOverRfq(market: MarketLike & Pick<IndexMarket, "discovery_pubkey" | "transports">): boolean {
+  if (isRfqMarket(market)) return true;
+  if (isSameAssetMarket(market)) return false;
+  const relays = market.transports?.nostr?.relays;
+  return typeof market.discovery_pubkey === "string" && market.discovery_pubkey.length > 0 && Array.isArray(relays) && relays.length > 0;
+}
+
 /**
  * One side's canonical leg identity. A CAIP-19 side is already complete;
  * during the compatibility window a legacy short id is qualified with its

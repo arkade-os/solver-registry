@@ -9,7 +9,7 @@ import {
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
 import { registryIndexUrl } from "../src/registries.ts";
-import { NETWORKS } from "../src/types.ts";
+import { NETWORKS, isRfqMarket, quotesOverRfq } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
 import { BTC, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
 
@@ -155,6 +155,67 @@ test("discover: skips an invalid local card with a warning", async () => {
   assert.match(res.warnings.join("\n"), /pinned: invalid card/);
 });
 
+test("discover: projects a pinned canonical card onto short ids", async () => {
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: daveCard(), network: "bitcoin" }],
+    network: "bitcoin",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
+  const market = res.markets[0];
+  assert.equal(market.base_asset.id, "btc");
+  assert.equal(market.base_asset.caip19_id, BTC.id);
+  assert.equal(market.quote_asset.id, "a".repeat(68));
+  assert.equal(market.quote_asset.caip19_id, USDT);
+  assert.equal(market.pair, "BTC/USDT");
+  assert.equal(market.quote_corridor, undefined);
+  assert.equal(quotesOverRfq(market), false);
+});
+
+test("discover: a legacy card with a pair is copied and not re-projected", async () => {
+  const quoteId = "b".repeat(68);
+  const spot = makeMarket({ fee_bps: 10 });
+  const card = {
+    version: 0,
+    name: "legacy",
+    markets: [{
+      ...spot,
+      pair: "BTC/USDT",
+      base_asset: { ...spot.base_asset, id: "btc" },
+      quote_asset: { ...spot.quote_asset, id: quoteId },
+    }],
+  };
+  const res = await discover({
+    registries: [],
+    localCards: [{ card, network: "bitcoin" }],
+    network: "bitcoin",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  const market = res.markets[0];
+  assert.equal(res.sources[0].ok, true, res.warnings.join("\n"));
+  assert.equal(market.base_asset.id, "btc");
+  assert.equal(market.quote_asset.id, quoteId);
+  assert.equal(market.pair, "BTC/USDT");
+  assert.equal(market.base_asset.caip19_id ?? market.quote_asset.caip19_id ?? market.base_corridor ?? market.quote_corridor, undefined);
+});
+
+test("discover: a pinned card whose assets name another network skips those markets", async () => {
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: daveCard(), network: "mutinynet" }],
+    network: "mutinynet",
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  assert.equal(res.markets.length, 0);
+  assert.equal(res.sources[0].ok, false);
+  assert.match(res.warnings.join("\n"), /bitcoin/);
+  assert.doesNotMatch(res.warnings.join("\n"), /targets/);
+});
+
 test("discover: skips a local card scoped to another network", async () => {
   const res = await discover({
     registries: [],
@@ -268,6 +329,25 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
   assert.equal(lightning.fee_bps, 25);
   assert.deepEqual(lightning.transports, { nostr: { relays: ["wss://relay.example.com"] } });
   assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: "bitcoin:bitcoin/slip44:0" })!.fee_bps, 40);
+});
+
+test("quotesOverRfq: a cross-asset spot market needs a pubkey and at least one relay", async () => {
+  const pubkey = "d".repeat(64);
+  const spot = () => ({ version: 0, markets: [makeMarket({ fee_bps: 10 })] });
+  const res = await discover({
+    registries: [],
+    localCards: [
+      { label: "quoted", card: { ...spot(), name: "quoted", discovery_pubkey: pubkey, transports: { nostr: { relays: ["wss://relay.example.com"] } } } },
+      { label: "feed", card: { ...spot(), name: "feed", discovery_pubkey: pubkey } },
+    ],
+    fetchImpl: mockFetch(routes),
+    now: NOW,
+  });
+  const quoted = res.markets.find((m) => m.source === "quoted")!;
+  assert.equal(quotesOverRfq(quoted), true);
+  assert.equal(isRfqMarket(quoted), false);
+  assert.equal(quotesOverRfq(res.markets.find((m) => m.source === "feed")!), false);
+  assert.equal(quotesOverRfq(makeCorridorMarket("lightning")), true);
 });
 
 test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {
