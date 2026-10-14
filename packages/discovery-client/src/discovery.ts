@@ -206,22 +206,24 @@ function transportCardRejection(delivered: TransportCard, solver: IndexSolver, n
   return undefined;
 }
 
-/** Replaces each listing's markets with its solver's delivered card where that card passes; returns a failed fetch's one warning. */
+/** Replaces each listing's markets with its solver's delivered card where that card passes; a failed fetch is a warning on every listing that asked. */
 async function resolveTransportCards(
   listings: Listing[],
   fetcher: TransportCardFetcher,
   network: Network,
   now: number,
-): Promise<string | undefined> {
+): Promise<void> {
   const identities = new Map<string, IndexSolver>();
   for (const { solvers } of listings) for (const solver of solvers) identities.set(stableStringify(solver), solver);
-  if (identities.size === 0) return undefined;
+  if (identities.size === 0) return;
   let delivered: TransportCard[];
   try {
     delivered = await fetcher.fetch([...identities.values()], network);
     if (!Array.isArray(delivered)) throw new Error("fetch did not return an array");
   } catch (e) {
-    return `transport cards: ${e instanceof Error ? e.message : String(e)}`;
+    const warning = `transport cards: ${e instanceof Error ? e.message : String(e)}`;
+    for (const listing of listings) if (listing.solvers.length > 0) listing.report.warnings.push(warning);
+    return;
   }
   const latest = new Map<string, TransportCard>();
   for (const entry of delivered) {
@@ -251,7 +253,6 @@ async function resolveTransportCards(
       (listing.delivered ??= new Set()).add(solver.name);
     }
   }
-  return undefined;
 }
 
 // A stale index cannot vouch for the terms it snapshotted; a listed solver's own fresh signed card still can.
@@ -329,12 +330,11 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     listings.push({ report: { source, sourceType: "local", ok: true, marketCount: markets.length, warnings: [] }, markets, solvers });
   }
 
-  const fetchFailure = opts.transportCards ? await resolveTransportCards(listings, opts.transportCards, network, now) : undefined;
+  if (opts.transportCards) await resolveTransportCards(listings, opts.transportCards, network, now);
   for (const listing of listings) holdOutStaleSnapshots(listing);
   const sources: SourceReport[] = [];
   const warnings: string[] = [];
   for (const { report } of listings) recordSource(sources, warnings, report);
-  if (fetchFailure) warnings.push(fetchFailure);
   const tagged = listings.flatMap(({ report, markets }) =>
     markets.map((market) => ({ market, source: report.source, sourceType: report.sourceType })),
   );

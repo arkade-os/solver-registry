@@ -421,10 +421,11 @@ test("transport cards: a card from a key no followed source lists is ignored", a
   assert.deepEqual(res.warnings, []);
 });
 
-test("transport cards: a fetcher that throws is one warning and changes nothing else", async () => {
+test("transport cards: a fetcher that throws is one warning, on the source that lists solvers, and changes nothing else", async () => {
   const res = await discoverT({ fetch: async () => { throw new Error("relays down"); } });
   assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
-  assert.deepEqual(res.warnings, ["transport cards: relays down"]);
+  assert.deepEqual(res.warnings, [`${REG_T}: transport cards: relays down`]);
+  assert.deepEqual(res.sources[0].warnings, ["transport cards: relays down"]);
 });
 
 test("transport cards: a pinned card with a nostr transport is an identity, and keeps its local source", async () => {
