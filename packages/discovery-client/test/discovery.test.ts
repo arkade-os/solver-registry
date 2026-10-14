@@ -342,6 +342,15 @@ const STALE_NOW = GENERATED_AT + 8 * 86_400;
 const discoverStale = (transportCards?: TransportCardFetcher) =>
   discover({ registries: [REG_T], localCards: [{ card: daveCard() }], fetchImpl: mockFetch(tRoutes), now: () => STALE_NOW, transportCards });
 
+test("stale index: past four max-ages it vouches for no one, so a delisted solver's live card stops counting", async () => {
+  const LONG_STALE = GENERATED_AT + 4 * 7 * 86_400 + 1;
+  const { fetcher, calls } = stub([delivered(signed(liveCard("pat", 7, PAT.pk), PAT.sk), PAT.pk, LONG_STALE)]);
+  const res = await discover({ registries: [REG_T], fetchImpl: mockFetch(tRoutes), now: () => LONG_STALE, transportCards: fetcher });
+  assert.deepEqual(marketsOf(res), []);
+  assert.equal(calls.length, 0);
+  assert.match(res.warnings.join("\n"), /too stale to vouch/);
+});
+
 test("stale index: its own markets are held out, while local pins stand", async () => {
   const res = await discoverStale();
   assert.deepEqual(marketsOf(res), [["dave", 10, "local:dave", "local"]]);

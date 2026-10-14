@@ -172,7 +172,9 @@ keep the listing's `source`. Anything else is a warning, never a throw.
 A registry index older than `DEFAULT_MAX_AGE_SECONDS` (7 days) is stale. Its own
 markets are held out with a warning, but the solvers it lists still resolve over
 their transports, so a pointer-listed solver with a fresh card keeps trading.
-Local pins are unaffected.
+Past `STALE_LISTING_TRUST_FACTOR` (4) max-ages the index vouches for no one and
+its solvers stop resolving too, so a registry's removal of a solver eventually
+wins. Local pins are unaffected.
 
 ## Expo / React Native
 

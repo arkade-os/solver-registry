@@ -35,6 +35,8 @@ export interface DiscoveredMarket extends IndexMarket {
 }
 
 export const DEFAULT_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+/** Past this many max-ages a stale index vouches for no one, so a registry's removal of a solver eventually wins. */
+export const STALE_LISTING_TRUST_FACTOR = 4;
 
 /**
  * Whether an index is older than `maxAgeSeconds` (default 7 days) relative to
@@ -291,8 +293,11 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     const report: SourceReport = { source: r.url, sourceType: "registry", ok: r.ok, marketCount: r.ok ? r.index!.markets.length : 0, warnings: r.warnings };
     if (!r.ok) report.error = r.error;
     if (fromDefault) report.fromDefault = true;
-    const stale = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds: opts.maxAgeSeconds });
-    listings.push({ report, markets: r.index?.markets ?? [], solvers: r.index?.solvers ?? [], stale });
+    const maxAgeSeconds = opts.maxAgeSeconds ?? DEFAULT_MAX_AGE_SECONDS;
+    const stale = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds });
+    const expired = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds: maxAgeSeconds * STALE_LISTING_TRUST_FACTOR });
+    if (expired) report.warnings.push(`index too stale to vouch for its solvers: older than ${STALE_LISTING_TRUST_FACTOR}x the ${maxAgeSeconds}s max age`);
+    listings.push({ report, markets: r.index?.markets ?? [], solvers: expired ? [] : (r.index?.solvers ?? []), stale });
   }
 
   for (const local of opts.localCards ?? []) {
