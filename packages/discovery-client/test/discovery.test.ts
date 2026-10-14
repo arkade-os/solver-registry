@@ -338,6 +338,33 @@ test("transport cards: a live clock is read once per discover(), for the index a
   assert.equal(reads, 1);
 });
 
+const STALE_NOW = GENERATED_AT + 8 * 86_400;
+const discoverStale = (transportCards?: TransportCardFetcher) =>
+  discover({ registries: [REG_T], localCards: [{ card: daveCard() }], fetchImpl: mockFetch(tRoutes), now: () => STALE_NOW, transportCards });
+
+test("stale index: its own markets are held out, while local pins stand", async () => {
+  const res = await discoverStale();
+  assert.deepEqual(marketsOf(res), [["dave", 10, "local:dave", "local"]]);
+  assert.equal(res.sources[0].ok, true);
+  assert.match(res.warnings.join("\n"), /index is stale/);
+  assert.match(res.warnings.join("\n"), /held out while the index is stale/);
+});
+
+test("stale index: solvers it lists still count through their fresh transport cards", async () => {
+  const res = await discoverStale(
+    stub([
+      delivered(signed(liveCard("pat", 7, PAT.pk), PAT.sk), PAT.pk, STALE_NOW),
+      delivered(signed(liveCard("carol", 5)), CAROL.pk, STALE_NOW),
+    ]).fetcher,
+  );
+  assert.deepEqual(marketsOf(res), [
+    ["carol", 5, REG_T, "registry"],
+    ["pat", 7, REG_T, "registry"],
+    ["dave", 10, "local:dave", "local"],
+  ].sort((a, b) => Number(a[1]) - Number(b[1])));
+  assert.doesNotMatch(res.warnings.join("\n"), /held out while/);
+});
+
 test("transport cards: without a fetcher, or with nothing delivered, the index stands and a pointer lists nothing", async () => {
   const res = await discoverT();
   assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);

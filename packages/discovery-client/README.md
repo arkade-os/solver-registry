@@ -169,6 +169,11 @@ registry rule, with a valid `sig` (`verifyCardSig`), and dated within
 `MAX_CARD_AGE_SECONDS` of now either way. It then replaces that solver's listed markets, which
 keep the listing's `source`. Anything else is a warning, never a throw.
 
+A registry index older than `DEFAULT_MAX_AGE_SECONDS` (7 days) is stale. Its own
+markets are held out with a warning, but the solvers it lists still resolve over
+their transports, so a pointer-listed solver with a fresh card keeps trading.
+Local pins are unaffected.
+
 ## Expo / React Native
 
 Works out of the box — Hermes ships `fetch`, `AbortController`, and `BigInt`. If

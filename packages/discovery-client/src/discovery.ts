@@ -183,6 +183,9 @@ interface Listing {
   report: SourceReport;
   markets: IndexMarket[];
   solvers: IndexSolver[];
+  stale?: boolean;
+  /** Solvers whose markets now come from their own transport card. */
+  delivered?: Set<string>;
 }
 
 function transportCardRejection(delivered: TransportCard, solver: IndexSolver, network: Network, now: number): string | undefined {
@@ -243,9 +246,22 @@ async function resolveTransportCards(
       }
       listing.markets = listing.markets.filter((m) => m.solver !== solver.name).concat(markets);
       listing.report.marketCount = listing.markets.length;
+      (listing.delivered ??= new Set()).add(solver.name);
     }
   }
   return undefined;
+}
+
+// A stale index cannot vouch for the terms it snapshotted; a listed solver's own fresh signed card still can.
+function holdOutStaleSnapshots(listing: Listing): void {
+  if (!listing.stale) return;
+  const kept = listing.markets.filter((m) => listing.delivered?.has(m.solver));
+  if (kept.length === listing.markets.length) return;
+  listing.report.warnings.push(
+    `${listing.markets.length - kept.length} market(s) held out while the index is stale; listed solvers' fresh transport cards still count`,
+  );
+  listing.markets = kept;
+  listing.report.marketCount = kept.length;
 }
 
 /**
@@ -275,7 +291,8 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
     const report: SourceReport = { source: r.url, sourceType: "registry", ok: r.ok, marketCount: r.ok ? r.index!.markets.length : 0, warnings: r.warnings };
     if (!r.ok) report.error = r.error;
     if (fromDefault) report.fromDefault = true;
-    listings.push({ report, markets: r.index?.markets ?? [], solvers: r.index?.solvers ?? [] });
+    const stale = r.ok && isIndexStale(r.index!, { now, maxAgeSeconds: opts.maxAgeSeconds });
+    listings.push({ report, markets: r.index?.markets ?? [], solvers: r.index?.solvers ?? [], stale });
   }
 
   for (const local of opts.localCards ?? []) {
@@ -308,6 +325,7 @@ export async function discover(opts: DiscoverOptions): Promise<DiscoverResult> {
   }
 
   const fetchFailure = opts.transportCards ? await resolveTransportCards(listings, opts.transportCards, network, now) : undefined;
+  for (const listing of listings) holdOutStaleSnapshots(listing);
   const sources: SourceReport[] = [];
   const warnings: string[] = [];
   for (const { report } of listings) recordSource(sources, warnings, report);
