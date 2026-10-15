@@ -253,7 +253,15 @@ export interface Card {
    * address request-for-quote messages to, so they must be self-authenticating.
    */
   transports?: TransportMap;
-  markets: Market[];
+  /** Absent on a pointer: a registry entry whose markets come signed over its `transports`. */
+  markets?: Market[];
+}
+
+/** An index's listing of one solver to resolve over its transports: pointers always, full cards with a key. */
+export interface IndexSolver {
+  name: string;
+  discovery_pubkey: string;
+  transports?: TransportMap;
 }
 
 /** A flattened market entry in a published per-network index. */
@@ -278,6 +286,8 @@ export interface NetworkIndex {
   generated_at: number;
   commit: string;
   markets: IndexMarket[];
+  /** Sorted by name. Absent from indexes reduced before pointers existed. */
+  solvers?: IndexSolver[];
 }
 
 // Corridor helpers. All shape-defensive (they run inside validators on

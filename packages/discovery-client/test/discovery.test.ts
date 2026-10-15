@@ -6,12 +6,15 @@ import {
   listMarkets,
   selectMarkets,
   bestMarket,
+  MAX_CARD_AGE_SECONDS,
+  type TransportCard,
+  type TransportCardFetcher,
 } from "../src/discovery.ts";
 import { quoteOffer } from "../src/offer.ts";
 import { registryIndexUrl } from "../src/registries.ts";
-import { NETWORKS } from "../src/types.ts";
+import { NETWORKS, type IndexSolver } from "../src/types.ts";
 import type { FetchLike } from "../src/feed.ts";
-import { BTC, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, USDT_ID as USDT } from "./helpers.ts";
+import { BTC, KEYS, makeCorridorMarket, makeMarket, makeOneSidedMarket, mockFetch, signed, USDT_ID as USDT } from "./helpers.ts";
 
 const NOW = 1_700_000_100;
 const GENERATED_AT = 1_700_000_000;
@@ -268,6 +271,176 @@ test("corridor markets: leg-pair grouping, corridor-aware selection, transports 
   assert.equal(lightning.fee_bps, 25);
   assert.deepEqual(lightning.transports, { nostr: { relays: ["wss://relay.example.com"] } });
   assert.equal(bestMarket(res.markets, { baseId: BTC.id, quoteId: "bitcoin:bitcoin/slip44:0" })!.fee_bps, 40);
+});
+
+// carol is a full card listed at fee 25; pat is a pointer with nothing in markets.
+const [CAROL, PAT, EVE] = KEYS;
+const REG_T = "https://reg-t.example.com/bitcoin.json";
+const RELAYS = { nostr: { relays: ["wss://relay.example.com"] } };
+const listed = (name: string, pk: string): IndexSolver => ({ name, discovery_pubkey: pk, transports: RELAYS });
+const tRoutes = {
+  ...routes,
+  [REG_T]: {
+    body: JSON.stringify({
+      version: 0,
+      network: "bitcoin",
+      generated_at: GENERATED_AT,
+      commit: "c".repeat(40),
+      markets: [{ ...idxMarket("carol", 25), discovery_pubkey: CAROL.pk, transports: RELAYS }],
+      solvers: [listed("carol", CAROL.pk), listed("pat", PAT.pk)],
+    }),
+  },
+};
+const liveCard = (name: string, fee: number, pk = CAROL.pk) =>
+  ({ version: 0, name, discovery_pubkey: pk, transports: RELAYS, markets: [makeMarket({ fee_bps: fee })] });
+const delivered = (card: unknown, pubkey = CAROL.pk, createdAt = NOW): TransportCard => ({ pubkey, createdAt, card });
+
+function stub(cards: TransportCard[]) {
+  const calls: Array<{ solvers: readonly IndexSolver[]; network: string }> = [];
+  const fetcher: TransportCardFetcher = {
+    fetch: async (solvers, network) => {
+      calls.push({ solvers, network });
+      return cards;
+    },
+  };
+  return { fetcher, calls };
+}
+
+const discoverT = (transportCards?: TransportCardFetcher) =>
+  discover({ registries: [REG_T], fetchImpl: mockFetch(tRoutes), now: () => NOW, transportCards });
+const marketsOf = (res: Awaited<ReturnType<typeof discover>>) =>
+  res.markets.map((m) => [m.solver, m.fee_bps, m.source, m.sourceType]);
+
+test("transport cards: a passing card replaces its listing's markets, projected, under the listing's source", async () => {
+  const { fetcher, calls } = stub([
+    delivered(signed(liveCard("carol", 5))),
+    delivered(signed(liveCard("pat", 7, PAT.pk), PAT.sk), PAT.pk, NOW - MAX_CARD_AGE_SECONDS),
+  ]);
+  const res = await discoverT(fetcher);
+  assert.deepEqual(res.warnings, []);
+  assert.deepEqual(calls, [{ solvers: [listed("carol", CAROL.pk), listed("pat", PAT.pk)], network: "bitcoin" }]);
+  assert.deepEqual(marketsOf(res), [["carol", 5, REG_T, "registry"], ["pat", 7, REG_T, "registry"]]);
+  assert.equal(res.markets[0].base_asset.id, "btc");
+  assert.equal(res.markets[0].base_asset.caip19_id, BTC.id);
+  assert.equal(res.sources[0].marketCount, 2);
+});
+
+test("transport cards: an entry with a non-numeric createdAt cannot shadow the solver's real card", async () => {
+  const { fetcher } = stub([delivered(signed(liveCard("carol", 9)), CAROL.pk, "soon" as never), delivered(signed(liveCard("carol", 5)))]);
+  const res = await discoverT(fetcher);
+  assert.deepEqual(res.warnings, []);
+  assert.deepEqual(marketsOf(res), [["carol", 5, REG_T, "registry"]]);
+});
+
+test("transport cards: a live clock is read once per discover(), for the index and the cards alike", async () => {
+  let reads = 0;
+  await discover({ registries: [REG_T], fetchImpl: mockFetch(tRoutes), now: () => (reads++, NOW), transportCards: stub([]).fetcher });
+  assert.equal(reads, 1);
+});
+
+const STALE_NOW = GENERATED_AT + 8 * 86_400;
+const discoverStale = (transportCards?: TransportCardFetcher) =>
+  discover({ registries: [REG_T], localCards: [{ card: daveCard() }], fetchImpl: mockFetch(tRoutes), now: () => STALE_NOW, transportCards });
+
+test("stale index: past four max-ages it vouches for no one, so a delisted solver's live card stops counting", async () => {
+  const LONG_STALE = GENERATED_AT + 4 * 7 * 86_400 + 1;
+  const { fetcher, calls } = stub([delivered(signed(liveCard("pat", 7, PAT.pk), PAT.sk), PAT.pk, LONG_STALE)]);
+  const res = await discover({ registries: [REG_T], fetchImpl: mockFetch(tRoutes), now: () => LONG_STALE, transportCards: fetcher });
+  assert.deepEqual(marketsOf(res), []);
+  assert.equal(calls.length, 0);
+  assert.match(res.warnings.join("\n"), /too stale to vouch/);
+  assert.match(res.warnings.join("\n"), /1 market\(s\) held out/);
+  assert.doesNotMatch(res.warnings.join("\n"), /still count/);
+});
+
+test("stale index: its own markets are held out, while local pins stand", async () => {
+  const res = await discoverStale();
+  assert.deepEqual(marketsOf(res), [["dave", 10, "local:dave", "local"]]);
+  assert.equal(res.sources[0].ok, true);
+  assert.match(res.warnings.join("\n"), /index is stale/);
+  assert.match(res.warnings.join("\n"), /held out while the index is stale/);
+});
+
+test("stale index: solvers it lists still count through their fresh transport cards", async () => {
+  const res = await discoverStale(
+    stub([
+      delivered(signed(liveCard("pat", 7, PAT.pk), PAT.sk), PAT.pk, STALE_NOW),
+      delivered(signed(liveCard("carol", 5)), CAROL.pk, STALE_NOW),
+    ]).fetcher,
+  );
+  assert.deepEqual(marketsOf(res), [
+    ["carol", 5, REG_T, "registry"],
+    ["pat", 7, REG_T, "registry"],
+    ["dave", 10, "local:dave", "local"],
+  ].sort((a, b) => Number(a[1]) - Number(b[1])));
+  assert.doesNotMatch(res.warnings.join("\n"), /held out while/);
+});
+
+test("transport cards: without a fetcher, or with nothing delivered, the index stands and a pointer lists nothing", async () => {
+  const res = await discoverT();
+  assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
+  assert.deepEqual(res.warnings, []);
+  assert.deepEqual(await discoverT(stub([]).fetcher), res);
+});
+
+const REJECTED: Array<[string, TransportCard, RegExp]> = [
+  ["a name mismatch", delivered(signed(liveCard("mallory", 5))), /does not match the listing/],
+  ["a card naming another key", delivered(signed(liveCard("carol", 5, PAT.pk), PAT.sk)), /does not match the listing/],
+  ["a bad sig", delivered({ ...signed(liveCard("carol", 5)), markets: [makeMarket({ fee_bps: 1 })] }), /sig does not verify/],
+  ["an unsigned card, before its markets are read", delivered({ ...liveCard("carol", 5), markets: [makeMarket({ fee_bps: 20_000 })] }), /sig does not verify/],
+  ["a stale card", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW - MAX_CARD_AGE_SECONDS - 1), /stale/],
+  ["a card dated too far ahead", delivered(signed(liveCard("carol", 5)), CAROL.pk, NOW + MAX_CARD_AGE_SECONDS + 1), /in the future/],
+  ["an invalid card", delivered(signed({ ...liveCard("carol", 5), markets: [makeMarket({ fee_bps: 20_000 })] })), /fee_bps/],
+  [
+    "another network's ids",
+    delivered(signed({ ...liveCard("carol", 5), markets: [makeMarket({ base_asset: { ...BTC, id: "arkade:mutinynet/slip44:1" } })] })),
+    /names network "mutinynet"/,
+  ],
+  ["a pointer", delivered(signed({ version: 0, name: "carol", discovery_pubkey: CAROL.pk, transports: RELAYS })), /pointer/],
+];
+
+for (const [what, card, reason] of REJECTED) {
+  test(`transport cards: ${what} is a warning on the listing, which keeps its own markets`, async () => {
+    const res = await discoverT(stub([card]).fetcher);
+    assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
+    assert.equal(res.warnings.length, 1, res.warnings.join("\n"));
+    assert.ok(res.warnings[0].startsWith(`${REG_T}: transport card for carol`), res.warnings[0]);
+    assert.match(res.warnings[0]!, reason);
+  });
+}
+
+test("transport cards: a market with no v0 asset id is held out with a warning, as the reducer holds it out", async () => {
+  const usdc = { id: `eip155:1/erc20:0x${"b".repeat(40)}`, name: "USD Coin", ticker: "USDC", decimals: 6 };
+  const card = { ...liveCard("carol", 5), version: 1, markets: [makeMarket({ fee_bps: 5 }), makeMarket({ fee_bps: 6, quote_asset: usdc })] };
+  const res = await discoverT(stub([delivered(signed(card))]).fetcher);
+  assert.deepEqual(marketsOf(res), [["carol", 5, REG_T, "registry"]]);
+  assert.match(res.warnings.join("\n"), /transport card for carol: held out, no v0 asset id: carol: arkade:bitcoin\/slip44:0 -> eip155:1\//);
+});
+
+test("transport cards: a card from a key no followed source lists is ignored", async () => {
+  const res = await discoverT(stub([delivered(signed(liveCard("eve", 1, EVE.pk), EVE.sk), EVE.pk)]).fetcher);
+  assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
+  assert.deepEqual(res.warnings, []);
+});
+
+test("transport cards: a fetcher that throws is one warning, on the source that lists solvers, and changes nothing else", async () => {
+  const res = await discoverT({ fetch: async () => { throw new Error("relays down"); } });
+  assert.deepEqual(marketsOf(res), [["carol", 25, REG_T, "registry"]]);
+  assert.deepEqual(res.warnings, [`${REG_T}: transport cards: relays down`]);
+  assert.deepEqual(res.sources[0].warnings, ["transport cards: relays down"]);
+});
+
+test("transport cards: a pinned card with a nostr transport is an identity, and keeps its local source", async () => {
+  const { fetcher, calls } = stub([delivered(signed(liveCard("dave", 12, EVE.pk), EVE.sk), EVE.pk)]);
+  const res = await discover({
+    registries: [],
+    localCards: [{ card: liveCard("dave", 40, EVE.pk) }, { card: daveCard(), label: "keyless" }],
+    fetchImpl: mockFetch(routes),
+    now: () => NOW,
+    transportCards: fetcher,
+  });
+  assert.deepEqual(calls[0].solvers, [listed("dave", EVE.pk)]);
+  assert.deepEqual(marketsOf(res), [["dave", 10, "keyless", "local"], ["dave", 12, "local:dave", "local"]]);
 });
 
 test("quoteOffer: end-to-end from discovered market to exact want amount", async () => {

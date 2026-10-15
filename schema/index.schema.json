@@ -298,6 +298,31 @@
           }
         }
       }
+    },
+    "solvers": {
+      "type": "array",
+      "description": "Every listed solver with a discovery_pubkey (pointer cards always, full cards when they carry one), sorted by name. A client resolves each one's signed card over its transports; a pointer's markets exist only there.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "discovery_pubkey"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "discovery_pubkey": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "transports": {
+            "$ref": "#/properties/markets/items/properties/transports"
+          }
+        }
+      }
     }
   }
 }

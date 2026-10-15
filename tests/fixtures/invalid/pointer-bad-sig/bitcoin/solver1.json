@@ -1,0 +1,13 @@
+{
+  "version": 0,
+  "name": "solver1",
+  "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://elsewhere.example.com"
+      ]
+    }
+  },
+  "sig": "891d80c1f7d0a4f2eb4691b47623a8b1c3b92ae074ded4afd2cf709bb3a30afb5c272b5645f8965a6a90f7bcefb47917c6af4b5bf264b48469640d4954ee1317"
+}

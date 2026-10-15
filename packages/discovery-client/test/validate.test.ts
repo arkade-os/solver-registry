@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSET_ID_FORMS, validateCard, validateIndex } from "../src/validate.ts";
+import { ASSET_ID_FORMS, cardErrors, validateCard, validateIndex } from "../src/validate.ts";
 import { isRfqMarket, isSameAssetMarket, marketCorridor, marketPairKey } from "../src/types.ts";
-import { makeMarket, makeOneSidedMarket } from "./helpers.ts";
+import { makeCorridorMarket, makeMarket, makeOneSidedMarket } from "./helpers.ts";
 
 function validCard(): any {
   return { version: 0, name: "alice", markets: [makeMarket()] };
@@ -199,6 +199,42 @@ test("validateCard: accepts an optionally signed card", () => {
   c.discovery_pubkey = "d".repeat(64);
   c.sig = "0".repeat(128);
   assert.equal(validateCard(c).ok, true);
+});
+
+const RELAYS = { nostr: { relays: ["wss://relay.example.com"] } };
+
+test("validateCard: a card without markets is a pointer, which needs discovery_pubkey, transports and sig", () => {
+  const pointer = (): any => ({ version: 0, name: "alice", discovery_pubkey: "d".repeat(64), transports: RELAYS, sig: "0".repeat(128) });
+  const r = validateCard(pointer());
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  for (const key of ["discovery_pubkey", "transports", "sig"]) {
+    const c = pointer();
+    delete c[key];
+    assert.match(validateCard(c).errors.join("\n"), new RegExp(`${key} is required when markets is absent`));
+  }
+});
+
+test("cardErrors: validateCard plus the directory's network and the registry's sig rule", () => {
+  const c = validCard();
+  assert.deepEqual(cardErrors(c, "bitcoin"), []);
+  assert.match(cardErrors(c, "mutinynet").join("\n"), /names network "bitcoin" but this card lives under the "mutinynet"/);
+  c.markets = [makeCorridorMarket("lightning")];
+  c.discovery_pubkey = "d".repeat(64);
+  c.transports = RELAYS;
+  assert.equal(validateCard(c).ok, true, "a pinned corridor card needs no sig");
+  assert.match(cardErrors(c, "bitcoin").join("\n"), /sig is required when any market has a non-arkade corridor/);
+  assert.match(cardErrors({ ...c, fee: 1 }, "bitcoin").join("\n"), /\/fee is not an allowed property/);
+});
+
+test("validateIndex: checks solvers when present", () => {
+  const idx = validIndex();
+  idx.solvers = [{ name: "alice", discovery_pubkey: "d".repeat(64), transports: RELAYS }, { name: "bob", discovery_pubkey: "e".repeat(64) }];
+  assert.equal(validateIndex(idx, "bitcoin").ok, true, JSON.stringify(validateIndex(idx, "bitcoin").errors));
+  idx.solvers[1].discovery_pubkey = "E".repeat(64);
+  idx.solvers.push("carol");
+  const errors = validateIndex(idx, "bitcoin").errors.join("\n");
+  assert.match(errors, /\/solvers\/1\/discovery_pubkey/);
+  assert.match(errors, /\/solvers\/2 must be an object/);
 });
 
 // The emulator co-signer key is a property of the network, not of a solver, and

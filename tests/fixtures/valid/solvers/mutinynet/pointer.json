@@ -1,0 +1,13 @@
+{
+  "version": 0,
+  "name": "pointer",
+  "discovery_pubkey": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+  "transports": {
+    "nostr": {
+      "relays": [
+        "wss://relay2.example.com"
+      ]
+    }
+  },
+  "sig": "c4d141540cb70bdfbc4a4c47be50b9e2d39e58ac3c2add0b54bae25f401b9f63430e292eeddaca1f4f68698987c03ee262b178e51389806b55b4d3e72f66e973"
+}

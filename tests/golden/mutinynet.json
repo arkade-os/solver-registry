@@ -3,5 +3,29 @@
   "network": "mutinynet",
   "generated_at": 1700000000,
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "markets": []
+  "markets": [],
+  "solvers": [
+    {
+      "name": "pointer",
+      "discovery_pubkey": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+      "transports": {
+        "nostr": {
+          "relays": [
+            "wss://relay2.example.com"
+          ]
+        }
+      }
+    },
+    {
+      "name": "pointer-solver",
+      "discovery_pubkey": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+      "transports": {
+        "nostr": {
+          "relays": [
+            "wss://relay.example.com"
+          ]
+        }
+      }
+    }
+  ]
 }

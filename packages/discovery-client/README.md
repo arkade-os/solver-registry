@@ -6,8 +6,9 @@ the price feeds solvers advertise, rank markets, convert amounts, and compute th
 `wantAmount` for an offer.
 
 - **Runs everywhere** — browser, Node, and Expo / React Native. The root
-  entrypoint has zero runtime dependencies; only global `fetch` is used (and
-  it's injectable).
+  entrypoint's only runtime dependencies are the pure-JS `@noble/curves` and
+  `@noble/hashes`, for card signatures; `fetch` is the global one (and it's
+  injectable).
 - **No `eval` / `new Function`** — validation is hand-rolled, so it works under a
   strict CSP and on Hermes (React Native), where JSON-Schema engines like Ajv
   fail.
@@ -146,6 +147,35 @@ const pinnedOnly = await discover({
 });
 ```
 
+## Transport-delivered cards
+
+A solver may publish its signed card on its own transports (nostr kind
+`SOLVER_CARD_KIND`, `d` = the network) — a registry pointer lists only its
+identity. Pass a `transportCards` fetcher and `discover()` asks it once for the
+latest card of every solver an index's `solvers` lists (plus pinned cards with
+a key and a nostr transport). The package opens no sockets itself:
+
+```ts
+const { markets } = await discover({
+  transportCards: {
+    // Latest event per author for this network; verify each EVENT signature here.
+    fetch: async (solvers, network) => myRelayQuery(solvers, network), // => [{ pubkey, createdAt, card }]
+  },
+});
+```
+
+A card counts only from a listed key, under the listing's name, passing every
+registry rule, with a valid `sig` (`verifyCardSig`), and dated within
+`MAX_CARD_AGE_SECONDS` of now either way. It then replaces that solver's listed markets, which
+keep the listing's `source`. Anything else is a warning, never a throw.
+
+A registry index older than `DEFAULT_MAX_AGE_SECONDS` (7 days) is stale. Its own
+markets are held out with a warning, but the solvers it lists still resolve over
+their transports, so a pointer-listed solver with a fresh card keeps trading.
+Past `STALE_LISTING_TRUST_FACTOR` (4) max-ages the index vouches for no one and
+its solvers stop resolving too, so a registry's removal of a solver eventually
+wins. Local pins are unaffected.
+
 ## Expo / React Native
 
 Works out of the box — Hermes ships `fetch`, `AbortController`, and `BigInt`. If
@@ -195,7 +225,8 @@ package entrypoint does not import React.
 
 | Export | Purpose |
 |---|---|
-| `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. With no `registries`, follows that network's published index (an internal default); `registries: []` follows none; a non-empty list overrides the default. Registry failures are isolated. |
+| `discover(opts)` | Fetch + merge + dedupe + rank markets across registries and local cards. Defaults to `network: "bitcoin"`. With no `registries`, follows that network's published index (an internal default); `registries: []` follows none; a non-empty list overrides the default. Registry failures are isolated. `transportCards` resolves solvers' signed cards from their transports. |
+| `verifyCardSig(card)` | Whether the card's `sig` is its `discovery_pubkey`'s BIP340 signature over the canonical JSON. |
 | `defaultRegistryUrls(network)` / `registryIndexUrl(network)` / `REGISTRY_INDEX_URLS` | The published index URL(s) for a network — the default `discover()` reads, exported so callers can surface or override it instead of hand-copying it. |
 | `fetchIndex(url, opts)` | Fetch + validate a single per-network index (never throws). Defaults to `network: "bitcoin"`. |
 | `listMarkets(markets)` | List available id pairs, how many solver candidates each pair has, and how many can pay out each side (`solvable.base` / `solvable.quote`). |
@@ -240,7 +271,7 @@ API design: [#1](https://github.com/arkade-os/solver-registry/issues/1).
 
 ```sh
 pnpm install
-pnpm test        # node --test, dependency-free, runs the .ts directly
+pnpm test        # node --test, runs the .ts directly
 pnpm typecheck
 pnpm build       # emits dist/*.js + *.d.ts
 ```

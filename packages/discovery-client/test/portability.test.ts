@@ -23,6 +23,8 @@ const FORBIDDEN: Array<{ pattern: RegExp; why: string }> = [
 
 const ALLOWED_EXTERNAL_IMPORTS: Record<string, Set<string>> = {
   "react.ts": new Set(["react"]),
+  // Pure-JS crypto, and the root entrypoint's only runtime dependencies.
+  "canonical.ts": new Set(["@noble/curves/secp256k1.js", "@noble/hashes/sha2.js", "@noble/hashes/utils.js"]),
 };
 
 test("source files exist to check", () => {
