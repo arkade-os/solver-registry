@@ -96,8 +96,12 @@ export function deriveAtomicPrice(
   opts: { price_decimals: number },
 ): Rational {
   const f = parseDecimal(feedValue);
-  // value / 10^price_decimals
-  const price: Rational = normalize({ num: f.num, den: f.den * pow10(opts.price_decimals) });
+  // value / 10^price_decimals; a negative exponent (quote asset has more
+  // decimals than the base) scales the numerator up instead — stays exact.
+  const d = opts.price_decimals;
+  const price: Rational = normalize(
+    d >= 0 ? { num: f.num, den: f.den * pow10(d) } : { num: f.num * pow10(-d), den: f.den },
+  );
   if (price.num <= 0n) throw new Error("price feed value must be positive");
   return price;
 }

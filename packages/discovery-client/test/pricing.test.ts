@@ -51,6 +51,12 @@ test("deriveAtomicPrice: price_decimals scales the raw feed value", () => {
     num: 377000n,
     den: 1n,
   });
+  // Negative: quote asset has more decimals than the base, feed scales up.
+  // E.g. USD(2)/BTC(8): 0.00000922 BTC per USD → 9.22 sats per cent.
+  assert.deepEqual(deriveAtomicPrice("0.00000922", { price_decimals: -6 }), {
+    num: 461n,
+    den: 50n, // 9.22
+  });
 });
 
 test("deriveAtomicPrice: rejects a zero/negative price", () => {
