@@ -295,7 +295,7 @@ export interface NetworkIndex {
 // malformed id reads as "undefined" in keys and defaults its corridor to
 // arkade, rather than throwing.
 
-type MarketLike = {
+export type MarketLike = {
   base_asset?: unknown;
   quote_asset?: unknown;
   base_corridor?: unknown;
@@ -437,38 +437,6 @@ export function marketLegKey(market: MarketLike, side: Side): string {
   const asset = side === "base" ? market.base_asset : market.quote_asset;
   const id = assetIdOf(asset);
   return id?.includes("/") ? id : `${legacyMarketCorridor(market, side)}:${id}`;
-}
-
-/** A regex that matches the 68-lowercase-hex identity for an Arkade-issued asset. */
-const ARKADE_ASSET_IDENTITY = /^[0-9a-f]{68}$/;
-
-/**
- * The canonical CAIP-19 asset id for one side of a card, on the given network.
- *
- * For a card with a full CAIP-19 id already in `base_asset.id` / `quote_asset.id`
- * (or in the v1-window `caip19_id` field), that id is returned unchanged.
- * For a legacy v0 card, the short id is upgraded:
- * - `"btc"` → `"<corridor>:<network>/slip44:0"`
- * - a 68-hex Arkade issuance id → `"arkade:<network>/asset:<id>"`
- *
- * Returns `undefined` when the leg has no expressible public CAIP-19 id (e.g. an
- * `eip155:` leg whose full CAIP-19 id is not yet known on this snapshot).
- */
-export function marketLegAssetId(
-  market: MarketLike,
-  side: Side,
-  network: Network,
-): string | undefined {
-  const asset = side === "base" ? market.base_asset : market.quote_asset;
-  const id = assetIdOf(asset);
-  // Already a full CAIP-19 id (contains the chain/asset separator).
-  if (id?.includes("/")) return id;
-  // Legacy short id — convert to the canonical form for this network.
-  const corridor = marketCorridor(market, side);
-  if (id === "btc") return `${corridor}:${network}/slip44:0`;
-  if (corridor === "arkade" && id !== undefined && ARKADE_ASSET_IDENTITY.test(id))
-    return `arkade:${network}/asset:${id}`;
-  return undefined;
 }
 
 /**

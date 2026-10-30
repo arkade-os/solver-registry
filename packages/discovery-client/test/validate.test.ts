@@ -1,8 +1,66 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSET_ID_FORMS, cardErrors, validateCard, validateIndex } from "../src/validate.ts";
-import { isRfqMarket, isSameAssetMarket, marketCorridor, marketPairKey } from "../src/types.ts";
+import { ASSET_ID_FORMS, cardErrors, marketLegAssetId, validateCard, validateIndex } from "../src/validate.ts";
+import { NETWORKS, isRfqMarket, isSameAssetMarket, marketCorridor, marketPairKey } from "../src/types.ts";
 import { makeCorridorMarket, makeMarket, makeOneSidedMarket } from "./helpers.ts";
+
+const ISSUANCE_ID = "a".repeat(68);
+
+function legacyQuote(id: string, quote_corridor?: string): any {
+  return makeMarket({
+    quote_asset: { id, name: "Asset", ticker: "AST", decimals: 8 },
+    ...(quote_corridor === undefined ? {} : { quote_corridor }),
+  } as any);
+}
+
+test("marketLegAssetId: picks BTC's coin type by network", () => {
+  assert.equal(marketLegAssetId(legacyQuote("btc"), "quote", "bitcoin"), "arkade:bitcoin/slip44:0");
+  assert.equal(marketLegAssetId(legacyQuote("btc"), "quote", "regtest"), "arkade:regtest/slip44:1");
+});
+
+test("marketLegAssetId: keeps a legacy leg's corridor", () => {
+  const cases = [
+    [undefined, "arkade"],
+    ["lightning", "bolt11"],
+    ["onchain", "bitcoin"],
+  ] as const;
+  for (const [legacy, corridor] of cases) {
+    assert.equal(
+      marketLegAssetId(legacyQuote(ISSUANCE_ID, legacy), "quote", "mutinynet"),
+      `${corridor}:mutinynet/asset:${ISSUANCE_ID}`,
+    );
+  }
+});
+
+test("marketLegAssetId: every upgraded legacy id is one the validator accepts", () => {
+  const accepted = new RegExp(`^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`);
+  for (const network of NETWORKS) {
+    for (const id of ["btc", ISSUANCE_ID]) {
+      for (const legacy of [undefined, "lightning", "onchain"]) {
+        const upgraded = marketLegAssetId(legacyQuote(id, legacy), "quote", network);
+        assert.ok(upgraded && accepted.test(upgraded), `${network} ${id} ${legacy}: ${upgraded}`);
+      }
+    }
+  }
+});
+
+test("marketLegAssetId: returns a valid canonical id unchanged, preferring caip19_id", () => {
+  const erc20 = `eip155:1/erc20:0x${"b".repeat(40)}`;
+  assert.equal(marketLegAssetId(legacyQuote(erc20), "quote", "regtest"), erc20);
+  // the card's own network, not the caller's
+  assert.equal(marketLegAssetId(legacyQuote("arkade:mutinynet/slip44:1"), "quote", "regtest"), "arkade:mutinynet/slip44:1");
+  const market = makeMarket({
+    quote_asset: { id: "btc", caip19_id: "bolt11:regtest/slip44:1", name: "Bitcoin", ticker: "BTC", decimals: 8 },
+  } as any);
+  assert.equal(marketLegAssetId(market, "quote", "regtest"), "bolt11:regtest/slip44:1");
+});
+
+test("marketLegAssetId: a malformed or missing id is undefined", () => {
+  for (const id of ["arkade:regtest/slip44:0", "arkade:nope/slip44:1", "not/an-id", "usdt", ""]) {
+    assert.equal(marketLegAssetId(legacyQuote(id), "quote", "regtest"), undefined, id);
+  }
+  assert.equal(marketLegAssetId({ ...makeMarket(), quote_asset: undefined } as any, "quote", "regtest"), undefined);
+});
 
 function validCard(): any {
   return { version: 0, name: "alice", markets: [makeMarket()] };
