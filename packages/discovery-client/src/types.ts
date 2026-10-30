@@ -295,7 +295,7 @@ export interface NetworkIndex {
 // malformed id reads as "undefined" in keys and defaults its corridor to
 // arkade, rather than throwing.
 
-type MarketLike = {
+export type MarketLike = {
   base_asset?: unknown;
   quote_asset?: unknown;
   base_corridor?: unknown;

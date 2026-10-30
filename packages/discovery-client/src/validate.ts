@@ -6,7 +6,7 @@
 // mirror `schema/card.schema.json` / `schema/index.schema.json` and the extra
 // cross-field rules the reducer enforces, with no `eval` and no dependencies.
 
-import type { AssetInfo, Card, NetworkIndex } from "./types.ts";
+import type { AssetInfo, Card, MarketLike, Network, NetworkIndex, Side } from "./types.ts";
 import {
   AMOUNT_PATTERN,
   ARKADE_NETWORK_CORRIDORS,
@@ -122,6 +122,27 @@ export const ASSET_ID_FORMS = [
 const ASSET_ID = new RegExp(`^(${ASSET_ID_FORMS.map((f) => f.pattern).join("|")})$`);
 
 export const LEGACY_ASSET_ID = /^(btc|[0-9a-f]{68})$/;
+
+/**
+ * The canonical CAIP-19 asset id for one side of a card, on the given network.
+ *
+ * A valid canonical id, including an `eip155:` one, is returned unchanged. A
+ * legacy id is upgraded on its corridor, to the form {@link ASSET_ID_FORMS}
+ * accepts: `"btc"` to `slip44:0` on mainnet and `slip44:1` elsewhere, a 68-hex
+ * issuance id to `asset:<id>`. Anything else is `undefined`.
+ */
+export function marketLegAssetId(
+  market: MarketLike,
+  side: Side,
+  network: Network,
+): string | undefined {
+  const id = assetIdOf(side === "base" ? market.base_asset : market.quote_asset);
+  if (id === undefined) return undefined;
+  if (ASSET_ID.test(id)) return id;
+  if (!LEGACY_ASSET_ID.test(id)) return undefined;
+  const asset = id === "btc" ? `slip44:${network === "bitcoin" ? 0 : 1}` : `asset:${id}`;
+  return `${marketCorridor(market, side)}:${network}/${asset}`;
+}
 
 // "a, b, c, or d" — the last form takes the "or", which is why this is not a
 // plain join.
