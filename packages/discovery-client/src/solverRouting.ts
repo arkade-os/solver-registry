@@ -16,15 +16,15 @@ export interface SolverMarket {
   readonly give: Side;
 }
 
+/** Scope preference bookkeeping to provenance; a claimed key does not authenticate a solver. */
 export function solverId(
-  card: Pick<DiscoveredMarket, "solver" | "source" | "discovery_pubkey">,
+  card: Pick<DiscoveredMarket, "solver" | "source" | "discovery_pubkey"> & Partial<Pick<DiscoveredMarket, "sourceType">>,
   network: string,
 ): string {
-  return card.discovery_pubkey
-    ? JSON.stringify([network, card.discovery_pubkey])
-    : JSON.stringify([network, card.source, card.solver]);
+  return JSON.stringify([network, card.sourceType ?? "unknown", card.source, card.solver, card.discovery_pubkey ?? null]);
 }
 
+/** Normalize legacy legs for preference keys without changing marketLegKey's compatibility behavior. */
 function directionLeg(card: Market, side: Side, network: string): string {
   const id = assetIdOf(side === "base" ? card.base_asset : card.quote_asset);
   if (id?.includes("/")) return id;
@@ -34,10 +34,12 @@ function directionLeg(card: Market, side: Side, network: string): string {
   return marketLegKey(card, side);
 }
 
+/** Identify a network and ordered give/take asset rails, including canonicalized legacy legs. */
 export function solverDirectionKey(card: Market, give: Side, network: string): string {
   return JSON.stringify([network, directionLeg(card, give, network), directionLeg(card, otherSide(give), network)]);
 }
 
+/** Return stable manual or successful-usage ordering; cost mode without an amount uses manual order. */
 export function orderSolverMarkets<T extends SolverMarket>(
   candidates: readonly T[],
   options: { network: string; preferences?: SolverRoutingPreferences },
@@ -63,6 +65,7 @@ export function orderSolverMarkets<T extends SolverMarket>(
     .map(({ candidate }) => candidate);
 }
 
+/** Rank advertised amount estimates within each direction; caller cancellation rejects the whole ranking. */
 export async function rankSolverMarkets<T extends SolverMarket>(
   candidates: readonly T[],
   options: {
@@ -71,9 +74,12 @@ export async function rankSolverMarkets<T extends SolverMarket>(
     amount?: { on: "give" | "take"; value: bigint };
     carrierSats?: bigint;
     fetchImpl?: typeof fetch;
+    signal?: AbortSignal;
+    timeoutMs?: number;
   },
 ): Promise<T[]> {
   const { amount } = options;
+  options.signal?.throwIfAborted();
   if (amount && amount.value <= 0n) throw new Error("amount must be positive");
   const ordered = orderSolverMarkets(candidates, options);
   if (options.preferences?.mode !== "cost" || !amount) return ordered;
@@ -85,7 +91,7 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   for (const candidate of ordered) {
     groups.get(solverDirectionKey(candidate.card, candidate.give, options.network))!.push(candidate);
   }
-  const ranked = await Promise.all(Array.from(groups.values(), async (group) => {
+  const pending = Promise.all(Array.from(groups.values(), async (group) => {
     const estimates = await Promise.all(group.map(async (candidate, index) => {
       let cost: bigint | undefined;
       try {
@@ -94,12 +100,16 @@ export async function rankSolverMarkets<T extends SolverMarket>(
           safetyBps: 0,
           carrierSats: options.carrierSats,
           fetchImpl: options.fetchImpl,
+          signal: options.signal,
+          timeoutMs: options.timeoutMs,
           ...(amount.on === "give" ? { giveAmount: amount.value } : { wantAmount: amount.value }),
         });
         if (plan.limits.withinLimits && plan.receive.atomic > 0n && plan.deposit.atomic > 0n) {
           cost = amount.on === "give" ? -plan.receive.atomic : plan.deposit.atomic;
         }
-      } catch {
+      } catch (error) {
+        options.signal?.throwIfAborted();
+        if (error !== null && typeof error === "object" && "name" in error && error.name === "AbortError") throw error;
         // One unavailable feed or invalid plan must not hide other solvers.
       }
       return { candidate, index, cost };
@@ -110,5 +120,17 @@ export async function rankSolverMarkets<T extends SolverMarket>(
       return a.cost < b.cost ? -1 : a.cost > b.cost ? 1 : a.index - b.index;
     }).map(({ candidate }) => candidate);
   }));
-  return ranked.flat();
+  const signal = options.signal;
+  if (!signal) return (await pending).flat();
+  let onAbort: (() => void) | undefined;
+  const cancelled = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return (await Promise.race([pending, cancelled])).flat();
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
 }

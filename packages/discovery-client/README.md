@@ -81,9 +81,11 @@ if (selected) {
 }
 ```
 
-`solverId` binds a published signing key to a network, independent of the
-solver's label or registry. A key rotation creates a new ID. Unsigned legacy
-entries use network, source and label instead. `solverDirectionKey` includes
+`solverId` scopes preference bookkeeping to the network, source type, source,
+solver label and claimed discovery key. A source, label or key change creates
+a new priority and usage scope; refreshed market terms keep the same ID.
+A claimed key is not proof of authentication. Quote responder authentication
+and source validation remain independent of preference IDs. `solverDirectionKey` includes
 network and ordered asset/rail identities, normalizing legacy BTC and asset IDs
 to their canonical equivalents without changing `marketLegKey`.
 
@@ -105,7 +107,9 @@ their first occurrence order. Input arrays and preferences are never mutated.
 These are advertised-price estimates, not execution guarantees. No RFQs are
 sent; same-asset corridor estimates use the published fees without a feed.
 Binding amounts still come from the solver's quote. `fetchImpl` can override
-feed transport; this helper currently has no caller cancellation option.
+feed transport. Pass `signal` to cancel the whole ranking (which rejects rather
+than returning a fallback) and `timeoutMs` to shorten the per-feed wait. Feed
+timeouts remain unavailable estimates; an `AbortError` rejects the ranking.
 
 ## Corridor markets
 

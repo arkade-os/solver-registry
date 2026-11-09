@@ -20,9 +20,13 @@ function candidate(solver: string, market: Partial<Market> = {}, give: Side = "b
 
 const names = (values: readonly { card: DiscoveredMarket }[]) => values.map(({ card }) => card.solver);
 
-test("solverId follows a signing key across labels and sources, separating keys and networks", () => {
+test("solverId scopes claimed keys to provenance and stays stable across term refreshes", () => {
   const { card } = candidate("one");
-  assert.equal(solverId(card, network), solverId({ ...card, solver: "renamed", source: "other" }, network));
+  assert.equal(solverId(card, network), solverId({ ...card, fee_bps: 90 }, network));
+  assert.deepEqual(JSON.parse(solverId(card, network)), [network, "registry", card.source, card.solver, card.discovery_pubkey]);
+  assert.notEqual(solverId(card, network), solverId({ ...card, solver: "renamed" }, network));
+  assert.notEqual(solverId(card, network), solverId({ ...card, source: "other" }, network));
+  assert.notEqual(solverId(card, network), solverId({ ...card, sourceType: "local" }, network));
   assert.notEqual(solverId(card, network), solverId({ ...card, discovery_pubkey: "new-key" }, network));
   assert.notEqual(solverId(card, network), solverId(candidate("one").card, "mutinynet"));
   assert.notEqual(solverId(card, network), solverId({ ...card, discovery_pubkey: "different" }, network));
@@ -33,6 +37,22 @@ test("unsigned identities preserve labels and sources without delimiter collisio
   const second = { solver: "b:c", source: "a", discovery_pubkey: undefined };
   assert.notEqual(solverId(first, network), solverId(second, network));
   assert.notEqual(solverId(first, network), solverId(first, "mutinynet"));
+  assert.deepEqual(JSON.parse(solverId(first, network)), [network, "unknown", "a:b", "c", null]);
+});
+
+test("a copied key cannot inherit preferences from a different source, name or source type", () => {
+  const real = candidate("real");
+  const variants = [
+    { ...real.card, source: "https://other.example" },
+    { ...real.card, solver: "imposter" },
+    { ...real.card, sourceType: "local" as const },
+  ].map((card) => ({ card, give: real.give }));
+  const id = solverId(real.card, network);
+  for (const mode of ["manual", "usage"] as const) {
+    const ranked = orderSolverMarkets([...variants, real], { network, preferences: { mode, priority: [id], usage: { [id]: 5 } } });
+    assert.equal(ranked[0], real);
+    assert.deepEqual(ranked.slice(1), variants);
+  }
 });
 
 test("direction identities include network, ordered canonical assets, and legacy rails", () => {
@@ -178,5 +198,73 @@ test("cost compares only within direction groups in original group order", async
 test("ranking rejects nonpositive supplied amounts", async () => {
   for (const value of [0n, -1n]) {
     await assert.rejects(rankSolverMarkets([], { network, amount: { on: "give", value } }), /positive/);
+  }
+});
+
+test("pre-aborted ranking rejects even when no feeds or cost estimates are needed", async () => {
+  const controller = new AbortController();
+  const reason = new Error("cancelled by caller");
+  controller.abort(reason);
+  for (const mode of ["manual", "usage", "cost"] as const) {
+    await assert.rejects(rankSolverMarkets([candidate("a")], { network, preferences: { mode }, signal: controller.signal }), (error) => error === reason);
+  }
+});
+
+test("caller cancellation rejects pending cost ranking instead of returning fallback", { timeout: 1_000 }, async () => {
+  const controller = new AbortController();
+  const started = Promise.withResolvers<void>();
+  const fetchImpl: typeof fetch = async () => {
+    started.resolve();
+    return new Promise(() => {});
+  };
+  const ranking = rankSolverMarkets([candidate("pending", makeMarket()), candidate("fallback")], {
+    network, preferences: { mode: "cost" }, amount: { on: "give", value: 2_000n }, fetchImpl, signal: controller.signal,
+  });
+  await started.promise;
+  const reason = new Error("user changed amount");
+  controller.abort(reason);
+  await assert.rejects(ranking, (error) => error === reason);
+});
+
+test("an AbortError rejects cost ranking instead of becoming an unavailable estimate", async () => {
+  const reason = new DOMException("request aborted", "AbortError");
+  const fetchImpl: typeof fetch = async () => { throw reason; };
+  await assert.rejects(rankSolverMarkets([candidate("aborted", makeMarket()), candidate("fallback")], {
+    network, preferences: { mode: "cost" }, amount: { on: "give", value: 2_000n }, fetchImpl,
+  }), (error) => error === reason);
+});
+
+test("cost ranking forwards a caller timeout and leaves timed-out feeds last", { timeout: 1_000 }, async () => {
+  const fetchImpl: typeof fetch = async (url) => String(url).endsWith("fallback")
+    ? new Response('{"price":"1"}')
+    : new Promise(() => {});
+  const ranked = await rankSolverMarkets([
+    candidate("pending", makeMarket()),
+    candidate("fallback", makeMarket({ min_quote_amount: "1", price_feed: "https://feed.example/fallback" })),
+  ], {
+    network, preferences: { mode: "cost" }, amount: { on: "give", value: 2_000n }, fetchImpl, timeoutMs: 5,
+  });
+  assert.deepEqual(names(ranked), ["fallback", "pending"]);
+});
+
+test("cancellation also rejects while a published feed response body is pending", { timeout: 1_000 }, async () => {
+  const controller = new AbortController();
+  const reading = Promise.withResolvers<void>();
+  const body = Promise.withResolvers<string>();
+  const response = new Response();
+  response.text = async () => {
+    reading.resolve();
+    return body.promise;
+  };
+  const fetchImpl: typeof fetch = async () => response;
+  const ranking = rankSolverMarkets([candidate("pending", makeMarket())], {
+    network, preferences: { mode: "cost" }, amount: { on: "give", value: 2_000n }, fetchImpl, signal: controller.signal,
+  });
+  await reading.promise;
+  controller.abort();
+  try {
+    await assert.rejects(ranking, { name: "AbortError" });
+  } finally {
+    body.resolve('{"price":"1"}');
   }
 });
