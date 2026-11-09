@@ -107,9 +107,11 @@ their first occurrence order. Input arrays and preferences are never mutated.
 These are advertised-price estimates, not execution guarantees. No RFQs are
 sent; same-asset corridor estimates use the published fees without a feed.
 Binding amounts still come from the solver's quote. `fetchImpl` can override
-feed transport. Pass `signal` to cancel the whole ranking (which rejects rather
-than returning a fallback) and `timeoutMs` to shorten the per-feed wait. Feed
-timeouts remain unavailable estimates; an `AbortError` rejects the ranking.
+feed transport using the package's `FetchLike` adapter type or global `fetch`.
+`timeoutMs` bounds the wait for response headers, not the response body. Pass
+`signal` for overall ranking cancellation, including a pending response body;
+cancellation rejects instead of returning a fallback. Header timeouts remain
+unavailable estimates; an `AbortError` rejects the ranking.
 
 ## Corridor markets
 
@@ -330,7 +332,7 @@ API design: [#1](https://github.com/arkade-os/solver-registry/issues/1).
 ```sh
 pnpm install
 pnpm test        # node --test, runs the .ts directly
-pnpm typecheck
+pnpm exec tsc -p test/types/tsconfig.json # strict public transport compatibility
 pnpm build       # emits dist/*.js + *.d.ts
 ```
 

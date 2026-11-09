@@ -1,4 +1,5 @@
 import type { DiscoveredMarket } from "./discovery.ts";
+import type { FetchLike } from "./feed.ts";
 import { quoteOffer } from "./offer.ts";
 import { otherSide } from "./pricing.ts";
 import { assetIdOf, marketCorridor, marketLegKey, type Market, type Side } from "./types.ts";
@@ -73,7 +74,7 @@ export async function rankSolverMarkets<T extends SolverMarket>(
     preferences?: SolverRoutingPreferences;
     amount?: { on: "give" | "take"; value: bigint };
     carrierSats?: bigint;
-    fetchImpl?: typeof fetch;
+    fetchImpl?: FetchLike;
     signal?: AbortSignal;
     timeoutMs?: number;
   },
