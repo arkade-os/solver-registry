@@ -53,6 +53,60 @@ console.log(`${plan.deposit.display} ${plan.deposit.asset.ticker}`
 if (!plan.limits.withinLimits) console.warn("amount is outside the market's size limits");
 ```
 
+## Solver routing preferences
+
+Use `orderSolverMarkets` for synchronous manual or successful-usage ordering,
+and `rankSolverMarkets` for amount-aware cost estimates:
+
+```ts
+import { rankSolverMarkets, solverDirectionKey, solverId } from "@arkade-os/solver-discovery";
+
+const network = "bitcoin";
+const candidates = markets.map((card) => ({ card, give: "base" as const }));
+const ranked = await rankSolverMarkets(candidates, {
+  network,
+  preferences: {
+    mode: "cost", // "manual" (default), "usage", or "cost"
+    priority: savedSolverIds,
+    usage: successfulSwapCounts,
+  },
+  amount: { on: "give", value: 100_000n }, // atomic units; "take" fixes the received amount
+  carrierSats: 330n, // the connected Service's dust, when applicable
+});
+const selected = ranked[0];
+if (selected) {
+  const id = solverId(selected.card, network);
+  const direction = solverDirectionKey(selected.card, selected.give, network);
+  // Persist the ID in the priority list or successful-swap counts for this direction.
+}
+```
+
+`solverId` binds a published signing key to a network, independent of the
+solver's label or registry. A key rotation creates a new ID. Unsigned legacy
+entries use network, source and label instead. `solverDirectionKey` includes
+network and ordered asset/rail identities, normalizing legacy BTC and asset IDs
+to their canonical equivalents without changing `marketLegKey`.
+
+Manual ordering follows `priority` IDs, then discovery order; duplicate and
+unknown IDs are harmless. Usage ordering takes successful-swap counts keyed by
+solver ID, descending, with manual ordering for ties. Counts must be nonnegative
+safe integers; invalid counts are zero. The caller records successful swaps and
+keeps per-direction preferences; these helpers never persist or increment them.
+
+Cost ordering requires a positive atomic `bigint` amount. Without an amount,
+both helpers retain manual ordering. An exact give amount maximizes estimated
+receive; an exact take amount minimizes estimated deposit. Estimates use
+`quoteOffer` with zero safety padding, published feeds, directional spreads and
+flat fees, legacy fee supersession, and the supplied carrier amount. Missing or
+failed feeds and plans outside payout limits rank last; ties use manual order.
+Only candidates in the same direction are compared, and direction groups retain
+their first occurrence order. Input arrays and preferences are never mutated.
+
+These are advertised-price estimates, not execution guarantees. No RFQs are
+sent; same-asset corridor estimates use the published fees without a feed.
+Binding amounts still come from the solver's quote. `fetchImpl` can override
+feed transport; this helper currently has no caller cancellation option.
+
 ## Corridor markets
 
 A market side may settle on another rail — Lightning (`bolt11`) or an L1
