@@ -20,6 +20,33 @@ function candidate(solver: string, market: Partial<Market> = {}, give: Side = "b
 
 const names = (values: readonly { card: DiscoveredMarket }[]) => values.map(({ card }) => card.solver);
 
+test("temporary health demotion precedes preference and usage without excluding fallback candidates", () => {
+  const a = candidate("a");
+  const b = candidate("b");
+  const c = candidate("c");
+  const id = solverId(a.card, network);
+  const prefs = { mode: "usage" as const, preferFirst: id, usage: { [id]: 100, [solverId(c.card, network)]: 5 }, deprioritized: [id] };
+  assert.deepEqual(names(orderSolverMarkets([a, b, c], { network, preferences: prefs })), ["c", "b", "a"]);
+  assert.deepEqual(names(orderSolverMarkets([a], { network, preferences: prefs })), ["a"]);
+  assert.deepEqual(names(orderSolverMarkets([a, b], { network, preferences: { ...prefs, disabled: [id] } })), ["b"]);
+  assert.deepEqual(names(orderSolverMarkets([a, b], { network, preferences: { ...prefs, deprioritized: [] } })), ["a", "b"]);
+});
+
+test("cost ordering puts a cooling preferred solver last and skips its estimate feed", async () => {
+  const a = candidate("a", { ...makeMarket(), fee_bps: 0, price_feed: "https://cooling.example" });
+  const b = candidate("b", { ...makeMarket(), fee_bps: 100 });
+  const c = candidate("c", { ...makeMarket(), fee_bps: 200 });
+  const fetched: string[] = [];
+  const ranked = await rankSolverMarkets([a, c, b], {
+    network,
+    preferences: { mode: "cost", preferFirst: solverId(a.card, network), deprioritized: [solverId(a.card, network)] },
+    amount: { on: "give", value: 10000n },
+    fetchImpl: async (url) => { fetched.push(String(url)); return new Response(JSON.stringify({ price: "100000" })); },
+  });
+  assert.deepEqual(names(ranked), ["b", "c", "a"]);
+  assert.ok(!fetched.includes(a.card.price_feed!));
+});
+
 test("solverId scopes claimed keys to provenance and stays stable across term refreshes", () => {
   const { card } = candidate("one");
   assert.equal(solverId(card, network), solverId({ ...card, fee_bps: 90 }, network));

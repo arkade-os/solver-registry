@@ -101,10 +101,15 @@ keeps per-direction preferences; these helpers never persist or increment them.
 changing saved priorities. Callers can combine card-wide pauses with the current
 direction's disabled IDs; an empty result means no enabled candidate remains.
 
-`preferFirst` places one matching enabled solver ahead of the others, which keep
+`preferFirst` places the matching enabled solver identity ahead of the others, which keep
 their manual, usage or cost ordering. An absent or disabled preferred solver falls
 back to normal ordering. Cost ranking keeps this preference within its direction
 group without changing the order of the groups. Saved priorities remain unchanged.
+
+`deprioritized` moves temporarily unreliable solver IDs behind healthy candidates,
+before applying `preferFirst` or the selected ordering mode. Those solvers remain
+last-resort fallbacks; cost ranking skips their estimate feeds. The caller owns
+failure observations, cooldown expiry and recovery, and keeps saved preferences intact.
 
 Cost ordering requires a positive atomic `bigint` amount. Without an amount,
 both helpers retain manual ordering. An exact give amount maximizes estimated

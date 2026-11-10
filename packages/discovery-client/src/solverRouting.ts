@@ -12,6 +12,8 @@ export interface SolverRoutingPreferences {
   /** Try this solver ID first; the remaining eligible solvers still follow mode ordering. */
   preferFirst?: string;
   usage?: Readonly<Record<string, number>>;
+  /** Temporary reliability demotion, before preference or mode; still eligible as a fallback. */
+  deprioritized?: readonly string[];
   /** Exclude these solver IDs before ordering or requesting advertised-cost feeds. */
   disabled?: readonly string[];
 }
@@ -51,6 +53,7 @@ export function orderSolverMarkets<T extends SolverMarket>(
 ): T[] {
   const { network, preferences } = options;
   const disabled = new Set(preferences?.disabled ?? []);
+  const deprioritized = new Set(preferences?.deprioritized ?? []);
   const priority = new Map<string, number>();
   for (const id of preferences?.priority ?? []) {
     if (!priority.has(id)) priority.set(id, priority.size);
@@ -63,6 +66,8 @@ export function orderSolverMarkets<T extends SolverMarket>(
   return candidates.map((candidate, index) => ({ candidate, index, id: solverId(candidate.card, network) }))
     .filter(({ id }) => !disabled.has(id))
     .sort((a, b) => {
+      const health = Number(deprioritized.has(a.id)) - Number(deprioritized.has(b.id));
+      if (health) return health;
       const preferred = Number(b.id === preferences?.preferFirst) - Number(a.id === preferences?.preferFirst);
       if (preferred) return preferred;
       if (preferences?.mode === "usage") {
@@ -92,6 +97,7 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   if (amount && amount.value <= 0n) throw new Error("amount must be positive");
   const ordered = orderSolverMarkets(candidates, options);
   if (options.preferences?.mode !== "cost" || !amount) return ordered;
+  const deprioritized = new Set(options.preferences.deprioritized ?? []);
 
   const groups = new Map<string, T[]>();
   const enabled = new Set(ordered);
@@ -104,9 +110,11 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   }
   const pending = Promise.all(Array.from(groups.values(), async (group) => {
     const estimates = await Promise.all(group.map(async (candidate, index) => {
+      const id = solverId(candidate.card, options.network);
+      const cooling = deprioritized.has(id);
       let cost: bigint | undefined;
       try {
-        const plan = await quoteOffer(candidate.card, {
+        const plan = cooling ? undefined : await quoteOffer(candidate.card, {
           give: candidate.give,
           safetyBps: 0,
           carrierSats: options.carrierSats,
@@ -115,7 +123,7 @@ export async function rankSolverMarkets<T extends SolverMarket>(
           timeoutMs: options.timeoutMs,
           ...(amount.on === "give" ? { giveAmount: amount.value } : { wantAmount: amount.value }),
         });
-        if (plan.limits.withinLimits && plan.receive.atomic > 0n && plan.deposit.atomic > 0n) {
+        if (plan && plan.limits.withinLimits && plan.receive.atomic > 0n && plan.deposit.atomic > 0n) {
           cost = amount.on === "give" ? -plan.receive.atomic : plan.deposit.atomic;
         }
       } catch (error) {
@@ -123,9 +131,11 @@ export async function rankSolverMarkets<T extends SolverMarket>(
         if (error !== null && typeof error === "object" && "name" in error && error.name === "AbortError") throw error;
         // One unavailable feed or invalid plan must not hide other solvers.
       }
-      return { candidate, index, cost, preferred: solverId(candidate.card, options.network) === options.preferences?.preferFirst };
+      return { candidate, index, cost, cooling, preferred: id === options.preferences?.preferFirst };
     }));
     return estimates.sort((a, b) => {
+      const health = Number(a.cooling) - Number(b.cooling);
+      if (health) return health;
       const preferred = Number(b.preferred) - Number(a.preferred);
       if (preferred) return preferred;
       if (a.cost === undefined) return b.cost === undefined ? a.index - b.index : 1;
