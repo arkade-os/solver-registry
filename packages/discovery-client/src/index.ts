@@ -19,4 +19,5 @@ export * from "./offer.ts";
 export * from "./feed.ts";
 export * from "./discovery.ts";
 export * from "./project.ts";
+export * from "./solverRouting.ts";
 export { verifyCardSig } from "./canonical.ts";
