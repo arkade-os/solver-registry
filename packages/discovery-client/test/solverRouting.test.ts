@@ -130,6 +130,46 @@ test("disabled solvers are not contacted for cost estimates and all-disabled rou
   assert.deepEqual(calls, []);
 });
 
+test("preferFirst precedes usage while the remainder keeps heuristic and priority order", () => {
+  const candidates = Object.freeze([candidate("preferred"), candidate("a"), candidate("b"), candidate("c")]);
+  const ids = candidates.map(({ card }) => solverId(card, network));
+  const preferences = { mode: "usage" as const, preferFirst: ids[0], priority: [ids[3]], usage: { [ids[1]]: 9, [ids[2]]: 3, [ids[3]]: 3 } };
+  assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences })), ["preferred", "a", "c", "b"]);
+  assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences: { ...preferences, preferFirst: "missing" } })), ["a", "c", "b", "preferred"]);
+  assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences: { ...preferences, mode: "manual" } })), ["preferred", "c", "a", "b"]);
+  assert.deepEqual(preferences.priority, [ids[3]]);
+});
+
+test("cost keeps preferFirst ahead of cheaper candidates and sorts the rest by cost", async () => {
+  const candidates = [candidate("preferred", { fee_bps: 500 }), candidate("middle", { fee_bps: 100 }), candidate("cheapest", { fee_bps: 0 })];
+  const preferences = { mode: "cost" as const, preferFirst: solverId(candidates[0].card, network) };
+  for (const on of ["give", "take"] as const) {
+    assert.deepEqual(names(await rankSolverMarkets(candidates, { network, preferences, amount: { on, value: 10_000n } })), ["preferred", "cheapest", "middle"]);
+  }
+});
+
+test("preferFirst never revives a disabled identity or transfers to a copied key", async () => {
+  const paused = candidate("paused", makeMarket({ price_feed: "https://paused.example/price" }));
+  const live = candidate("live");
+  const copied = { ...paused, card: { ...paused.card, source: "another registry", price_feed: live.card.price_feed } };
+  const id = solverId(paused.card, network);
+  for (const mode of ["manual", "usage", "cost"] as const) {
+    const preferences = { mode, preferFirst: id, disabled: [id] };
+    const fetchImpl: typeof fetch = async () => { throw new Error("unexpected feed request"); };
+    assert.deepEqual(names(await rankSolverMarkets([paused, live, copied], { network, preferences, amount: { on: "give", value: 2_000n }, fetchImpl })), ["live", "paused"]);
+  }
+});
+
+test("a preferred solver with an unavailable cost estimate remains first without moving direction groups", async () => {
+  const candidates = [candidate("chain", makeCorridorMarket("onchain")), candidate("live", makeMarket({ min_quote_amount: "1", price_feed: "https://live.example/price" })), candidate("preferred", makeMarket())];
+  const preferences = { mode: "cost" as const, preferFirst: solverId(candidates[2].card, network) };
+  const fetchImpl: typeof fetch = async (url) => {
+    if (String(url) === "https://live.example/price") return new Response('{"price":"2"}');
+    throw new Error("feed offline");
+  };
+  assert.deepEqual(names(await rankSolverMarkets(candidates, { network, preferences, amount: { on: "give", value: 2_000n }, fetchImpl })), ["chain", "preferred", "live"]);
+});
+
 test("cost without amount and non-cost ranking never fetch feeds", async () => {
   const candidates = [candidate("a", makeMarket()), candidate("b", makeMarket())];
   const priority = [solverId(candidates[1].card, network)];

@@ -9,6 +9,8 @@ export type SolverOrder = "manual" | "usage" | "cost";
 export interface SolverRoutingPreferences {
   mode?: SolverOrder;
   priority?: readonly string[];
+  /** Try this solver ID first; the remaining eligible solvers still follow mode ordering. */
+  preferFirst?: string;
   usage?: Readonly<Record<string, number>>;
   /** Exclude these solver IDs before ordering or requesting advertised-cost feeds. */
   disabled?: readonly string[];
@@ -61,6 +63,8 @@ export function orderSolverMarkets<T extends SolverMarket>(
   return candidates.map((candidate, index) => ({ candidate, index, id: solverId(candidate.card, network) }))
     .filter(({ id }) => !disabled.has(id))
     .sort((a, b) => {
+      const preferred = Number(b.id === preferences?.preferFirst) - Number(a.id === preferences?.preferFirst);
+      if (preferred) return preferred;
       if (preferences?.mode === "usage") {
         const usage = usageCount(b.id) - usageCount(a.id);
         if (usage !== 0) return usage;
@@ -119,9 +123,11 @@ export async function rankSolverMarkets<T extends SolverMarket>(
         if (error !== null && typeof error === "object" && "name" in error && error.name === "AbortError") throw error;
         // One unavailable feed or invalid plan must not hide other solvers.
       }
-      return { candidate, index, cost };
+      return { candidate, index, cost, preferred: solverId(candidate.card, options.network) === options.preferences?.preferFirst };
     }));
     return estimates.sort((a, b) => {
+      const preferred = Number(b.preferred) - Number(a.preferred);
+      if (preferred) return preferred;
       if (a.cost === undefined) return b.cost === undefined ? a.index - b.index : 1;
       if (b.cost === undefined) return -1;
       return a.cost < b.cost ? -1 : a.cost > b.cost ? 1 : a.index - b.index;

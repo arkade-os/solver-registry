@@ -68,6 +68,7 @@ const ranked = await rankSolverMarkets(candidates, {
   preferences: {
     mode: "cost", // "manual" (default), "usage", or "cost"
     priority: savedSolverIds,
+    preferFirst: preferredSolverId,
     usage: successfulSwapCounts,
     disabled: pausedSolverIds,
   },
@@ -99,6 +100,11 @@ keeps per-direction preferences; these helpers never persist or increment them.
 `disabled` excludes solver IDs before ordering or fetching cost estimates, without
 changing saved priorities. Callers can combine card-wide pauses with the current
 direction's disabled IDs; an empty result means no enabled candidate remains.
+
+`preferFirst` places one matching enabled solver ahead of the others, which keep
+their manual, usage or cost ordering. An absent or disabled preferred solver falls
+back to normal ordering. Cost ranking keeps this preference within its direction
+group without changing the order of the groups. Saved priorities remain unchanged.
 
 Cost ordering requires a positive atomic `bigint` amount. Without an amount,
 both helpers retain manual ordering. An exact give amount maximizes estimated
