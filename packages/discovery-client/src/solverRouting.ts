@@ -10,6 +10,8 @@ export interface SolverRoutingPreferences {
   mode?: SolverOrder;
   priority?: readonly string[];
   usage?: Readonly<Record<string, number>>;
+  /** Exclude these solver IDs before ordering or requesting advertised-cost feeds. */
+  disabled?: readonly string[];
 }
 
 export interface SolverMarket {
@@ -40,12 +42,13 @@ export function solverDirectionKey(card: Market, give: Side, network: string): s
   return JSON.stringify([network, directionLeg(card, give, network), directionLeg(card, otherSide(give), network)]);
 }
 
-/** Return stable manual or successful-usage ordering; cost mode without an amount uses manual order. */
+/** Exclude disabled solvers, then order stably; cost mode without an amount uses manual order. */
 export function orderSolverMarkets<T extends SolverMarket>(
   candidates: readonly T[],
   options: { network: string; preferences?: SolverRoutingPreferences },
 ): T[] {
   const { network, preferences } = options;
+  const disabled = new Set(preferences?.disabled ?? []);
   const priority = new Map<string, number>();
   for (const id of preferences?.priority ?? []) {
     if (!priority.has(id)) priority.set(id, priority.size);
@@ -56,6 +59,7 @@ export function orderSolverMarkets<T extends SolverMarket>(
     return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
   };
   return candidates.map((candidate, index) => ({ candidate, index, id: solverId(candidate.card, network) }))
+    .filter(({ id }) => !disabled.has(id))
     .sort((a, b) => {
       if (preferences?.mode === "usage") {
         const usage = usageCount(b.id) - usageCount(a.id);

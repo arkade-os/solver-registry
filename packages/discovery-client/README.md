@@ -69,6 +69,7 @@ const ranked = await rankSolverMarkets(candidates, {
     mode: "cost", // "manual" (default), "usage", or "cost"
     priority: savedSolverIds,
     usage: successfulSwapCounts,
+    disabled: pausedSolverIds,
   },
   amount: { on: "give", value: 100_000n }, // atomic units; "take" fixes the received amount
   carrierSats: 330n, // the connected Service's dust, when applicable
@@ -94,6 +95,10 @@ unknown IDs are harmless. Usage ordering takes successful-swap counts keyed by
 solver ID, descending, with manual ordering for ties. Counts must be nonnegative
 safe integers; invalid counts are zero. The caller records successful swaps and
 keeps per-direction preferences; these helpers never persist or increment them.
+
+`disabled` excludes solver IDs before ordering or fetching cost estimates, without
+changing saved priorities. Callers can combine card-wide pauses with the current
+direction's disabled IDs; an empty result means no enabled candidate remains.
 
 Cost ordering requires a positive atomic `bigint` amount. Without an amount,
 both helpers retain manual ordering. An exact give amount maximizes estimated

@@ -98,6 +98,38 @@ test("usage counts sort descending with manual ties and reject corrupt counts", 
   assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences: { ...prefs, usage: inherited } })), ["b", "a", "c", "d"]);
 });
 
+test("disabled identities are excluded in every ordering mode without losing saved priority", () => {
+  const candidates = [candidate("a"), candidate("b"), candidate("c")];
+  const id = solverId(candidates[1].card, network);
+  const priority = Object.freeze([id, solverId(candidates[2].card, network)]);
+  for (const mode of ["manual", "usage", "cost"] as const) {
+    const preferences = { mode, priority, usage: { [id]: 99 }, disabled: Object.freeze([id]) };
+    assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences })), ["c", "a"]);
+    assert.deepEqual(preferences.priority, priority);
+    assert.deepEqual(names(orderSolverMarkets(candidates, { network, preferences: { ...preferences, disabled: [] } })), ["b", "c", "a"]);
+  }
+  const copied = { ...candidates[1], card: { ...candidates[1].card, source: "another registry" } };
+  assert.deepEqual(orderSolverMarkets([candidates[1], copied], { network, preferences: { disabled: [id] } }), [copied]);
+});
+
+test("disabled solvers are not contacted for cost estimates and all-disabled routes stay empty", async () => {
+  const candidates = [
+    candidate("paused", makeMarket({ price_feed: "https://feed.example/paused" })),
+    candidate("live", makeMarket({ price_feed: "https://feed.example/live", min_quote_amount: "1" })),
+  ];
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (url) => {
+    calls.push(String(url));
+    return new Response('{"price":"2"}');
+  };
+  const options = { network, preferences: { mode: "cost" as const, disabled: [solverId(candidates[0].card, network)] }, amount: { on: "give" as const, value: 2_000n }, fetchImpl };
+  assert.deepEqual(names(await rankSolverMarkets(candidates, options)), ["live"]);
+  assert.deepEqual(calls, ["https://feed.example/live"]);
+  calls.length = 0;
+  assert.deepEqual(await rankSolverMarkets(candidates, { ...options, preferences: { ...options.preferences, disabled: candidates.map(({ card }) => solverId(card, network)) } }), []);
+  assert.deepEqual(calls, []);
+});
+
 test("cost without amount and non-cost ranking never fetch feeds", async () => {
   const candidates = [candidate("a", makeMarket()), candidate("b", makeMarket())];
   const priority = [solverId(candidates[1].card, network)];
