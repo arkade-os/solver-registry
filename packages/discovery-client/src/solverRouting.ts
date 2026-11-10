@@ -90,7 +90,9 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   if (options.preferences?.mode !== "cost" || !amount) return ordered;
 
   const groups = new Map<string, T[]>();
+  const enabled = new Set(ordered);
   for (const candidate of candidates) {
+    if (!enabled.has(candidate)) continue;
     groups.set(solverDirectionKey(candidate.card, candidate.give, options.network), []);
   }
   for (const candidate of ordered) {

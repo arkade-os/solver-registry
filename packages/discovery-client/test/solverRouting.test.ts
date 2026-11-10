@@ -227,6 +227,12 @@ test("cost compares only within direction groups in original group order", async
   assert.deepEqual(names(await rankSolverMarkets(candidates, { network, preferences: { mode: "cost", priority: [solverId(candidates[1].card, network)] }, amount: { on: "give", value: 2_000n } })), ["ln-cheap", "ln-expensive", "chain", "reverse"]);
 });
 
+test("disabled candidates cannot anchor direction order during cost ranking", async () => {
+  const candidates = [candidate("paused"), candidate("chain", makeCorridorMarket("onchain")), candidate("live")];
+  const preferences = { mode: "cost" as const, disabled: [solverId(candidates[0].card, network)], priority: [solverId(candidates[2].card, network)] };
+  assert.deepEqual(names(await rankSolverMarkets(candidates, { network, preferences, amount: { on: "give", value: 2_000n } })), ["chain", "live"]);
+});
+
 test("ranking rejects nonpositive supplied amounts", async () => {
   for (const value of [0n, -1n]) {
     await assert.rejects(rankSolverMarkets([], { network, amount: { on: "give", value } }), /positive/);
