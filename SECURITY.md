@@ -14,15 +14,17 @@ We aim to acknowledge a new report within 2 business days. If you do not receive
 
 ## System and Scope
 
-This policy covers **arkade-os/solver-registry**: the public solver discovery and registry state used to select settlement providers.
+This policy covers **arkade-os/solver-registry**: the public solver registry schema, reducer, CI validation, hosted indexes, and discovery client used to select settlement providers.
 
 The policy applies to the source in this public repository, release artifacts and packages built from it, and services operated by Ark Labs or Arkade OS from an unmodified release. It also covers a vulnerability in a dependency when the issue creates an exploitable path through this repository's code or a supported deployment.
 
 Documented alpha, testnet, or unaudited status is severity context, not a blanket exclusion. A testnet-only issue is still relevant when it exposes a flaw that can reach a supported mainnet or published release path.
 
+
+
 ## Threat Model and Trust Boundaries
 
-This repository uses the **Product and service** profile. The security boundary includes authentication and authorization, invoice and quote verification, payment and settlement state, tenant or merchant isolation, stored receive state, webhook handling, outbound requests, and administrator surfaces.
+This repository uses the **Registry and discovery** profile. The security boundary includes registry cards and records, schema validation, signature verification, reducer output, hosted indexes, registry URLs, merge and deduplication behavior, and the discovery library that selects a market.
 
 Assets include private keys and signing authority, funds and VTXOs, settlement and payment state, contract source and compiled artifacts, service credentials, enclave or MPC material, user data, and release integrity.
 
@@ -32,11 +34,11 @@ Users control their own keys. Remote servers, operators, solvers, plugins, peers
 
 ## Security Invariants
 
-- Every state-changing operation must authorize the caller and verify signatures, webhooks, invoices, quotes, or sessions before mutation.
-- Payment, swap, credit, refund, and settlement transitions must be exactly-once and replay-safe. An unknown response must not become a second credit or payout.
-- Tenants, merchants, stores, wallets, addresses, and sessions must remain isolated across reads, writes, caches, logs, and background work.
-- Untrusted URLs, paths, headers, messages, and structured input must not create SSRF, path traversal, injection, cross-site scripting, unsafe deserialization, or unbounded work.
-- Secrets and sensitive payment data must not be logged, exposed through diagnostics, or made reachable from a less-privileged surface.
+- Registry inclusion is curation, not authorization. A client must verify protocol terms and signatures and must not treat presence in an index as proof that a solver or asset is trustworthy.
+- Schema validation, signature verification, sorting, deduplication, and output generation must be deterministic and must not silently skip a malformed or conflicting entry.
+- Network, asset, and solver identity must remain exact. A card or index for one network must not be accepted as valid for another.
+- Registry URLs, pointers, cards, and remote index content are untrusted input and must be bounded, merged predictably, and rejected safely when inconsistent.
+- Published indexes and hosted registry output must correspond to the reviewed source and must not be replaceable through an untrusted build or deployment path.
 
 ## Reportable Findings and Severity Context
 
@@ -57,7 +59,7 @@ These are context for prioritization, not a requirement that reporters assign th
 - A vulnerability only in a third-party dependency, when it cannot be exploited through this repository or a supported deployment. Report that dependency upstream as well.
 - Feature requests, non-security bugs, and reports without a concrete security impact.
 - Social engineering, physical access, or a report that requires an already compromised device or credential, unless the compromise exposes an upstream weakness.
-- Public disclosure before we have coordinated a fix and disclosure date.
+- Public disclosure of new, undisclosed technical details before we have coordinated a fix and disclosure date. A vulnerability that is already public is still reportable when it affects supported code, releases, or deployments.
 - Spam, automated low-signal reports, leaked secrets unrelated to this repository, and requests for payment in exchange for withholding disclosure.
 
 We will not treat an inference or an undocumented assumption about a deployment as an accepted risk. A known limitation becomes an accepted risk only after review and documentation by the repository owner.
