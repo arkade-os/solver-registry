@@ -37,6 +37,13 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      # The client has its own lockfile, outside the root install, and
+      # `pnpm test` strips types without checking them.
+      - name: Typecheck the discovery client
+        run: |
+          pnpm -C packages/discovery-client install --frozen-lockfile
+          pnpm -C packages/discovery-client typecheck
+
       # The reducer appends its per-card validation report to the job summary
       # via GITHUB_STEP_SUMMARY when that variable is set.
       - name: Validate cards and build indexes in-memory
