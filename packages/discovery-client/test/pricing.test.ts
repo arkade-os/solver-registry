@@ -93,7 +93,8 @@ test("computeWantAmount: giving base concedes fee + safety and floors", () => {
     feeBps: 20,
     safetyBps: 50,
   });
-  const expected = (100_000_000n * 65000n * 9930n) / (1n * 10000n);
+  const mid = 100_000_000n * 65000n;
+  const expected = mid - (mid * 70n + 9_999n) / 10_000n;
   assert.equal(want, expected);
 });
 
@@ -116,7 +117,7 @@ test("computeWantAmount: giving quote is symmetric with 1/P", () => {
     feeBps: 0,
     safetyBps: 0,
   });
-  const expected = (65_000_000_000n * 1n * 10000n) / (65000n * 10000n);
+  const expected = (65_000_000_000n * 1n) / 65000n;
   assert.equal(want, expected);
 });
 
@@ -132,7 +133,8 @@ test("computeWantAmount: giving base subtracts fee_flat directly, same units", (
     safetyBps: 50,
     feeFlat: 1_000_000n,
   });
-  const expected = (100_000_000n * 65000n * 9930n) / (1n * 10000n) - 1_000_000n;
+  const mid = 100_000_000n * 65000n;
+  const expected = mid - (mid * 70n + 9_999n) / 10_000n - 1_000_000n;
   assert.equal(want, expected);
 });
 
