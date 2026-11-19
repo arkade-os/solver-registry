@@ -273,7 +273,7 @@ test("card schema accepts both complete market shapes but rejects a hybrid", () 
   assert.equal(validate(canonical), false, "canonical ids plus a legacy pair must not form a third wire shape");
 });
 
-test("the checked-in legacy signed card reduces to an index the current client accepts", () => {
+test("the archived legacy signed card reduces to an index the current client accepts", () => {
   const result = reduceNetwork(fixture("legacy", "solvers"), "mutinynet", FIXED_META);
 
   assert.equal(result.ok, true, JSON.stringify(result.errors));
