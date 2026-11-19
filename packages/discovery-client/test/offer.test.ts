@@ -190,6 +190,36 @@ test("planOffer: wantAmount inverts giveAmount with deposit charges applied", ()
   }
 });
 
+test("planOffer: the inverse is the LEAST deposit that reaches the want amount", () => {
+  const markets: [string, Market][] = [
+    ["plain", arkadeMarket()],
+    ["fee_flat", arkadeMarket({ fee_flat: "1000000" })],
+    [
+      "solver_fee",
+      arkadeMarket({ solver_fee: { base: { flat: "1000000", bps: 17 }, quote: { flat: "7000000", bps: 43 } } }),
+    ],
+    ["carrier", arkadeMarket({ charges_delivered_carrier: true })],
+    ["6-decimal quote", makeMarket()],
+  ];
+  for (const [label, market] of markets) {
+    for (const feedValue of ["377000", "377000.5", "65000", "3", "0.004"]) {
+      for (const give of ["base", "quote"] as const) {
+        for (const want of [1n, 2n, 999n, 100_001n, 373_983_626_017n]) {
+          const shared = { market, give, feedValue, safetyBps: 50, carrierSats: 330n };
+          const where = `${label} ${give} @${feedValue} want=${want}`;
+          const deposit = planOffer({ ...shared, wantAmount: want }).deposit.atomic;
+          const reached = planOffer({ ...shared, giveAmount: deposit }).receive.atomic;
+          assert.ok(reached >= want, `${where}: deposit ${deposit} under-funds it, reaching only ${reached}`);
+          if (deposit > 0n) {
+            const under = planOffer({ ...shared, giveAmount: deposit - 1n }).receive.atomic;
+            assert.ok(under < want, `${where}: ${deposit - 1n} already reaches ${under}, so ${deposit} is not least`);
+          }
+        }
+      }
+    }
+  }
+});
+
 test("planOffer: solver_fee supersedes fee_flat rather than adding to it", () => {
   const priced = { give: "base" as const, giveAmount: "1", feedValue: "377000" };
   const none = planOffer({ market: arkadeMarket(), ...priced }).receive.atomic;

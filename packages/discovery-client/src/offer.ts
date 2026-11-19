@@ -170,11 +170,15 @@ function depositForWant(input: {
   // received-side units, via the shared conversion so the two cannot drift.
   const gross =
     input.wantAmount + flatInReceivedUnits(input.feeFlat, input.give, input.price);
-  // Off before the spread, so back on after the division, not inside `gross`.
-  if (input.give === "base") {
-    return ceilDiv(gross * input.price.den * 10000n, input.price.num * net) + input.depositCharges;
-  }
-  return ceilDiv(gross * input.price.num * 10000n, input.price.den * net) + input.depositCharges;
+  // computeWantAmount rounds twice, so this inverts each step separately: ONE
+  // combined division is a different number, and the one that under-funds.
+  const mid = ceilDiv(gross * 10000n, net);
+  const netDeposit =
+    input.give === "base"
+      ? ceilDiv(mid * input.price.den, input.price.num)
+      : ceilDiv(mid * input.price.num, input.price.den);
+  // Off before the spread, so back on after the divisions, not inside `gross`.
+  return netDeposit + input.depositCharges;
 }
 
 /**

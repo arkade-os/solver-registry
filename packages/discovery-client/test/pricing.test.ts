@@ -195,3 +195,71 @@ test("computeWantAmount: spread >= 100% yields zero", () => {
   });
   assert.equal(want, 0n);
 });
+
+// The reference solver's exact-in payout, ported verbatim at tolerance 0 from
+// arkade-os/intent-solver `packages/solver-core/src/core/assetExactInPrice.ts`
+// as of 6c1986f3. An estimate above it is one the solver will not honour.
+function referencePayout(args: {
+  netInput: bigint;
+  givesBase: boolean;
+  baseDecimals: number;
+  quoteDecimals: number;
+  feeBps: number;
+  feed: { mantissa: bigint; scale: number };
+}): bigint {
+  const BPS = 10_000n;
+  const { netInput, givesBase, baseDecimals, quoteDecimals, feeBps, feed } = args;
+  const scale = pow10(feed.scale);
+  const baseUnit = pow10(baseDecimals);
+  const quoteUnit = pow10(quoteDecimals);
+  const mid = givesBase
+    ? (netInput * feed.mantissa * BPS * quoteUnit) / (baseUnit * scale * BPS)
+    : (netInput * baseUnit * scale * BPS) / (quoteUnit * feed.mantissa * BPS);
+  const fee = (mid * BigInt(feeBps) + BPS - 1n) / BPS;
+  return mid - fee;
+}
+
+test("computeWantAmount: equals the reference solver's payout across a grid", () => {
+  let checked = 0;
+  for (const mantissa of [1n, 7n, 65000n, 377000n, 1_000_003n]) {
+    for (const scale of [0, 2, 8]) {
+      for (const [baseDecimals, quoteDecimals] of [
+        [8, 8],
+        [8, 6],
+        [6, 8],
+        [8, 2],
+      ]) {
+        const price = {
+          num: mantissa * pow10(quoteDecimals),
+          den: pow10(scale) * pow10(baseDecimals),
+        };
+        for (const deposit of [1n, 2n, 333n, 10_007n, 1_000_000n, 99_999_999_999n]) {
+          for (const feeBps of [0, 1, 30, 137, 2500]) {
+            for (const give of ["base", "quote"] as const) {
+              const where = `${give} d=${deposit} m=${mantissa}e-${scale} ${baseDecimals}/${quoteDecimals} fee=${feeBps}`;
+              const reference = referencePayout({
+                netInput: deposit,
+                givesBase: give === "base",
+                baseDecimals,
+                quoteDecimals,
+                feeBps,
+                feed: { mantissa, scale },
+              });
+              assert.equal(
+                computeWantAmount({ deposit, give, price, feeBps, safetyBps: 0 }),
+                reference,
+                where,
+              );
+              assert.ok(
+                computeWantAmount({ deposit, give, price, feeBps, safetyBps: 50 }) <= reference,
+                `cushion raised the estimate above the solver: ${where}`,
+              );
+              checked++;
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked > 1000, `grid too small: ${checked}`);
+});
