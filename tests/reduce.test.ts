@@ -264,7 +264,7 @@ test("card schema accepts both complete market shapes but rejects a hybrid", () 
   const validate = ajv.compile(schema);
   const canonical = JSON.parse(readFileSync(fixture("valid", "solvers", "bitcoin", "alice.json"), "utf8"));
   const legacy = JSON.parse(
-    readFileSync(join(here, "..", "solvers", "mutinynet", "ln-solver-mutinynet.json"), "utf8"),
+    readFileSync(fixture("legacy", "solvers", "mutinynet", "ln-solver-mutinynet.json"), "utf8"),
   );
 
   assert.equal(validate(canonical), true, JSON.stringify(validate.errors));
@@ -274,10 +274,10 @@ test("card schema accepts both complete market shapes but rejects a hybrid", () 
 });
 
 test("the checked-in legacy signed card reduces to an index the current client accepts", () => {
-  const result = reduceNetwork(join(here, "..", "solvers"), "mutinynet", FIXED_META);
+  const result = reduceNetwork(fixture("legacy", "solvers"), "mutinynet", FIXED_META);
 
   assert.equal(result.ok, true, JSON.stringify(result.errors));
-  assert.equal(result.index!.markets.length, 3);
+  assert.equal(result.index!.markets.length, 2);
   assert.equal(validateIndex(result.index, "mutinynet").ok, true);
   assert.equal(result.index!.markets[0]!.base_asset.caip19_id, undefined);
 });
