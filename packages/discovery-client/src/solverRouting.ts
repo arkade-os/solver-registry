@@ -38,6 +38,7 @@ function directionLeg(card: Market, side: Side, network: string): string {
   const rail = marketCorridor(card, side);
   if (id === "btc") return `${rail}:${network}/slip44:${network === "bitcoin" ? 0 : 1}`;
   if (id && /^[0-9a-f]{68}$/.test(id)) return `${rail}:${network}/asset:${id}`;
+  // legacy fallback: leg ids that are neither canonical nor a recognized btc/asset form
   return marketLegKey(card, side);
 }
 
@@ -108,7 +109,10 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   for (const candidate of ordered) {
     groups.get(solverDirectionKey(candidate.card, candidate.give, options.network))!.push(candidate);
   }
-  const pending = Promise.all(Array.from(groups.values(), async (group) => {
+  // Keep discovery order between directions, but send all-cooling directions last so ranked[0] is healthy when possible.
+  const allCooling = (group: T[]) => group.every((candidate) => deprioritized.has(solverId(candidate.card, options.network)));
+  const rankedGroups = Array.from(groups.values()).sort((a, b) => Number(allCooling(a)) - Number(allCooling(b)));
+  const pending = Promise.all(rankedGroups.map(async (group) => {
     const estimates = await Promise.all(group.map(async (candidate, index) => {
       const id = solverId(candidate.card, options.network);
       const cooling = deprioritized.has(id);
@@ -145,15 +149,14 @@ export async function rankSolverMarkets<T extends SolverMarket>(
   }));
   const signal = options.signal;
   if (!signal) return (await pending).flat();
-  let onAbort: (() => void) | undefined;
-  const cancelled = new Promise<never>((_, reject) => {
-    onAbort = () => reject(signal.reason);
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-  });
+  let rejectCancelled: (reason: unknown) => void = () => {};
+  const cancelled = new Promise<never>((_, reject) => { rejectCancelled = reject; });
+  const onAbort = () => rejectCancelled(signal.reason);
+  if (signal.aborted) onAbort();
+  else signal.addEventListener("abort", onAbort, { once: true });
   try {
     return (await Promise.race([pending, cancelled])).flat();
   } finally {
-    if (onAbort) signal.removeEventListener("abort", onAbort);
+    signal.removeEventListener("abort", onAbort);
   }
 }

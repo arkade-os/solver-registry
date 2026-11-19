@@ -300,6 +300,24 @@ test("disabled candidates cannot anchor direction order during cost ranking", as
   assert.deepEqual(names(await rankSolverMarkets(candidates, { network, preferences, amount: { on: "give", value: 2_000n } })), ["chain", "live"]);
 });
 
+test("cost ranking sends all-cooling directions last and keeps discovery order otherwise", async () => {
+  const cooling = candidate("cooling");
+  const chain = candidate("chain", makeCorridorMarket("onchain"));
+  const reverse = candidate("reverse", {}, "quote");
+  const sibling = candidate("sibling");
+  const amount = { on: "give" as const, value: 2_000n };
+  const deprioritized = [solverId(cooling.card, network)];
+  const preferences = { mode: "cost" as const, deprioritized };
+  // Cooling solver heads the first direction, but the healthy second direction leads both functions.
+  assert.deepEqual(names(orderSolverMarkets([cooling, chain], { network, preferences })), ["chain", "cooling"]);
+  assert.deepEqual(names(await rankSolverMarkets([cooling, chain], { network, preferences, amount })), ["chain", "cooling"]);
+  // A group with any healthy member keeps its discovery position; its cooling member trails within the group.
+  assert.deepEqual(names(await rankSolverMarkets([cooling, sibling, chain], { network, preferences, amount })), ["sibling", "cooling", "chain"]);
+  // Several all-cooling directions keep their relative discovery order behind healthy ones.
+  const both = [solverId(cooling.card, network), solverId(chain.card, network)];
+  assert.deepEqual(names(await rankSolverMarkets([cooling, chain, reverse], { network, preferences: { ...preferences, deprioritized: both }, amount })), ["reverse", "cooling", "chain"]);
+});
+
 test("ranking rejects nonpositive supplied amounts", async () => {
   for (const value of [0n, -1n]) {
     await assert.rejects(rankSolverMarkets([], { network, amount: { on: "give", value } }), /positive/);
