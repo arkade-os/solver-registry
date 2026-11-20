@@ -11,47 +11,95 @@
   },
   "markets": [
     {
-      "pair": "BTC/lightning:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:mutinynet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bolt11:mutinynet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "lightning",
       "fee_bps": 30,
-      "min_base_amount": "1000",
-      "max_base_amount": "50000",
-      "min_quote_amount": "1000",
-      "max_quote_amount": "25000"
+      "fee_flat": "50",
+      "min_base_amount": "330",
+      "max_base_amount": "5000000",
+      "min_quote_amount": "330",
+      "max_quote_amount": "5000000"
     },
     {
-      "pair": "BTC/onchain:BTC",
       "base_asset": {
-        "id": "btc",
+        "id": "arkade:mutinynet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
       "quote_asset": {
-        "id": "btc",
+        "id": "bitcoin:mutinynet/slip44:1",
         "name": "Bitcoin",
         "ticker": "BTC",
         "decimals": 8
       },
-      "quote_corridor": "onchain",
-      "fee_bps": 0,
+      "fee_bps": 25,
+      "fee_flat": "500",
+      "min_base_amount": "0",
+      "max_base_amount": "0",
+      "min_quote_amount": "330",
+      "max_quote_amount": "10000000"
+    },
+    {
+      "base_asset": {
+        "id": "arkade:mutinynet/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "arkade:mutinynet/asset:f121ac9b7656797cc68d1e8fecacfbaa2069ec1461edf0bf2f3c37404cb9791a0000",
+        "name": "Arkade asset f121ac9b",
+        "ticker": "f121ac9b",
+        "decimals": 2
+      },
+      "fee_bps": 10,
+      "price_feed": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+      "price_feed_schema": {
+        "type": "json",
+        "price_path": "/bitcoin/usd"
+      },
+      "price_decimals": 6,
       "min_base_amount": "1000",
-      "max_base_amount": "50000",
-      "min_quote_amount": "1000",
-      "max_quote_amount": "50000"
+      "max_base_amount": "100000000",
+      "min_quote_amount": "100",
+      "max_quote_amount": "63000"
+    },
+    {
+      "base_asset": {
+        "id": "arkade:mutinynet/slip44:1",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "decimals": 8
+      },
+      "quote_asset": {
+        "id": "arkade:mutinynet/asset:f394dcbfe90ed53b6e9aa6916faf865e4be01a44fa4a0d1daad6fdbb459b4a790000",
+        "name": "Arkade asset f394dcbf",
+        "ticker": "f394dcbf",
+        "decimals": 0
+      },
+      "fee_bps": 5,
+      "price_feed": "https://api.coinbase.com/v2/prices/BTC-XLM/spot",
+      "price_feed_schema": {
+        "type": "json",
+        "price_path": "/data/amount"
+      },
+      "price_decimals": 8,
+      "min_base_amount": "1",
+      "max_base_amount": "100000000",
+      "min_quote_amount": "1",
+      "max_quote_amount": "1000000"
     }
   ],
-  "sig": "9eb76dddd0c793a0d0a7bf1a78ea63e41a8e751df006721c116be0898b4189d2a9ea4b4fb23ddd8c0c88cf5c425f6ca96fab4d6dc1f8c5986cca143ccee8404a"
+  "sig": "91d8a75176aceda79fa6763e2c99731b583c7a7d098d574aea0f3b73b5ef73c626849beafdeebcf3638b171d817866fa9067eb5d361819f81df1583b7d94973f"
 }
