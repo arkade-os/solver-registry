@@ -249,8 +249,11 @@ side       = <the side deposited>
 charges    = solver_fee[side].flat + (charges_delivered_carrier ? carrier : 0)
 bps        = solver_fee[side].bps ?? fee_bps
 returned   = <deposited an Arkade asset, receiving BTC> ? carrier : 0
-wantAmount = floor((D - charges) * P * (1 - (bps + safety_bps) / 10000)) + returned
+mid        = floor((D - charges) * P)
+wantAmount = mid - ceil(mid * (bps + safety_bps) / 10000) + returned
 ```
+
+Rounding favours the solver at **both** steps, because that is what the solver does: it floors the conversion to a whole atomic unit, then ceils the bps fee it takes off that figure. Conceding the spread in one combined division instead lands up to one atomic unit above the solver's own payout, and the offer is refused for over-asking by that unit. `safety_bps` rides inside the same ceiled share, so a zero cushion reproduces the solver's payout exactly and any cushion only lowers it. Planning from a wanted amount inverts both steps separately for the same reason — one combined division there under-funds the want by a unit.
 
 Both charges come off the deposit **before** the spread, matching the solver, and the spread itself is the deposited side's. `returned` is the mirror image, and needs no card field: where the maker fronts the carrier and is paid out in BTC, the solver hands that dust back inside the payout unconditionally, so a client derives it from the two legs' asset ids. A card carrying only the superseded `fee_flat` is the exception: it is quote-denominated, so it comes off the RECEIVED side after the spread instead, and is never summed with `solver_fee`.
 

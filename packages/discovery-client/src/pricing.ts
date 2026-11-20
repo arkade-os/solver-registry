@@ -140,9 +140,12 @@ export interface WantAmountInput {
 /**
  * Compute the want amount (atomic units of the received side) the maker should
  * request, conceding `fee_bps + safety_bps` from fair value and then the
- * market's flat fee. Floor division on bigints keeps it exact and never rounds
- * up in the maker's favor. Returns 0n if the conceded spread is >= 100%, or if
- * the flat fee swallows what is left.
+ * market's flat fee. Returns 0n if the conceded spread is >= 100%, or if the
+ * flat fee swallows what is left.
+ *
+ * Rounding favours the solver twice, mirroring it: FLOOR the conversion to a
+ * whole atomic unit, then CEIL the bps share (`safety_bps` included) off it.
+ * One combined division lands a unit above what the solver pays and is refused.
  *
  * The spread applies to the whole deposit and the flat fee is charged on top
  * (`fee = amount·bps/10⁴ + flat`) rather than the spread applying to the
@@ -158,16 +161,14 @@ export function computeWantAmount(input: WantAmountInput): bigint {
     input.depositCharges === undefined ? 0n : toBigIntAmount(input.depositCharges, "depositCharges");
   if (charges >= deposit) return 0n;
   const netDeposit = deposit - charges;
-  const netBps = 10000 - feeBps - safetyBps;
-  if (netBps <= 0) return 0n;
-  const net = BigInt(netBps);
-  // give base: deposit(base) * price(quote/base) * net/10000
-  // give quote: deposit(quote) / price(quote/base) * net/10000  == deposit * (den/num) * net/10000
+  if (10000 - feeBps - safetyBps <= 0) return 0n;
   const flat = flatInReceivedUnits(feeFlat, give, price);
-  const gross =
+  const mid =
     give === "base"
-      ? (netDeposit * price.num * net) / (price.den * 10000n)
-      : (netDeposit * price.den * net) / (price.num * 10000n);
+      ? (netDeposit * price.num) / price.den
+      : (netDeposit * price.den) / price.num;
+  const conceded = (mid * BigInt(feeBps + safetyBps) + 9999n) / 10000n;
+  const gross = mid - conceded;
   return gross > flat ? gross - flat : 0n;
 }
 
@@ -177,7 +178,7 @@ export function computeWantAmount(input: WantAmountInput): bigint {
  *
  * Giving base means receiving quote, which is already the fee's denomination,
  * so that direction is the identity. Giving quote means receiving base, and the
- * conversion rounds UP — unlike every other division in this file. This one is
+ * conversion rounds UP, as the conceded bps share also does. This one is
  * a charge rather than a receipt, and flooring it would concede the sub-unit to
  * the maker.
  *
